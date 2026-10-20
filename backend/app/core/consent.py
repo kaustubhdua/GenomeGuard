@@ -167,14 +167,3 @@ def eligible_cohort(request: ConsentRequest, donors: Iterable[DonorView]) -> Eli
         else:
             reasons[reason] += 1
     return EligibleCohort(ids, considered, dict(reasons))
-
-
-def donors_from_session(session) -> list[DonorView]:
-    """Load DonorViews from the database. Selects only the donors table: never genotypes."""
-    from sqlalchemy import select
-
-    from app.models import Donor
-
-    rows = session.execute(select(Donor)).scalars()
-    return [DonorView(r.id, r.population, r.cohort_id, r.family_id, r.consent_json,
-                      r.withdrawn_at is not None) for r in rows]

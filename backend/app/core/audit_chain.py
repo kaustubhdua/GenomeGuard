@@ -77,38 +77,6 @@ class MemoryStore:
         self.rows[idx - 1]["payload"] = payload
 
 
-class SqlStore:
-    """Stores entries in the audit_log table. Takes a SQLAlchemy Session; the caller commits
-    (so an audit entry can join the same transaction as the thing it describes)."""
-
-    def __init__(self, session) -> None:
-        self.s = session
-
-    def all(self) -> list[dict]:
-        from sqlalchemy import select
-
-        from app.models import AuditLog
-
-        rows = self.s.execute(select(AuditLog).order_by(AuditLog.idx)).scalars()
-        return [{"idx": r.idx, "ts": r.ts, "actor": r.actor, "action": r.action,
-                 "payload": r.payload_json, "prev_hash": r.prev_hash, "hash": r.hash}
-                for r in rows]
-
-    def add(self, entry: dict) -> None:
-        from app.models import AuditLog
-
-        self.s.add(AuditLog(idx=entry["idx"], ts=entry["ts"], actor=entry["actor"],
-                            action=entry["action"], payload_json=entry["payload"],
-                            prev_hash=entry["prev_hash"], hash=entry["hash"]))
-        self.s.flush()
-
-    def replace_payload(self, idx: int, payload: Any) -> None:
-        from app.models import AuditLog
-
-        self.s.get(AuditLog, idx).payload_json = payload
-        self.s.flush()
-
-
 def verify(entries: list[dict], anchor: dict | None = None) -> dict:
     """Recompute the whole chain. Returns
     {ok, length, head_hash, first_broken_index, reason}.

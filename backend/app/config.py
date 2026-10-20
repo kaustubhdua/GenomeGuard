@@ -1,33 +1,45 @@
-"""Infrastructure settings. Privacy/anomaly thresholds live in app/core/params.py (dependency-free
-so the core can be tested without installing the web stack); they are re-exported here.
+"""Infrastructure settings, read from environment variables prefixed GG_ (e.g. GG_DB_PATH).
+Privacy / anomaly thresholds live in app/core/params.py (also overridable via GG_<NAME>)."""
 
-Override any setting with an environment variable prefixed GG_ (e.g. GG_DATABASE_URL) or .env.
-"""
+from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+from dataclasses import dataclass, field
 
 from app.core.params import BANDS, CREDENTIAL_LEVELS, DATA_LEVELS, OUTCOMES, Params  # noqa: F401
 from app.core.params import DEFAULT as params  # noqa: F401
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="GG_", env_file=".env", extra="ignore")
+def _env(name: str, default, cast=str):
+    raw = os.environ.get("GG_" + name.upper())
+    if raw is None:
+        return default
+    if cast is bool:
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    return cast(raw)
 
-    database_url: str = "sqlite:///./genomeguard.db"
-    allow_tamper_demo: bool = False  # enables POST /admin/tamper/{idx}; demo only
-    admin_api_key: str = "dev-admin-key-change-me"
-    anthropic_api_key: str | None = None  # absent -> deterministic template explanations
-    llm_model: str = "claude-sonnet-5-5"
-    dataset_id: str = "synthetic-cohort-1"  # one encryption key and one epsilon budget per dataset
-    master_key: str = ""  # base64 32-byte key; per-dataset keys are derived from it (HKDF)
 
-    # synthetic data defaults (section 7.1)
-    seed: int = 1337
-    n_donors: int = 600
-    n_variants: int = 3000
-    n_populations: int = 3
-    n_families: int = 120
-    n_planted_rare: int = 5
+@dataclass
+class Settings:
+    db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
+    allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
+    demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
+    admin_api_key: str = field(default_factory=lambda: _env("admin_api_key", "demo-admin-key"))
+    anthropic_api_key: str | None = field(
+        default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY") or _env("anthropic_api_key", None))
+    llm_model: str = field(default_factory=lambda: _env("llm_model", "claude-sonnet-5-5"))
+    master_key: str = field(default_factory=lambda: _env("master_key", ""))
+    dataset_id: str = field(default_factory=lambda: _env("dataset_id", "synthetic-cohort-1"))
+    seed: int = field(default_factory=lambda: _env("seed", 1337, int))
+    n_donors: int = field(default_factory=lambda: _env("n_donors", 600, int))
+    n_variants: int = field(default_factory=lambda: _env("n_variants", 3000, int))
+    n_populations: int = field(default_factory=lambda: _env("n_populations", 3, int))
+    n_families: int = field(default_factory=lambda: _env("n_families", 120, int))
+    n_planted_rare: int = field(default_factory=lambda: _env("n_planted_rare", 5, int))
+
+
+def get_settings() -> Settings:
+    return Settings()
 
 
 settings = Settings()

@@ -193,7 +193,7 @@ def run_ladder(
         if not keep:
             return finish("deny", ["all_variants_below_maf_floor"], False)
     # 2. record -> count
-    if cur.level == "record" and cur_risk["band"] != "low":
+    if cur.level == "record":  # unconditional: genotype rows are never returned by this system
         record("downgrade_to_count", "record-level rows are never auto-released",
                replace(cur, level="count"))
     # 3. generalise

@@ -14,7 +14,12 @@ from datetime import date, timedelta
 
 import numpy as np
 
+from app.core.consent import ConsentRequest, permitted
 from app.data import pedigree as ped
+
+# The scripted demo asks for diabetes-study frequencies; the first two planted variants are
+# carried by at least one donor whose consent allows that request, so the demo is deterministic.
+DEMO_REQUEST = ConsentRequest(purpose="disease_research", disease="diabetes")
 
 POPULATIONS = ["POP_A", "POP_B", "POP_C", "POP_D", "POP_E"]
 COHORTS = ["BIOBANK-A", "BIOBANK-B", "DIABETES-STUDY", "ONCO-STUDY"]
@@ -154,9 +159,13 @@ def generate(
             close.setdefault(r["donor_a"], []).append(r["donor_b"])
             close.setdefault(r["donor_b"], []).append(r["donor_a"])
     anchors = [d for d, rel in close.items() if len(rel) >= 1]
-    for j in planted:
+    by_id = {d["id"]: d for d in donors}
+    eligible_anchors = [a for a in anchors
+                        if permitted(by_id[a]["consent"], DEMO_REQUEST, by_id[a]["withdrawn"])[0]]
+    for k, j in enumerate(planted):
         genotypes[:, j] = 0
-        anchor = int(anchors[int(rng.integers(len(anchors)))])
+        pool = eligible_anchors if (k < 2 and eligible_anchors) else anchors
+        anchor = int(pool[int(rng.integers(len(pool)))])
         genotypes[anchor - 1, j] = 1
         for rel in close[anchor]:
             if rng.random() < 0.5:
