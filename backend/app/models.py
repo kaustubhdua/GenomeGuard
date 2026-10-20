@@ -41,8 +41,9 @@ class Relationship(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     donor_a: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
     donor_b: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
-    relation: Mapped[str] = mapped_column(String(32))
-    degree: Mapped[int] = mapped_column(Integer)
+    relation: Mapped[str] = mapped_column(String(48))
+    meioses: Mapped[int] = mapped_column(Integer)  # genealogical distance (parent=1, sibling=2)
+    shared_fraction: Mapped[float] = mapped_column(Float)  # EXPECTED average, real sharing varies
 
 
 class Variant(Base):

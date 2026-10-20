@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     uniqueness_medium: float = 0.01  # >= 1% unique -> medium
     uniqueness_high: float = 0.10  # > 10% unique -> high
     min_carriers_high: int = 5  # a rare variant with fewer carriers -> high risk
-    max_relative_degree: int = 3  # siblings .. third cousins
+    max_relative_meioses: int = 8  # up to third cousins (4+4 meioses); farther pairs are ignored
+    exposure_min_shared: float = 0.0078  # ignore pairs expected to share less than this
 
     # --- transformations (section 7.4) ---
     maf_floor: float = 0.01

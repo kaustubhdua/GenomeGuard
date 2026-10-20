@@ -9,7 +9,7 @@ setup:
 	$(PIP) install -e ".[dev]"
 
 seed:
-	@echo "seed: implemented in step 2 (synthetic data + pedigree)"
+	$(PY) -m app.data.seed
 
 run:
 	$(PY) -m uvicorn app.main:app --app-dir backend --reload --port 8000
