@@ -23,7 +23,7 @@ def _master() -> bytes:
 
 
 def _blob(donor_id: int, row: np.ndarray, master: bytes) -> bytes:
-    """Compressed numpy bytes, then AES-256-GCM encrypted with the dataset key, bound to the donor."""
+    """Compressed numpy bytes, AES-256-GCM encrypted with the dataset key, bound to the donor."""
     buf = io.BytesIO()
     np.savez_compressed(buf, g=row.astype(np.int8))
     return crypto.encrypt(master, settings.dataset_id, donor_id, buf.getvalue())
@@ -72,7 +72,8 @@ def seed_database(engine=None, **kwargs) -> dict:
                     withdrawn_at=now if d["withdrawn"] else None,
                 )
             )
-            s.add(models.Genotype(donor_id=d["id"], genotype_blob=_blob(d["id"], c.genotypes[d["id"] - 1], master)))
+            blob = _blob(d["id"], c.genotypes[d["id"] - 1], master)
+            s.add(models.Genotype(donor_id=d["id"], genotype_blob=blob))
         s.add_all(
             models.Relationship(
                 donor_a=r["donor_a"], donor_b=r["donor_b"], relation=r["relation"],

@@ -204,9 +204,10 @@ def run_ladder(
         eps = min(epsilon_per_release, epsilon_available)
         if eps < min_epsilon:
             return finish("deny", ["epsilon_budget_exhausted"], False)
+        scale = SENSITIVITY * len(cur.variant_idx) / eps
         record("laplace_noise", f"Laplace noise, epsilon={eps:g} split over "
-               f"{len(cur.variant_idx)} variants (scale {SENSITIVITY * len(cur.variant_idx) / eps:.1f}"
-               " on allele counts)", replace(cur, epsilon=eps))
+               f"{len(cur.variant_idx)} variants (scale {scale:.1f} on allele counts)",
+               replace(cur, epsilon=eps))
     # 5. last resort: boolean
     if cur_risk["band"] != "low" and cur.level in ("frequency", "count"):
         record("downgrade_to_boolean", "last resort: yes/no answers only",
