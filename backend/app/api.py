@@ -29,6 +29,34 @@ EVAL_JSON = Path(__file__).resolve().parents[2] / "docs" / "eval-results.json"
 ROUTES_DOC: list[tuple[str, str, str, str]] = []
 
 
+# What a RESEARCHER may not see, because it is itself the protected information or an oracle:
+#  - exact carrier counts of rare variants, family/relative exposure (these describe withheld
+#    variants and registry relatives, and are steward-only)
+#  - detector scores and advisory notes (would let an attacker tune queries to stay under them)
+_STEWARD_RISK_KEYS = ("min_carriers", "carrier_families", "relatives_exposed")
+_STEWARD_BRIEF_KEYS = ("min_carriers", "relatives_exposed_total")
+_STEWARD_NOTES = ("privacy", "anomaly", "access", "reviewer")
+
+
+def requester_view(d: dict | None) -> dict | None:
+    """Copy of a decision with steward-only detail removed. Admin responses skip this."""
+    if not d:
+        return d
+    out = json.loads(json.dumps(d))
+    risk = out.get("risk") or {}
+    for part in ("assessment", "before"):
+        for k in _STEWARD_RISK_KEYS:
+            (risk.get(part) or {}).pop(k, None)
+    tr = out.get("transform") or {}
+    for part in ("risk_before", "risk_after"):
+        for k in _STEWARD_BRIEF_KEYS:
+            (tr.get(part) or {}).pop(k, None)
+    for k in _STEWARD_NOTES:
+        (tr.get("agent_notes") or {}).pop(k, None)
+    tr.pop("agent_agrees", None)
+    return out
+
+
 def _j(data, status: int = 200) -> JSONResponse:
     return JSONResponse(jsonable(data), status_code=status)
 
@@ -109,13 +137,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         r = requester(request)
         body = await _body(request)
         d = await run_in_threadpool(S().submit, r, body)
-        return _j(d, 201)
+        return _j(d if S().is_admin(request.headers.get("x-admin-key")) else requester_view(d), 201)
 
     @route("GET", "/requests", "List requests (own; all with admin key)", "requester|admin")
     async def list_requests(request):
         if S().is_admin(request.headers.get("x-admin-key")):
             return _j({"requests": S().requests_for(None)})
-        return _j({"requests": S().requests_for(requester(request))})
+        return _j({"requests": [requester_view(x) for x in S().requests_for(requester(request))]})
 
     @route("GET", "/requests/{id:int}", "One decision in detail", "requester|admin")
     async def get_request(request):
@@ -123,10 +151,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         d = S().store.decision(rid)
         if not d:
             raise ServiceError(404, "not_found", "no such request")
-        if not S().is_admin(request.headers.get("x-admin-key")):
-            if d["requester_id"] != requester(request)["id"]:
-                raise ServiceError(403, "forbidden", "not your request")
-        return _j(d)
+        if S().is_admin(request.headers.get("x-admin-key")):
+            return _j(d)
+        if d["requester_id"] != requester(request)["id"]:
+            raise ServiceError(403, "forbidden", "not your request")
+        return _j(requester_view(d))
 
     @route("POST", "/requests/{id:int}/review", "Human approve/deny of an escalation", "admin")
     async def review(request):
@@ -137,16 +166,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                                     bool(b.get("approve")))
         return _j(d)
 
-    @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model)",
-           "requester|admin")
+    @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model); "
+           "steward-only because it describes withheld variants and registry relatives", "admin")
     async def exposure(request):
+        admin(request)
         rid = request.path_params["id"]
-        d = S().store.decision(rid, with_release=False)
-        if not d:
+        if not S().store.decision(rid, with_release=False):
             raise ServiceError(404, "not_found", "no such request")
-        if not S().is_admin(request.headers.get("x-admin-key")):
-            if d["requester_id"] != requester(request)["id"]:
-                raise ServiceError(403, "forbidden", "not your request")
         return _j(S().exposure(rid))
 
     @route("GET", "/consent/summary", "How many donors would be eligible (counts only)",

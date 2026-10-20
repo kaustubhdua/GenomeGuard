@@ -1,3 +1,5 @@
+import json
+
 from tests.helpers import ADMIN, ANON, ATTACKER, DEMO_REQ, RESEARCHER, H, attack_queries, make_client
 
 
@@ -106,9 +108,10 @@ def test_tamper_endpoint_403_when_disabled():
 def test_exposure_and_report_endpoints():
     svc, c = make_client()
     d = c.post("/requests", json=DEMO_REQ, headers=H(RESEARCHER)).json()
-    g = c.get(f"/requests/{d['id']}/exposure", headers=H(RESEARCHER)).json()
+    g = c.get(f"/requests/{d['id']}/exposure", headers=ADMIN).json()
     assert "SIMULATED" in g["model"]
-    assert c.get(f"/requests/{d['id']}/exposure", headers=H(ATTACKER)).status_code == 403
+    # the exposure graph describes withheld variants and registry relatives: steward-only
+    assert c.get(f"/requests/{d['id']}/exposure", headers=H(RESEARCHER)).status_code == 401
     rep = c.get("/reports/compliance", headers=ADMIN).json()
     assert rep["facts"]["requests"] == 1 and rep["report"]
     assert c.get("/reports/compliance").status_code == 401
@@ -128,3 +131,21 @@ def test_no_response_ever_leaks_genotype_like_data():
              c.get("/anomalies", headers=ADMIN).text, c.get("/me", headers=H(RESEARCHER)).text]
     for t in texts:
         assert "genotype_blob" not in t and "consent_json" not in t and "donor_ids" not in t
+
+
+def test_researcher_never_sees_carrier_counts_relatives_or_detector_scores():
+    svc, c = make_client()
+    d = c.post("/requests", json=DEMO_REQ, headers=H(RESEARCHER)).json()
+    admin_view = c.get(f"/requests/{d['id']}", headers=ADMIN).json()
+    # sanity: the sensitive fields exist server-side and the admin can see them
+    assert admin_view["risk"]["before"]["min_carriers"] is not None
+    assert admin_view["risk"]["before"]["relatives_exposed"]["total"] > 0
+    assert "anomaly" in admin_view["transform"]["agent_notes"]
+    for body in (d, c.get(f"/requests/{d['id']}", headers=H(RESEARCHER)).json(),
+                 c.get("/requests", headers=H(RESEARCHER)).json()["requests"][0]):
+        text = json.dumps(body)
+        for forbidden in ("min_carriers", "carrier_families", "relatives_exposed",
+                          "relatives_exposed_total", "Simulated model", "Behaviour score"):
+            assert forbidden not in text, forbidden
+        assert body["risk"]["consent"]["eligible"] > 0  # what they may know is still there
+        assert body["risk"]["before"]["band"] == "high"
