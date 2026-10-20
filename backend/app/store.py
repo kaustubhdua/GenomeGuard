@@ -260,6 +260,14 @@ class AuditStore:
                  "payload": json.loads(r["payload_json"]), "prev_hash": r["prev_hash"],
                  "hash": r["hash"]} for r in self.s.q("SELECT * FROM audit_log ORDER BY idx")]
 
+    def last(self) -> dict | None:
+        r = self.s.one("SELECT * FROM audit_log ORDER BY idx DESC LIMIT 1")
+        if not r:
+            return None
+        return {"idx": r["idx"], "ts": r["ts"], "actor": r["actor"], "action": r["action"],
+                "payload": json.loads(r["payload_json"]), "prev_hash": r["prev_hash"],
+                "hash": r["hash"]}
+
     def add(self, e: dict) -> None:
         self.s.x("INSERT INTO audit_log VALUES(?,?,?,?,?,?,?)",
                  (e["idx"], e["ts"], e["actor"], e["action"], json.dumps(e["payload"]),

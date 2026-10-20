@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 
-.PHONY: setup seed run test eval demo lint
+.PHONY: setup seed run test eval eval-smoke demo lint
 
 setup:
 	python3 -m venv .venv
@@ -21,7 +21,10 @@ lint:
 	.venv/bin/ruff check backend
 
 eval:
-	@echo "eval: implemented in step 10 (red-team harness)"
+	PYTHONPATH=backend $(PY) -m redteam.run_eval
+
+eval-smoke:
+	PYTHONPATH=backend $(PY) -m redteam.run_eval --quick
 
 demo:
 	@echo "demo: implemented in step 12 (scripted demo scenario)"

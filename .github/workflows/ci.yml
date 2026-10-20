@@ -11,4 +11,4 @@ jobs:
       - run: make setup
       - run: make lint
       - run: make test
-      # eval smoke test is added in step 10
+      - run: make eval-smoke

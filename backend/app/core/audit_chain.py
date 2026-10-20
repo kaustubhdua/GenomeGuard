@@ -59,6 +59,7 @@ def _now() -> str:
 
 class Store(Protocol):
     def all(self) -> list[dict]: ...
+    def last(self) -> dict | None: ...
     def add(self, entry: dict) -> None: ...
     def replace_payload(self, idx: int, payload: Any) -> None: ...
 
@@ -69,6 +70,9 @@ class MemoryStore:
 
     def all(self) -> list[dict]:
         return [dict(r) for r in self.rows]
+
+    def last(self) -> dict | None:
+        return dict(self.rows[-1]) if self.rows else None
 
     def add(self, entry: dict) -> None:
         self.rows.append(dict(entry))
@@ -125,9 +129,9 @@ class AuditChain:
         self.allow_tamper = allow_tamper
 
     def append(self, actor: str, action: str, payload: Any, ts: str | None = None) -> dict:
-        rows = self.store.all()
-        prev = rows[-1]["hash"] if rows else GENESIS
-        idx = len(rows) + 1
+        last = self.store.last()
+        prev = last["hash"] if last else GENESIS
+        idx = (last["idx"] + 1) if last else 1
         ts = ts or _now()
         payload = jsonable(payload)
         entry = {"idx": idx, "ts": ts, "actor": actor, "action": action, "payload": payload,
@@ -140,8 +144,9 @@ class AuditChain:
         return self.store.all()
 
     def head(self) -> dict:
-        rows = self.store.all()
-        return {"length": len(rows), "head_hash": rows[-1]["hash"] if rows else GENESIS}
+        last = self.store.last()
+        return {"length": last["idx"] if last else 0,
+                "head_hash": last["hash"] if last else GENESIS}
 
     def verify(self, anchor: dict | None = None) -> dict:
         return verify(self.store.all(), anchor)
