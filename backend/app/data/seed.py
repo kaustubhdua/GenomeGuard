@@ -14,17 +14,24 @@ from datetime import datetime
 import numpy as np
 
 from app.config import settings
+from app.core import crypto
 from app.data.synth import generate, summarize
 
 
-def _blob(row: np.ndarray) -> bytes:
+def _master() -> bytes:
+    return crypto.load_master_key(settings.master_key)
+
+
+def _blob(donor_id: int, row: np.ndarray, master: bytes) -> bytes:
+    """Compressed numpy bytes, then AES-256-GCM encrypted with the dataset key, bound to the donor."""
     buf = io.BytesIO()
     np.savez_compressed(buf, g=row.astype(np.int8))
-    return buf.getvalue()
+    return crypto.encrypt(master, settings.dataset_id, donor_id, buf.getvalue())
 
 
-def load_genotype(blob: bytes) -> np.ndarray:
-    return np.load(io.BytesIO(blob))["g"]
+def load_genotype(donor_id: int, blob: bytes, master: bytes | None = None) -> np.ndarray:
+    raw = crypto.decrypt(master or _master(), settings.dataset_id, donor_id, blob)
+    return np.load(io.BytesIO(raw))["g"]
 
 
 def seed_database(engine=None, **kwargs) -> dict:
@@ -47,6 +54,7 @@ def seed_database(engine=None, **kwargs) -> dict:
     p.update(kwargs)
     c = generate(**p)
     now = datetime(2026, 1, 1)
+    master = _master()
     v = c.variants
     with Session(engine) as s:
         s.add_all(
@@ -64,7 +72,7 @@ def seed_database(engine=None, **kwargs) -> dict:
                     withdrawn_at=now if d["withdrawn"] else None,
                 )
             )
-            s.add(models.Genotype(donor_id=d["id"], genotype_blob=_blob(c.genotypes[d["id"] - 1])))
+            s.add(models.Genotype(donor_id=d["id"], genotype_blob=_blob(d["id"], c.genotypes[d["id"] - 1], master)))
         s.add_all(
             models.Relationship(
                 donor_a=r["donor_a"], donor_b=r["donor_b"], relation=r["relation"],

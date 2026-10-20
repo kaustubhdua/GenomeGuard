@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     genotype_dir: str = "./data_store"  # compressed numpy genotype files; never served by the API
     allow_tamper_demo: bool = False  # enables POST /admin/tamper/{idx}; demo only
     admin_api_key: str = "dev-admin-key-change-me"
+    master_key: str | None = None  # base64 32 bytes; absent -> INSECURE dev key (warned)
+    dataset_id: str = "synthetic-cohort-1"  # one encryption key and one epsilon budget per dataset
     anthropic_api_key: str | None = None  # absent -> deterministic template explanations
 
     # --- synthetic data defaults (section 7.1) ---
