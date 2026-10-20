@@ -1,207 +1,206 @@
-"""Privacy-risk estimator (section 7.3). Pure numpy: no database, no web, no config import.
+"""Re-identification risk estimator (section 7.3).
 
-Given a candidate release (donors x variants at a data level) it reports, with plain numbers:
+`estimate()` scores a *candidate release*: a set of donors (the eligible cohort), a set of variants
+and a data level ("boolean" < "count" < "frequency" < "record"), optionally with protections
+already applied by the transform ladder. It never returns genotypes, only numbers and a band.
 
-  n                  cohort size. Below k_min the release is never allowed (`below_k_min`).
-  uniqueness_rate    share of donors whose genotype vector over the released variants is unique
-                     in the cohort. Only a real risk when INDIVIDUAL rows leave the system
-                     (data_level == "record"); for aggregate levels it is reported as a
-                     worst-case indicator but does not drive the band.
-  info_bits          mean over donors of sum_j -log2 P(genotype_ij) under Hardy-Weinberg
-                     (record level only). Compare with log2(n): once bits >> log2(n), a donor's
-                     row identifies them inside this cohort. (~33 bits single out one person
-                     among 8 billion.)
-  rare_variants      released variants with MAF < rare_maf, and `min_carriers` = fewest carriers
-                     of any such variant that is actually present in the cohort. Fewer than
-                     min_carriers_high carriers means a count/frequency/boolean answer can
-                     reveal membership, so the band becomes "high" - UNLESS the variant is
-                     masked by the transform (frequency rounded to 0 in its bin, or Laplace
-                     noise scale >= carrier count, a documented heuristic: the real guarantee is
-                     epsilon, and the evaluation measures the actual attack AUC).
-  relatives_exposed  SIMULATED MODEL: registry relatives (up to third cousins) of released
-                     donors who are not themselves in the release, with expected shared DNA.
-                     These are people who never had a say in this request.
+What the recipient can learn depends on the level, so the band is computed differently:
 
-Band = worst of: size (n < k_min -> high), uniqueness (record level only), rare-variant carriers,
-and kin-linked rare variants (a released carrier with a close relative outside the release ->
-at least medium). All thresholds live in RiskThresholds (mirrors config.py).
+RECORD level (individual genotype rows are released)
+    uniqueness_rate  share of donors whose genotype vector over the released variants is unique in
+                     the cohort (found by hashing/grouping rows). Band: <1% low, 1-10% medium,
+                     >10% high. Simple, honest and verifiable.
+    info_bits        sum of -log2 P(genotype) under Hardy-Weinberg per donor, shown against
+                     log2(n): once a donor's bits exceed log2(n) the genotype alone singles them out.
+
+AGGREGATE levels (count / frequency / boolean: no individual rows leave the system)
+    Individual vectors are not released, so uniqueness is not the leak. Two leaks remain:
+    (a) rare variants with very few carriers: a count of 1-4 effectively names the carrier(s)
+        (and rare alleles cluster in families); hidden only if binning/noise blurs the count;
+    (b) membership inference (Homer/Sankararaman-style likelihood-ratio attacks), whose power grows
+        with (number of released statistics) / (cohort size). We use a transparent proxy,
+        `membership_signal` z = sqrt(sum_v effect_v^2 / (sampling_var_v + distortion^2)), where the
+        effect of one donor on a frequency is ~1/n. Binning and Laplace noise add `distortion`.
+        This proxy is CALIBRATED against the measured attack in `make eval`.
+    n < K_MIN is always high: never release below the minimum cohort size.
+
+RELATIVE exposure (the differentiator, a SIMULATED model, not a forecast about any real database)
+    Subjects = all donors (record level) or the carriers of released rare variants (aggregate).
+    Exposed relatives = registry members related to a subject, expected to share >= ~0.8% of DNA
+    (third cousins), who are not themselves subjects. Grouped by degree = round(-log2(shared)):
+    1 = parent/child/sibling (50%), 2 = grandparent/aunt/half-sibling (25%), 3 = first cousin
+    (12.5%), 5 = second cousin (3.1%), 7 = third cousin (0.8%). Shares are expected averages.
 """
 
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
 
-BAND_ORDER = {"low": 0, "medium": 1, "high": 2}
-AGGREGATE_LEVELS = ("boolean", "count", "frequency")
+from app.core.dataset import Dataset
+from app.core.params import BANDS, DEFAULT, Params
 
 
 @dataclass(frozen=True)
-class RiskThresholds:
-    k_min: int = 20
-    uniqueness_medium: float = 0.01
-    uniqueness_high: float = 0.10
-    min_carriers_high: int = 5
-    rare_maf: float = 0.01
-    max_meioses: int = 8
-    min_shared: float = 0.0078  # ignore relatives expected to share less than ~0.8%
-    close_shared: float = 0.25  # "close" relative: expected sharing >= 25%
+class Protections:
+    """What the transform ladder has already done to the candidate release."""
 
-    @classmethod
-    def from_settings(cls) -> RiskThresholds:
-        from app.config import settings as s
-
-        return cls(s.k_min, s.uniqueness_medium, s.uniqueness_high, s.min_carriers_high,
-                   s.rare_maf, s.max_relative_meioses, s.exposure_min_shared)
+    bin_width: float | None = None  # frequencies rounded into bins this wide
+    epsilon: float | None = None  # total epsilon spent on Laplace noise for this release
 
 
-def _worst(*bands: str) -> str:
-    return max(bands, key=BAND_ORDER.__getitem__)
+def _bump(band: str, to: str) -> str:
+    return to if BANDS.index(to) > BANDS.index(band) else band
 
 
-def uniqueness_rate(sub: np.ndarray) -> float:
-    """Share of rows (donors) whose vector appears exactly once. sub: (n, m) int array."""
-    n = sub.shape[0]
-    if n == 0:
+def distortion_variance(n: int, prot: Protections, n_variants: int, p: Params) -> float:
+    """Variance added to each released FREQUENCY by binning and Laplace noise."""
+    var = 0.0
+    if prot.bin_width:
+        var += prot.bin_width**2 / 12.0  # uniform quantisation error
+    if prot.epsilon and n_variants:
+        scale = p.allele_count_sensitivity * n_variants / prot.epsilon  # b = 2V/eps (composition)
+        var += 2.0 * scale**2 / (2.0 * n) ** 2  # Laplace variance 2b^2, count -> frequency
+    return var
+
+
+def membership_signal(n: int, p_vec: np.ndarray, prot: Protections, p: Params) -> float:
+    if n <= 0 or len(p_vec) == 0:
         return 0.0
-    if sub.shape[1] == 0:
-        return 1.0 if n == 1 else 0.0
-    _, counts = np.unique(sub, axis=0, return_counts=True)
-    return float((counts == 1).sum() / n)
+    pq = p_vec * (1 - p_vec)
+    effect2 = pq / (2.0 * n**2)  # variance contributed by one donor's genotype
+    samp2 = pq / (2.0 * n)  # attacker's baseline uncertainty about the frequency
+    d2 = distortion_variance(n, prot, len(p_vec), p)
+    return float(math.sqrt(np.sum(effect2 / (samp2 + d2))))
 
 
-def information_bits(sub: np.ndarray, maf: np.ndarray) -> float:
-    """Mean over donors of sum_j -log2 P(g_ij) with genotype g in {0,1,2} minor-allele copies,
-    assuming Hardy-Weinberg at the stored frequency."""
-    if sub.size == 0:
-        return 0.0
-    p = np.clip(maf, 1e-6, 0.5)
-    probs = np.stack([(1 - p) ** 2, 2 * p * (1 - p), p**2])  # (3, m)
-    cols = np.arange(sub.shape[1])
-    bits = -np.log2(probs[sub.astype(int), cols])  # (n, m)
-    return float(bits.sum(axis=1).mean())
-
-
-def relative_exposure(
-    released_ids: set[int], relationships: list[dict], t: RiskThresholds
-) -> dict:
-    """SIMULATED MODEL. Relatives of released donors who are outside the release, counted once
-    each at their closest relationship. `relationships` rows: donor_a, donor_b, relation,
-    meioses, shared (expected average; real sharing varies, especially for distant cousins)."""
-    best: dict[int, tuple[float, str]] = {}
-    inside_pairs = 0
-    for r in relationships:
-        if r["meioses"] > t.max_meioses or r["shared"] < t.min_shared:
-            continue
-        a, b = r["donor_a"], r["donor_b"]
-        for me, other in ((a, b), (b, a)):
-            if me in released_ids:
-                if other in released_ids:
-                    inside_pairs += 1
-                    continue
-                if other not in best or r["shared"] > best[other][0]:
-                    best[other] = (r["shared"], r["relation"])
-    by_relation: dict[str, int] = {}
-    for _, name in best.values():
-        by_relation[name] = by_relation.get(name, 0) + 1
+def relative_exposure(ds: Dataset, subjects: set[int], p: Params) -> dict:
+    by_degree: Counter[int] = Counter()
+    by_relation: Counter[str] = Counter()
+    exposed: dict[int, float] = {}
+    for s in subjects:
+        for other, relation, shared in ds.relatives.get(s, []):
+            if other in subjects or shared < p.exposure_min_shared:
+                continue
+            if shared > exposed.get(other, 0.0):
+                exposed[other] = shared
+                # attribute each exposed relative to their closest subject once (below)
+    closest: dict[int, tuple[str, float]] = {}
+    for s in subjects:
+        for other, relation, shared in ds.relatives.get(s, []):
+            if other in exposed and shared == exposed[other] and other not in closest:
+                closest[other] = (relation, shared)
+    for _, (relation, shared) in closest.items():
+        by_degree[round(-math.log2(shared))] += 1
+        by_relation[relation] += 1
     return {
-        "total": len(best),
-        "by_relation": dict(sorted(by_relation.items(), key=lambda kv: -kv[1])),
-        "close_total": sum(1 for s, _ in best.values() if s >= t.close_shared),
-        "expected_shared_sum": round(sum(s for s, _ in best.values()), 4),
-        "exposed_ids": sorted(best),  # internal; API layers must not return these
-        "model": "simulated; expected averages, real sharing varies",
+        "total": len(closest),
+        "subjects": len(subjects),
+        "by_degree": {int(k): int(v) for k, v in sorted(by_degree.items())},
+        "by_relation": dict(by_relation.most_common()),
+        "expected_shared_dna": round(sum(sh for _, sh in closest.values()), 3),
+        "model": "simulated: expected-average kinship, not a forecast about any real database",
     }
 
 
-def estimate_risk(
-    genotypes: np.ndarray,
-    maf: np.ndarray,
+def estimate(
+    ds: Dataset,
     donor_ids: list[int],
-    variant_idx: list[int] | np.ndarray,
-    data_level: str,
-    relationships: list[dict] | None = None,
-    thresholds: RiskThresholds | None = None,
-    bin_width: float | None = None,
-    noise_scale: float | None = None,
+    variant_idx: np.ndarray,
+    level: str,
+    prot: Protections | None = None,
+    p: Params = DEFAULT,
 ) -> dict:
-    """Risk of releasing `variant_idx` for `donor_ids` (1-based ids; row = id - 1) at
-    `data_level`. `bin_width` / `noise_scale` describe transforms ALREADY applied so the
-    estimator can credit them (see module docstring)."""
-    t = thresholds or RiskThresholds()
-    relationships = relationships or []
-    ids = list(donor_ids)
-    vidx = np.asarray(list(variant_idx), dtype=int)
-    n = len(ids)
-    sub = genotypes[np.ix_(np.asarray(ids, dtype=int) - 1, vidx)] if n and len(vidx) else \
-        np.zeros((n, len(vidx)), dtype=np.int8)
-    m = len(vidx)
-    vmaf = maf[vidx] if m else np.array([])
-    record = data_level == "record"
-
-    uniq = uniqueness_rate(sub)
-    bits = information_bits(sub, vmaf) if record else None
-
-    # ---- rare variants (carrier counts are WITHIN the released cohort) ----
-    carriers = (sub > 0).sum(axis=0) if n and m else np.zeros(m, dtype=int)
-    is_rare = vmaf < t.rare_maf
-    present_rare = is_rare & (carriers > 0)
-    freq = sub.sum(axis=0) / (2.0 * n) if n and m else np.zeros(m)
-    masked = np.zeros(m, dtype=bool)
-    if bin_width:  # frequency rounds to the zero bin: nothing visible
-        masked |= present_rare & (freq < bin_width / 2.0)
-    if noise_scale:  # signal (carrier count) no larger than the Laplace scale
-        masked |= present_rare & (carriers <= noise_scale)
-    exposed_rare = present_rare & ~masked
-    min_carriers = int(carriers[exposed_rare].min()) if exposed_rare.any() else None
-
-    # ---- relatives ----
-    rel = relative_exposure(set(ids), relationships, t)
-    carrier_donors = set()
-    if exposed_rare.any():
-        any_carry = (sub[:, exposed_rare] > 0).any(axis=1)
-        carrier_donors = {ids[i] for i in np.where(any_carry)[0]}
-    exposed_ids = set(rel["exposed_ids"])
-    kin_links = 0
-    for r in relationships:
-        if r["shared"] < t.close_shared or r["meioses"] > t.max_meioses:
-            continue
-        a, b = r["donor_a"], r["donor_b"]
-        if (a in carrier_donors and b in exposed_ids) or (b in carrier_donors and a in exposed_ids):
-            kin_links += 1
-
-    # ---- band ----
-    size_band = "high" if n < t.k_min else "low"
-    if not record:
-        uniq_band = "low"
-    elif uniq > t.uniqueness_high:
-        uniq_band = "high"
-    elif uniq >= t.uniqueness_medium:
-        uniq_band = "medium"
-    else:
-        uniq_band = "low"
-    rare_band = "high" if min_carriers is not None and min_carriers < t.min_carriers_high \
-        else "low"
-    kin_band = "medium" if kin_links > 0 or (record and rel["close_total"] > 0) else "low"
-    band = _worst(size_band, uniq_band, rare_band, kin_band)
-
-    return {
-        "n": n,
-        "below_k_min": n < t.k_min,
-        "k_min": t.k_min,
-        "data_level": data_level,
-        "n_variants": m,
-        "uniqueness_rate": round(uniq, 4),
-        "info_bits": None if bits is None else round(bits, 2),
-        "log2_n": round(math.log2(n), 2) if n > 0 else 0.0,
-        "rare_variants": int(present_rare.sum()),
-        "rare_variants_masked": int((present_rare & masked).sum()),
-        "min_carriers": min_carriers,
-        "relatives_exposed": {k: v for k, v in rel.items() if k != "exposed_ids"},
-        "kin_linked_rare_pairs": kin_links,
-        "band_components": {"size": size_band, "uniqueness": uniq_band, "rare": rare_band,
-                            "kin": kin_band},
-        "band": band,
+    prot = prot or Protections()
+    variant_idx = np.asarray(variant_idx, dtype=int)
+    n, v = len(donor_ids), len(variant_idx)
+    reasons: list[str] = []
+    out: dict = {
+        "n": n, "level": level, "n_variants": v, "below_k_min": n < p.k_min,
+        "uniqueness_rate": None, "info_bits_mean": None, "log2_n": round(math.log2(max(n, 1)), 2),
+        "rare_variants": 0, "min_carriers": None, "rare_few_carriers": 0, "rare_hidden": False,
+        "carrier_families": 0, "membership_signal": 0.0,
+        "protections": {"bin_width": prot.bin_width, "epsilon": prot.epsilon},
     }
+    if n == 0 or v == 0:
+        out.update(band="high" if n < p.k_min else "low", band_reasons=["empty_release"],
+                   relatives_exposed=relative_exposure(ds, set(), p))
+        return out
+
+    rows = ds.rows(donor_ids)
+    g = ds.genotypes[np.ix_(rows, variant_idx)]  # (n, v), local copy; never leaves this function
+    maf = ds.maf[variant_idx]
+
+    # ---- rare variants and carrier counts ---------------------------------------------------
+    rare = maf < p.rare_maf
+    carriers = (g > 0).sum(axis=0)
+    rare_present = rare & (carriers > 0)
+    out["rare_variants"] = int(rare.sum())
+    if rare_present.any():
+        out["min_carriers"] = int(carriers[rare_present].min())
+    few = rare_present & (carriers < p.min_carriers_high)
+    out["rare_few_carriers"] = int(few.sum())
+
+    carrier_donors: set[int] = set()
+    if rare_present.any():
+        mask = (g[:, rare_present] > 0).any(axis=1)
+        carrier_donors = {int(donor_ids[i]) for i in np.where(mask)[0]}
+    fam = {d.id: d.family_id for d in ds.donors}
+    out["carrier_families"] = len({fam[d] for d in carrier_donors})
+
+    # ---- how much blurring protects small counts (alleles) -----------------------------------
+    d_var = distortion_variance(n, prot, v, p)
+    hidden_by_bins = bool(prot.bin_width and prot.bin_width >= 2 * p.rare_maf)
+    noise_alleles = math.sqrt(d_var) * 2.0 * n  # distortion expressed in allele counts
+    hidden = level in ("count", "frequency") and (hidden_by_bins or noise_alleles >= p.min_carriers_high)
+    out["rare_hidden"] = bool(hidden)
+
+    # ---- release-level quantities ------------------------------------------------------------
+    pv = ds.alt_freq[variant_idx]
+    if level == "record":
+        uniq = np.unique(g, axis=0, return_counts=True)[1]
+        out["uniqueness_rate"] = round(float((uniq == 1).sum()) / n, 4)
+        lp = np.stack([2 * np.log2(1 - pv), np.log2(2 * pv * (1 - pv)), 2 * np.log2(pv)])
+        bits = -lp[g, np.arange(v)].sum(axis=1)
+        out["info_bits_mean"] = round(float(bits.mean()), 2)
+    if level in ("count", "frequency"):
+        out["membership_signal"] = round(membership_signal(n, pv, prot, p), 3)
+
+    # ---- band --------------------------------------------------------------------------------
+    band = "low"
+    if n < p.k_min:
+        band = "high"
+        reasons.append("cohort_below_k_min")
+    if level == "record":
+        u = out["uniqueness_rate"]
+        if u > p.uniqueness_high:
+            band = _bump(band, "high")
+            reasons.append("record_uniqueness_high")
+        elif u >= p.uniqueness_medium:
+            band = _bump(band, "medium")
+            reasons.append("record_uniqueness_medium")
+    else:
+        z = out["membership_signal"]
+        if z >= p.signal_high:
+            band = _bump(band, "high")
+            reasons.append("membership_signal_high")
+        elif z >= p.signal_medium:
+            band = _bump(band, "medium")
+            reasons.append("membership_signal_medium")
+    if few.any() and not hidden:
+        band = _bump(band, "high")
+        reasons.append("rare_variant_few_carriers")
+    elif rare_present.any() and level == "boolean":
+        band = _bump(band, "medium")
+        reasons.append("rare_variant_existence_revealed")
+
+    subjects = set(int(d) for d in donor_ids) if level == "record" else carrier_donors
+    if level != "record" and hidden:
+        subjects = set()  # carriers are not singled out when counts are blurred
+    out["relatives_exposed"] = relative_exposure(ds, subjects, p)
+    out["band"] = band
+    out["band_reasons"] = reasons
+    return out

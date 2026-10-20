@@ -50,12 +50,13 @@ class AnomalyConfig:
     diff_hits_freeze: int = 3  # ...and this many -> freeze (a human reviews)
 
     @classmethod
-    def from_settings(cls) -> AnomalyConfig:
-        from app.config import settings as s
+    def from_params(cls, p=None) -> AnomalyConfig:
+        from app.core.params import DEFAULT
 
-        return cls(window_s=s.anomaly_window_minutes * 60.0, k_min=s.k_min,
-                   epsilon_budget=s.epsilon_budget, warn=s.anomaly_warn,
-                   throttle=s.anomaly_throttle, freeze=s.anomaly_freeze)
+        p = p or DEFAULT
+        return cls(window_s=p.anomaly_window_minutes * 60.0, k_min=p.k_min,
+                   epsilon_budget=p.epsilon_budget, warn=p.anomaly_warn,
+                   throttle=p.anomaly_throttle, freeze=p.anomaly_freeze)
 
 
 @dataclass(frozen=True)

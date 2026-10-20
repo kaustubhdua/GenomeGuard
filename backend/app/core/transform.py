@@ -7,6 +7,8 @@ band "medium" -> release with what was applied.
   1 drop_rare_variants        drop variants with MAF below the floor
   2 downgrade_to_count        record -> count  (a record-level request never auto-releases rows)
   3 generalise_bins           round frequencies / counts into bins of `bin_width`
+  3b limit_variants           only if still risky and > max_variants_noised variants: keep the first
+                              N requested (noise grows linearly with #variants, so release few)
   4 laplace_noise             Laplace noise on allele counts, scale = sensitivity * m / epsilon
   5 downgrade_to_boolean      last resort: frequencies/counts -> yes/no (loses the most utility)
 
@@ -31,7 +33,9 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
-from app.core.risk import RiskThresholds, estimate_risk
+from app.core.dataset import Dataset
+from app.core.params import DEFAULT, Params
+from app.core.risk import Protections, estimate
 
 LEVELS = ("boolean", "count", "frequency", "record")
 SENSITIVITY = 2.0  # one donor changes a diploid allele count by at most 2
@@ -101,8 +105,9 @@ class TransformResult:
 
 
 def _brief(r: dict) -> dict:
-    keys = ("n", "band", "uniqueness_rate", "info_bits", "rare_variants", "rare_variants_masked",
-            "min_carriers", "kin_linked_rare_pairs")
+    keys = ("n", "level", "n_variants", "band", "band_reasons", "uniqueness_rate", "info_bits_mean",
+            "rare_variants", "rare_few_carriers", "rare_hidden", "min_carriers",
+            "membership_signal")
     out = {k: r.get(k) for k in keys}
     out["relatives_exposed_total"] = (r.get("relatives_exposed") or {}).get("total")
     return out
@@ -136,30 +141,26 @@ def materialize(
 
 
 def run_ladder(
-    genotypes: np.ndarray,
-    maf: np.ndarray,
+    ds: Dataset,
     donor_ids: list[int],
     variant_idx: list[int],
     level: str,
-    relationships: list[dict],
-    thresholds: RiskThresholds | None = None,
-    epsilon_available: float = 1.0,
-    epsilon_per_release: float = 0.5,
-    maf_floor: float = 0.01,
-    bin_width: float = 0.05,
+    p: Params = DEFAULT,
+    epsilon_available: float | None = None,
     min_epsilon: float = 0.05,
     rng: np.random.Generator | None = None,
     build_release: bool = True,
 ) -> TransformResult:
     """Decide what transforms a release needs. Does NOT charge the ledger: the caller charges
     `result.epsilon_spent` when it actually releases."""
-    t = thresholds or RiskThresholds()
     rng = rng or np.random.default_rng(0)
+    eps_avail = p.epsilon_budget if epsilon_available is None else epsilon_available
+    maf, genotypes = ds.maf, ds.genotypes
     plan = TransformPlan(level, tuple(int(v) for v in variant_idx))
 
-    def risk(p: TransformPlan) -> dict:
-        return estimate_risk(genotypes, maf, donor_ids, list(p.variant_idx), p.level,
-                             relationships, t, p.bin_width, p.noise_scale)
+    def risk(pl: TransformPlan) -> dict:
+        prot = Protections(pl.bin_width, pl.epsilon)
+        return estimate(ds, donor_ids, np.asarray(pl.variant_idx, dtype=int), pl.level, prot, p)
 
     before = risk(plan)
     steps: list[dict] = []
@@ -184,10 +185,10 @@ def run_ladder(
         return finish("permit", [], True)
 
     # 1. drop rare variants
-    keep = tuple(v for v in cur.variant_idx if maf[v] >= maf_floor)
+    keep = tuple(v for v in cur.variant_idx if maf[v] >= p.maf_floor)
     if len(keep) != len(cur.variant_idx):
         dropped = len(cur.variant_idx) - len(keep)
-        record("drop_rare_variants", f"dropped {dropped} variant(s) with MAF < {maf_floor}",
+        record("drop_rare_variants", f"dropped {dropped} variant(s) with MAF < {p.maf_floor}",
                replace(cur, variant_idx=keep))
         if not keep:
             return finish("deny", ["all_variants_below_maf_floor"], False)
@@ -197,11 +198,17 @@ def run_ladder(
                replace(cur, level="count"))
     # 3. generalise
     if cur_risk["band"] != "low" and cur.level in ("frequency", "count"):
-        record("generalise_bins", f"round into bins of width {bin_width}",
-               replace(cur, bin_width=bin_width))
+        record("generalise_bins", f"round into bins of width {p.freq_bin_width}",
+               replace(cur, bin_width=p.freq_bin_width))
+    # 3b. noise grows with the number of variants: cap them
+    if (cur_risk["band"] != "low" and cur.level in ("frequency", "count")
+            and len(cur.variant_idx) > p.max_variants_noised):
+        record("limit_variants", f"noise grows with #variants: kept the first "
+               f"{p.max_variants_noised} of {len(cur.variant_idx)}",
+               replace(cur, variant_idx=cur.variant_idx[: p.max_variants_noised]))
     # 4. Laplace noise
     if cur_risk["band"] != "low" and cur.level in ("frequency", "count"):
-        eps = min(epsilon_per_release, epsilon_available)
+        eps = min(p.epsilon_per_release, eps_avail)
         if eps < min_epsilon:
             return finish("deny", ["epsilon_budget_exhausted"], False)
         scale = SENSITIVITY * len(cur.variant_idx) / eps

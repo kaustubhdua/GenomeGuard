@@ -13,7 +13,7 @@ from datetime import datetime
 
 import numpy as np
 
-from app.config import settings
+from app.config import params, settings
 from app.core import crypto
 from app.data.synth import generate, summarize
 
@@ -49,7 +49,7 @@ def seed_database(engine=None, **kwargs) -> dict:
         "n_families": settings.n_families,
         "seed": settings.seed,
         "n_planted": settings.n_planted_rare,
-        "rare_maf": settings.rare_maf,
+        "rare_maf": params.rare_maf,
     }
     p.update(kwargs)
     c = generate(**p)
