@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS epsilon_ledger(requester_id INTEGER, dataset_id TEXT,
   epsilon_spent REAL, updated_at TEXT, PRIMARY KEY(requester_id, dataset_id));
 CREATE TABLE IF NOT EXISTS audit_log(idx INTEGER PRIMARY KEY, ts TEXT, actor TEXT, action TEXT,
   payload_json TEXT, prev_hash TEXT, hash TEXT);
+CREATE TABLE IF NOT EXISTS donor_access(id INTEGER PRIMARY KEY AUTOINCREMENT, donor_id INTEGER,
+  request_id INTEGER, ts TEXT, purpose TEXT, disease TEXT, level TEXT, institution TEXT);
+CREATE INDEX IF NOT EXISTS donor_access_donor ON donor_access(donor_id);
 CREATE TABLE IF NOT EXISTS alerts(id INTEGER PRIMARY KEY AUTOINCREMENT, requester_id INTEGER,
   ts TEXT, kind TEXT, score REAL, details_json TEXT, action_taken TEXT);
 """
@@ -142,6 +145,23 @@ class Store:
 
     def requester_by_key(self, key_hash: str) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE api_key_hash=?", (key_hash,))
+
+    # ------------------------------------------------------------------ donor ledger
+    def add_donor_access(self, rows: list[tuple]) -> None:
+        """rows: (donor_id, request_id, ts, purpose, disease, level, institution). One row per
+        donor included in an AGGREGATE release; this is what a donor sees in their portal."""
+        with self.lock:
+            self.db.executemany(
+                "INSERT INTO donor_access(donor_id,request_id,ts,purpose,disease,level,"
+                "institution) VALUES(?,?,?,?,?,?,?)", rows)
+            self.db.commit()
+
+    def donor_access(self, donor_id: int, limit: int = 200) -> list[dict]:
+        return self.q("SELECT request_id,ts,purpose,disease,level,institution FROM donor_access "
+                      "WHERE donor_id=? ORDER BY id DESC LIMIT ?", (donor_id, limit))
+
+    def set_donor_withdrawn(self, donor_id: int, ts: str | None) -> None:
+        self.x("UPDATE donors SET withdrawn_at=? WHERE id=?", (ts, donor_id))
 
     def requester(self, rid: int) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE id=?", (rid,))

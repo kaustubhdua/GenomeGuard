@@ -21,10 +21,12 @@ Every step writes to the hash-chained audit log.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import numpy as np
@@ -351,6 +353,7 @@ class GenomeGuardService:
         out["variant_ids"] = [int(v) + 1 for v in plan.variant_idx]
         out["n_donors"] = len(donor_ids)
         out["epsilon_spent"] = eps
+        self._record_donor_access(req_id, rid, donor_ids)
         self.audit.append("system", "release.issued", {
             "request_id": req_id, "level": plan.level, "n_variants": len(plan.variant_idx),
             "n_donors": len(donor_ids), "epsilon": eps,
@@ -422,6 +425,93 @@ class GenomeGuardService:
                                    reviewed_at=now, needs_human=0, release=release)
         self.store.set_request_status(req_id, "released")
         return self.store.decision(req_id)
+
+    # ================================================================== donor portal (patient side)
+    def _record_donor_access(self, req_id: int, rid: int, donor_ids: list[int]) -> None:
+        """Remember which donors were counted in an aggregate release, for their own portal.
+        Stored apart from the audit chain on purpose: the chain never holds donor identities."""
+        r = self.store.one("SELECT purpose, disease, data_level FROM requests WHERE id=?",
+                           (req_id,)) or {}
+        who = self.store.requester(rid) or {}
+        ts = now_iso()
+        self.store.add_donor_access([
+            (d, req_id, ts, r.get("purpose"), r.get("disease"), r.get("data_level"),
+             who.get("institution") or "") for d in donor_ids])
+
+    def donor_key(self, donor_id: int) -> str:
+        """Per-donor access key derived from the master key (demo: handed out in demo mode;
+        a real deployment would use proper donor authentication)."""
+        mac = hmac.new(self.master or b"dev", f"donor|{self.dataset_id}|{donor_id}".encode(),
+                       hashlib.sha256)
+        return mac.hexdigest()[:24]
+
+    def donor_authenticated(self, donor_id: int, key: str | None) -> bool:
+        return bool(key) and 1 <= donor_id <= self.ds.n_donors and hmac.compare_digest(
+            self.donor_key(donor_id), key)
+
+    def _donor(self, donor_id: int):
+        if not 1 <= donor_id <= self.ds.n_donors:
+            raise ServiceError(404, "not_found", "no such donor")
+        return self.ds.donors[donor_id - 1]
+
+    def _donor_ref(self, donor_id: int) -> str:
+        return hashlib.sha256(f"{self.dataset_id}|{donor_id}".encode()).hexdigest()[:12]
+
+    def demo_donors(self) -> list[dict]:
+        """Three persona donors for the demo, chosen from the cohort by consent shape."""
+        want = [("Donor A", lambda c: c["use"] == "DS" and c.get("disease") == "diabetes"),
+                ("Donor B", lambda c: c["use"] == "HMB" and not c.get("modifiers")),
+                ("Donor C", lambda c: c["use"] == "GRU" and "NCU" in (c.get("modifiers") or []))]
+        out, used = [], set()
+        for label, pred in want:
+            for d in self.ds.donors:
+                if d.id not in used and not d.withdrawn and pred(d.consent):
+                    used.add(d.id)
+                    out.append({"id": d.id, "label": label, "key": self.donor_key(d.id)})
+                    break
+        return out
+
+    def donor_profile(self, donor_id: int) -> dict:
+        d = self._donor(donor_id)
+        acc = self.store.donor_access(donor_id)
+        c = d.consent
+        return {
+            "id": donor_id, "label": f"Donor {donor_id}", "withdrawn": d.withdrawn,
+            "consent": {"use": c.get("use"), "disease": c.get("disease"),
+                        "modifiers": c.get("modifiers") or [], "population": c.get("population"),
+                        "consent_date": c.get("consent_date")},
+            "accesses": acc[:50], "access_total": len(acc),
+            "note": "Aggregate statistics only. No researcher ever received your genome."}
+
+    def donor_set_withdrawn(self, donor_id: int, withdrawn: bool) -> dict:
+        d = self._donor(donor_id)
+        if d.withdrawn == withdrawn:
+            return self.donor_profile(donor_id)
+        self.ds.donors[donor_id - 1] = replace(d, withdrawn=withdrawn)
+        self.store.set_donor_withdrawn(donor_id, now_iso() if withdrawn else None)
+        self.audit.append(f"donor:{self._donor_ref(donor_id)}",
+                          "consent.withdrawn" if withdrawn else "consent.restored",
+                          {"donor_ref": self._donor_ref(donor_id), "effective": "future_requests"})
+        return self.donor_profile(donor_id)
+
+    def donor_ask(self, donor_id: int, intent: str) -> dict:
+        from app.agents.templates import INTENTS
+
+        if intent not in INTENTS:
+            raise ServiceError(422, "bad_intent", "intent must be one of " + ", ".join(INTENTS))
+        p = self.donor_profile(donor_id)
+        acc = self.store.donor_access(donor_id)
+        by_purpose: dict[str, int] = {}
+        by_level: dict[str, int] = {}
+        for a in acc:
+            by_purpose[a["purpose"] or "unknown"] = by_purpose.get(a["purpose"] or "unknown", 0) + 1
+            by_level[a["level"] or "unknown"] = by_level.get(a["level"] or "unknown", 0) + 1
+        c = p["consent"]
+        facts = {"intent": intent, "accesses": len(acc), "by_purpose": by_purpose,
+                 "by_level": by_level, "use": (c["use"] or "").lower(),
+                 "modifiers": [m.lower() for m in c["modifiers"]], "withdrawn": p["withdrawn"]}
+        text = self._agent("concierge", facts, actor="agent:donor")
+        return {"intent": intent, "answer": text}
 
     def freeze(self, rid: int, by: str = "admin") -> dict:
         if not self.store.requester(rid):

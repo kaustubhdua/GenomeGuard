@@ -239,6 +239,39 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(404, "not_found", "run `make eval` first")
         return JSONResponse(json.loads(EVAL_JSON.read_text()))
 
+    # ---- donor portal (patient side): authenticated by a per-donor key, never by the steward key
+    def donor_auth(request: Request) -> int:
+        did = request.path_params["id"]
+        if not S().donor_authenticated(did, request.headers.get("x-donor-key")):
+            raise ServiceError(401, "unauthorized", "donor key required (X-Donor-Key)")
+        return did
+
+    @route("GET", "/demo/donors", "Demo donor personas and keys (demo mode only)", "public")
+    async def demo_donors(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "demo mode is off")
+        return _j({"donors": S().demo_donors()})
+
+    @route("GET", "/donor/{id:int}", "A donor's own consent, status and who used their data",
+           "donor")
+    async def donor_get(request):
+        return _j(S().donor_profile(donor_auth(request)))
+
+    @route("POST", "/donor/{id:int}/withdraw", "Withdraw consent for all future requests", "donor")
+    async def donor_withdraw(request):
+        return _j(S().donor_set_withdrawn(donor_auth(request), True))
+
+    @route("POST", "/donor/{id:int}/restore", "Give consent again after withdrawing", "donor")
+    async def donor_restore(request):
+        return _j(S().donor_set_withdrawn(donor_auth(request), False))
+
+    @route("POST", "/donor/{id:int}/ask", "Ask the consent concierge one of a fixed set of "
+           "questions (who_used, what_allowed, how_withdraw, relatives, security)", "donor")
+    async def donor_ask(request):
+        did = donor_auth(request)
+        b = await _body(request)
+        return _j(await run_in_threadpool(S().donor_ask, did, str(b.get("intent", ""))))
+
     @route("GET", "/federated/demo", "Simulated hospitals with secure aggregation (synthetic)",
            "public")
     async def federated_demo(request):

@@ -44,6 +44,11 @@ ROLES = {
                   "sentences: the outcome and why, the consent result, the protections applied."),
     "reviewer": ("Reviewer assistant", "a human reviewer", "Summarise the case and list the "
                  "specific questions the human should answer. Recommend; the human decides."),
+    "concierge": ("Consent concierge", "a donor (a member of the public, not an expert)",
+                  "Answer ONE question, chosen from a fixed list (the `intent` field), about "
+                  "the donor's own consent and data use. Use plain, calm language, at most 4 "
+                  "sentences. Never say anyone received the donor's genome: only aggregate "
+                  "statistics were released. Do not give legal or medical advice."),
     "compliance": ("Audit and compliance", "a compliance officer", "Write a short plain-language "
                    "report of what was requested, released, denied and flagged."),
 }
@@ -121,7 +126,8 @@ class AgentTeam:
     use templates (keeps cost and latency low; configurable with GG_LLM_ROLES)."""
 
     def __init__(self, llm: LLM, llm_roles: set[str] | None = None) -> None:
-        roles = llm_roles if llm_roles is not None else {"explainer", "reviewer", "compliance"}
+        roles = llm_roles if llm_roles is not None else {"explainer", "reviewer", "compliance",
+                                                         "concierge"}
         self.agents = {r: Agent(r, llm, r in roles) for r in ROLES}
 
     def run(self, role: str, facts: dict) -> AgentOutput:

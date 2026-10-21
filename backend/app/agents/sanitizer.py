@@ -37,11 +37,12 @@ ALLOWED_KEYS = frozenset({
     "by_relation", "expected_shared_dna", "purpose", "disease", "is_commercial", "detail",
     "excluded", "n_steps", "reason", "agent_recommendation", "agrees", "tier", "window",
     "chain_head_short", "period",
+    "intent", "accesses", "use", "modifiers", "withdrawn", "by_purpose", "by_level", "institutions",
 })
 # maps whose KEYS are data-dependent but enumerated by our code (reason codes, detector names...)
 ALLOWED_MAPS = frozenset({
     "excluded_by_reason", "detectors", "outcomes", "denials_by_reason", "alerts_by_kind",
-    "by_degree", "by_relation",
+    "by_degree", "by_relation", "by_purpose", "by_level",
 })
 
 SAFE_STR = re.compile(r"^[a-z0-9_:\.\-]{1,48}$")

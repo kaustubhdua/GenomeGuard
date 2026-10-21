@@ -141,5 +141,52 @@ def compliance(f: dict) -> str:
     )
 
 
+USE_PLAIN = {"gru": "any research purpose", "hmb": "health, medical or biomedical research",
+             "ds": "research on one named disease"}
+MOD_PLAIN = {"ncu": "no commercial use", "npu": "non-profit use only",
+             "nmds": "no methods-development research", "nagr": "no aggregate-level research",
+             "nctrl": "no use as a control group"}
+INTENTS = ("who_used", "what_allowed", "how_withdraw", "relatives", "security")
+
+
+def concierge(f: dict) -> str:
+    """Donor-facing answers to a fixed set of questions. Never implies a genome was shared."""
+    intent = f.get("intent")
+    n = f.get("accesses", 0)
+    if f.get("withdrawn"):
+        status = "You have withdrawn consent, so you are excluded from every future release. "
+    else:
+        status = ""
+    if intent == "who_used":
+        if not n:
+            return (status + "So far, your data has not been part of any release. "
+                    "When it is, you will see it here: who asked, why, and in what form.")
+        purposes = ", ".join(sorted(f.get("by_purpose", {}))) or "research"
+        return (status + f"Your data was counted in {n} aggregate release"
+                f"{'s' if n != 1 else ''} (purposes: {purposes}). Researchers received summary "
+                "statistics about groups of donors, never your individual genome or your name.")
+    if intent == "what_allowed":
+        use = USE_PLAIN.get(f.get("use"), "the use you chose")
+        mods = [MOD_PLAIN[m] for m in f.get("modifiers", []) if m in MOD_PLAIN]
+        extra = (" You also set these limits: " + "; ".join(mods) + ".") if mods else ""
+        return (status + f"You agreed to {use}.{extra} Requests outside that are excluded "
+                "automatically before any statistic is computed.")
+    if intent == "how_withdraw":
+        return ("Press Withdraw consent on this page. It takes effect for every future request "
+                "straight away, and the withdrawal is written to a tamper-evident log. Statistics "
+                "already published about large groups cannot be recomputed without you, which is "
+                "why the system only releases protected aggregates.")
+    if intent == "relatives":
+        return ("DNA is shared with family. A rare variant in your genome can hint at relatives "
+                "who never joined. That is why GenomeGuard drops very rare variants, adds noise "
+                "and refuses small groups before releasing anything.")
+    if intent == "security":
+        return ("Genotypes are encrypted at rest with a separate key per dataset. Every request "
+                "is checked against consent, scored for re-identification risk and monitored for "
+                "probing, and every step is recorded in a hash-chained log.")
+    return "I can answer questions about who used your data, what you allowed, and how to withdraw."
+
+
 TEMPLATES = {"consent": consent, "privacy": privacy, "access": access, "anomaly": anomaly,
-             "explainer": explainer, "reviewer": reviewer, "compliance": compliance}
+             "explainer": explainer, "reviewer": reviewer, "concierge": concierge,
+             "compliance": compliance}
