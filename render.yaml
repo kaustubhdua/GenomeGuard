@@ -1,0 +1,19 @@
+# Render blueprint for a single web service (Docker). Check Render's CURRENT free-tier limits and
+# sleep behaviour before relying on it for judging; free instances may sleep when idle, so open
+# the link shortly before presenting. Without a persistent disk the database is re-created (and
+# the audit chain restarts) on every deploy or restart: acceptable for a synthetic-data demo.
+services:
+  - type: web
+    name: genomeguard
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GG_DEMO_MODE
+        value: "true"
+      - key: GG_ALLOW_TAMPER_DEMO
+        value: "true"
+      - key: GG_MASTER_KEY
+        sync: false   # set by hand: python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+      - key: GG_ADMIN_API_KEY
+        generateValue: true
