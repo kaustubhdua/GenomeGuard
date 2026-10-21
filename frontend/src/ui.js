@@ -1,0 +1,116 @@
+// Small DOM helpers shared by every page. No framework, no build step.
+export function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === false || v == null) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "html") el.innerHTML = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+export const svg = (tag, attrs, ...kids) => {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  for (const kid of kids.flat()) if (kid != null) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return el;
+};
+
+export const OUTCOME_LABEL = {
+  permit: "Approved", permit_with_transform: "Approved with protections",
+  deny: "Denied", escalate: "Held for human review",
+};
+export const badge = (o) => h("span", { class: "badge o-" + o }, OUTCOME_LABEL[o] || o);
+
+const REASONS = {
+  withdrawn: "the donor withdrew consent", purpose_unknown: "the purpose is not a recognised research purpose",
+  purpose_not_health: "consent covers health research only", disease_mismatch: "consent is limited to a different disease",
+  commercial_use_blocked: "consent forbids commercial use", methods_research_blocked: "consent forbids methods-development use",
+  aggregate_blocked: "consent forbids aggregate-level use", controls_blocked: "consent forbids use as controls",
+  population_restricted: "consent is limited to another population", unknown_consent: "the consent record was malformed",
+  below_k_min: "the eligible cohort is below the minimum size", cohort_below_k_min: "the cohort is below the minimum size",
+  credential_insufficient: "this account's credential tier does not allow that data level",
+  cohort_too_small_for_tier: "the cohort is too small for an anonymous account", no_variants: "no variants matched the request",
+  all_variants_below_maf_floor: "every requested variant was too rare to release",
+  epsilon_budget_exhausted: "the privacy (epsilon) budget is used up", residual_high_risk: "risk stayed high after every protection",
+  differencing_guard: "two queries differ by only a few donors, which could isolate them",
+  requester_frozen: "the account is frozen pending human review", requester_throttled: "unusual query patterns need a human check",
+  record_level_needs_approval: "record-level access always needs human approval",
+  record_rows_never_released: "individual rows are never released automatically",
+  rare_variant_few_carriers: "a rare variant has only a few carriers",
+};
+export const reasonText = (c) => REASONS[c] || String(c).replaceAll("_", " ");
+export const stepText = (s) => ({
+  drop_rare_variants: "Very rare variants dropped", downgrade_to_count: "Rows replaced by counts",
+  generalise_bins: "Values rounded into bins", limit_variants: "Number of variants capped",
+  laplace_noise: "Calibrated noise added (differential privacy)", downgrade_to_boolean: "Answer reduced to yes or no",
+}[s] || String(s).replaceAll("_", " "));
+
+export const when = (iso) => { try { return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); } catch { return iso; } };
+export const pct = (x, d = 1) => (x == null ? "n/a" : (100 * x).toFixed(d) + "%");
+
+export function row(label, sub, ...content) {
+  return h("div", { class: "row" }, h("div", { class: "k" }, h("b", {}, label), sub || ""), h("div", { class: "c" }, content));
+}
+
+export function notice(kind, ...kids) { return h("div", { class: "notice " + kind, role: kind === "err" ? "alert" : "status" }, kids); }
+
+export function errorText(res) {
+  const d = res.data || {};
+  if (res.status === 401) return "This view needs a different account. Use the “Acting as” menu to switch.";
+  if (res.status === 403 && d.error === "requester_frozen") return "This account is frozen pending human review. A steward can unfreeze it.";
+  return d.message || d.error || "Something went wrong (HTTP " + res.status + ").";
+}
+
+// risk lane: three bands, a pin marks where the risk sits
+export function lane(band) {
+  const pos = { low: 16.7, medium: 50, high: 83.3 }[band] ?? 50;
+  return h("div", { class: "lane", role: "img", "aria-label": "Risk band: " + band },
+    h("span", { class: "low" }, "low"), h("span", { class: "med" }, "medium"), h("span", { class: "high" }, "high"),
+    h("i", { class: "pin", style: `left:${pos}%` }));
+}
+
+export function copy(text, btn) {
+  const done = () => { const t = btn.textContent; btn.textContent = "Copied"; setTimeout(() => (btn.textContent = t), 1400); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => {});
+  else done();
+}
+
+// minimal responsive SVG line chart. series: [{name, color, points:[[x,y],..], dash?}]
+export function lineChart({ series, xLabel, yLabel, xMin, xMax, yMin = 0, yMax = 1, hlines = [], width = 640, height = 260, fmtX = (v) => v, fmtY = (v) => v }) {
+  const m = { l: 46, r: 14, t: 12, b: 38 };
+  const w = width - m.l - m.r, hh = height - m.t - m.b;
+  const xs = series.flatMap((s) => s.points.map((p) => p[0]));
+  const x0 = xMin ?? Math.min(...xs), x1 = xMax ?? Math.max(...xs, x0 + 1);
+  const X = (v) => m.l + ((v - x0) / (x1 - x0 || 1)) * w, Y = (v) => m.t + hh - ((v - yMin) / (yMax - yMin || 1)) * hh;
+  const root = svg("svg", { class: "chart", viewBox: `0 0 ${width} ${height}`, role: "img" });
+  for (let i = 0; i <= 4; i++) {
+    const v = yMin + ((yMax - yMin) * i) / 4;
+    root.append(svg("line", { x1: m.l, x2: m.l + w, y1: Y(v), y2: Y(v), stroke: "var(--rule-2)" }),
+      svg("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, fmtY(v)));
+  }
+  for (let i = 0; i <= 4; i++) {
+    const v = x0 + ((x1 - x0) * i) / 4;
+    root.append(svg("text", { x: X(v), y: height - 16, "text-anchor": "middle" }, fmtX(v)));
+  }
+  for (const hl of hlines) root.append(svg("line", { x1: m.l, x2: m.l + w, y1: Y(hl.y), y2: Y(hl.y), stroke: hl.color, "stroke-dasharray": "5 4" }),
+    svg("text", { x: m.l + w, y: Y(hl.y) - 4, "text-anchor": "end", style: `fill:${hl.color}` }, hl.label));
+  for (const s of series) {
+    const d = s.points.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join(" ");
+    root.append(svg("path", { d, fill: "none", stroke: s.color, "stroke-width": 2.5, "stroke-dasharray": s.dash || "" }));
+    for (const p of s.points) root.append(svg("circle", { cx: X(p[0]), cy: Y(p[1]), r: 3.5, fill: s.color }, svg("title", {}, `${s.name}: ${fmtX(p[0])}, ${fmtY(p[1])}`)));
+  }
+  root.append(svg("text", { x: m.l + w / 2, y: height - 1, "text-anchor": "middle" }, xLabel || ""),
+    svg("text", { x: 12, y: m.t + hh / 2, transform: `rotate(-90 12 ${m.t + hh / 2})`, "text-anchor": "middle" }, yLabel || ""));
+  return root;
+}
+
+export function legend(items) {
+  return h("div", { class: "legend", style: "margin-top:6px" }, items.map(([name, color]) =>
+    h("span", {}, h("span", { style: `display:inline-block;width:14px;height:4px;background:${color};margin-right:6px;vertical-align:middle` }), name)));
+}

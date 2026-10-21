@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GenomeGuard</title>
+<meta name="description" content="Consent-aware, relative-aware guard for genomic data. All data is synthetic.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2314213D'/%3E%3Cpath d='M9 7c0 6 14 6 14 12s-14 6-14 6M23 7c0 6-14 6-14 12s14 6 14 6' stroke='%23fff' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/src/style.css">
+</head>
+<body>
+<a class="skip" href="#view">Skip to content</a>
+<div class="shell">
+  <nav class="rail" aria-label="Main">
+    <a class="brand" href="#/requests"><span class="mark" aria-hidden="true"></span>GenomeGuard</a>
+    <div class="links" id="nav"></div>
+    <div class="who">
+      <label for="who">Acting as</label>
+      <select id="who"></select>
+      <p class="fine" id="who-note"></p>
+    </div>
+    <p class="fine synthetic">All data is synthetic. Nothing here describes a real person.</p>
+  </nav>
+  <main id="view" tabindex="-1"><p class="muted">Loading…</p></main>
+</div>
+<script type="module" src="/static/src/main.js"></script>
+</body>
+</html>

@@ -26,5 +26,10 @@ eval:
 eval-smoke:
 	PYTHONPATH=backend $(PY) -m redteam.run_eval --quick
 
+# Scripted 3-minute scenario. Starts a throwaway server on a fresh database, runs the checks.
 demo:
-	@echo "demo: implemented in step 12 (scripted demo scenario)"
+	rm -f /tmp/gg-demo.sqlite3
+	GG_DB_PATH=/tmp/gg-demo.sqlite3 GG_ALLOW_TAMPER_DEMO=true PYTHONPATH=backend \
+		$(PY) -m uvicorn app.main:app --port 8765 > /tmp/gg-demo.log 2>&1 & echo $$! > /tmp/gg-demo.pid
+	sleep 8
+	$(PY) scripts/demo.py --base http://127.0.0.1:8765; code=$$?; kill `cat /tmp/gg-demo.pid`; exit $$code
