@@ -239,6 +239,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(404, "not_found", "run `make eval` first")
         return JSONResponse(json.loads(EVAL_JSON.read_text()))
 
+    @route("GET", "/federated/demo", "Simulated hospitals with secure aggregation (synthetic)",
+           "public")
+    async def federated_demo(request):
+        from app.core.federated import demo
+        return _j(await run_in_threadpool(demo))
+
     @route("GET", "/openapi.json", "Machine-readable endpoint list", "public")
     async def openapi(request):
         return _j({"openapi": "3.0.0-lite", "info": {"title": "GenomeGuard", "version": "0.2.0"},

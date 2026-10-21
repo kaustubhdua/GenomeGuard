@@ -6,6 +6,7 @@ import * as family from "./pages/family.js";
 import * as anomalies from "./pages/anomalies.js";
 import * as audit from "./pages/audit.js";
 import * as redteam from "./pages/redteam.js";
+import * as federated from "./pages/federated.js";
 
 const ROUTES = [
   { re: /^#\/requests$/, mod: requests, nav: "requests" },
@@ -14,9 +15,10 @@ const ROUTES = [
   { re: /^#\/anomalies$/, mod: anomalies, nav: "anomalies" },
   { re: /^#\/audit$/, mod: audit, nav: "audit" },
   { re: /^#\/redteam$/, mod: redteam, nav: "redteam" },
+  { re: /^#\/federated$/, mod: federated, nav: "federated" },
 ];
 const NAV = [["requests", "Requests", "#/requests", false], ["family", "Family exposure", "#/family/1", true],
-  ["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true], ["redteam", "Red-team results", "#/redteam", false]];
+  ["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true], ["redteam", "Red-team results", "#/redteam", false], ["federated", "Federated", "#/federated", false]];
 
 let token = 0;
 async function render() {
