@@ -36,6 +36,10 @@ class Settings:
     n_populations: int = field(default_factory=lambda: _env("n_populations", 3, int))
     n_families: int = field(default_factory=lambda: _env("n_families", 120, int))
     n_planted_rare: int = field(default_factory=lambda: _env("n_planted_rare", 5, int))
+    # Optional: path to a cohort built by `python -m app.data.real build` (real 1000 Genomes
+    # genotypes, simulated consent). When set and the database is empty, it replaces the synthetic
+    # cohort. Unset = fully synthetic.
+    real_cohort_file: str = field(default_factory=lambda: _env("real_cohort_file", ""))
 
 
 def get_settings() -> Settings:

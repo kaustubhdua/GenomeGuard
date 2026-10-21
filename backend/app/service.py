@@ -594,9 +594,14 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     store = store or Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
     if not store.has_dataset():
-        cohort = generate(n_donors=s.n_donors, n_variants=s.n_variants,
-                          n_populations=s.n_populations, n_families=s.n_families, seed=s.seed,
-                          n_planted=s.n_planted_rare, rare_maf=p.rare_maf)
+        if s.real_cohort_file:
+            from app.data.real import load_cohort
+
+            cohort = load_cohort(s.real_cohort_file)
+        else:
+            cohort = generate(n_donors=s.n_donors, n_variants=s.n_variants,
+                              n_populations=s.n_populations, n_families=s.n_families,
+                              seed=s.seed, n_planted=s.n_planted_rare, rare_maf=p.rare_maf)
         store.save_cohort(cohort, master, s.dataset_id)
     ds = store.load_dataset(master, s.dataset_id)
     llm = llm or LLM(s.anthropic_api_key, s.llm_model)
