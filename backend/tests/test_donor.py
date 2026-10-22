@@ -1,3 +1,5 @@
+import json
+
 from app.agents.sanitizer import sanitize
 from app.agents.templates import INTENTS, concierge
 from tests.helpers import ADMIN, DEMO_REQ, RESEARCHER, H, make_client
@@ -104,3 +106,36 @@ def test_withdrawn_donor_excluded_from_approved_release():
     r = c.post("/requests", json=DEMO_REQ, headers=H(RESEARCHER)).json()
     assert r["outcome"].startswith("permit")
     assert c.get(f"/donor/{a['id']}", headers=DK(a)).json()["access_total"] == 0
+
+
+def _eligible(c, key):
+    r = c.post("/requests", json=DEMO_REQ, headers=H(key)).json()
+    return r["risk"]["consent"]["eligible"] if "risk" in r else None
+
+
+def test_donor_can_change_consent_and_it_applies_to_next_request():
+    svc, c = make_client()
+    a = donors(c)[0]  # DS:diabetes
+    before = c.post("/requests", json=DEMO_REQ, headers=ADMIN | H(RESEARCHER)).json()
+    n0 = before["risk"]["consent"]["eligible"]
+    r = c.put(f"/donor/{a['id']}/consent", headers=DK(a),
+              json={"use": "DS", "disease": "cancer", "modifiers": ["ncu"]})
+    assert r.status_code == 200
+    assert r.json()["consent"]["disease"] == "cancer" and r.json()["consent"]["modifiers"] == ["NCU"]
+    after = c.post("/requests", json=DEMO_REQ, headers=ADMIN | H(RESEARCHER)).json()
+    assert after["risk"]["consent"]["eligible"] == n0 - 1  # diabetes study no longer fits donor A
+    log = json.dumps(c.get("/audit", headers=ADMIN).json())
+    assert "consent.updated" in log and f'"donor_id": {a["id"]}' not in log
+
+
+def test_consent_edit_is_validated_and_authenticated():
+    svc, c = make_client()
+    a, b = donors(c)[0], donors(c)[1]
+    url = f"/donor/{a['id']}/consent"
+    assert c.put(url, json={"use": "GRU"}).status_code == 401
+    assert c.put(url, json={"use": "GRU"}, headers=DK(b)).status_code == 401
+    for bad in ({"use": "ALL"}, {"use": "DS"}, {"use": "DS", "disease": "Cancer; DROP"},
+                {"use": "GRU", "modifiers": ["XYZ"]}, {"use": "GRU", "modifiers": "NCU"}):
+        assert c.put(url, json=bad, headers=DK(a)).status_code == 422, bad
+    ok = c.put(url, json={"use": "GRU", "disease": "ignored"}, headers=DK(a)).json()
+    assert ok["consent"]["use"] == "GRU" and ok["consent"]["disease"] is None

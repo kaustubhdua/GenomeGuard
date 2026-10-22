@@ -303,6 +303,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def donor_withdraw(request):
         return _j(S().donor_set_withdrawn(donor_auth(request), True))
 
+    @route("PUT", "/donor/{id:int}/consent", "Change what you agree to (use, disease, limits); "
+           "applies to future requests", "donor")
+    async def donor_consent(request):
+        did = donor_auth(request)
+        return _j(S().donor_set_consent(did, await _body(request)))
+
     @route("POST", "/donor/{id:int}/restore", "Give consent again after withdrawing", "donor")
     async def donor_restore(request):
         return _j(S().donor_set_withdrawn(donor_auth(request), False))

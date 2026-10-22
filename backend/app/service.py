@@ -494,6 +494,37 @@ class GenomeGuardService:
                           {"donor_ref": self._donor_ref(donor_id), "effective": "future_requests"})
         return self.donor_profile(donor_id)
 
+    CONSENT_USES = ("GRU", "HMB", "DS")
+    CONSENT_MODS = ("NCU", "NPU", "NMDS", "NAGR", "NCTRL")
+
+    def donor_set_consent(self, donor_id: int, change: dict) -> dict:
+        """The donor edits what they agree to. Only whitelisted DUO-style fields are accepted;
+        the change applies to future requests and is audited without the donor's identity."""
+        d = self._donor(donor_id)
+        use = str(change.get("use", "")).upper()
+        if use not in self.CONSENT_USES:
+            raise ServiceError(422, "invalid_consent", f"use must be one of {self.CONSENT_USES}")
+        disease = change.get("disease")
+        if use == "DS":
+            if not isinstance(disease, str) or not re.fullmatch(r"[a-z_]{2,32}", disease):
+                raise ServiceError(422, "invalid_consent", "DS needs a lowercase disease name")
+        else:
+            disease = None
+        mods = change.get("modifiers") or []
+        if (not isinstance(mods, list) or not all(isinstance(m, str) for m in mods)
+                or {m.upper() for m in mods} - set(self.CONSENT_MODS)):
+            raise ServiceError(422, "invalid_consent", f"modifiers from {self.CONSENT_MODS}")
+        new = {**d.consent, "use": use, "disease": disease,
+               "modifiers": sorted({m.upper() for m in mods})}
+        old = d.consent
+        self.ds.donors[donor_id - 1] = replace(d, consent=new)
+        self.store.set_donor_consent(donor_id, new)
+        self.audit.append(f"donor:{self._donor_ref(donor_id)}", "consent.updated",
+                          {"donor_ref": self._donor_ref(donor_id), "effective": "future_requests",
+                           "use": [old.get("use"), use], "modifiers": [len(old.get("modifiers") or []),
+                                                                       len(new["modifiers"])]})
+        return self.donor_profile(donor_id)
+
     def donor_ask(self, donor_id: int, intent: str) -> dict:
         from app.agents.templates import INTENTS
 

@@ -165,6 +165,9 @@ class Store:
     def set_donor_withdrawn(self, donor_id: int, ts: str | None) -> None:
         self.x("UPDATE donors SET withdrawn_at=? WHERE id=?", (ts, donor_id))
 
+    def set_donor_consent(self, donor_id: int, consent: dict) -> None:
+        self.x("UPDATE donors SET consent_json=? WHERE id=?", (json.dumps(consent), donor_id))
+
     def requester(self, rid: int) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE id=?", (rid,))
 

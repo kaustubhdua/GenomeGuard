@@ -44,6 +44,7 @@ export async function render() {
       h("button", { class: p.withdrawn ? "" : "danger", onclick: () => act(p.withdrawn ? "restore" : "withdraw") }, p.withdrawn ? "Yes, restore" : "Yes, withdraw"),
       h("button", { class: "ghost", onclick: () => confirm.replaceChildren() }, "Cancel")));
 
+    const form = consentForm(p, (r) => { if (r.ok) { flash.replaceChildren(notice("ok", "Saved. Your new choices apply to future requests.")); draw(r.data); } else flash.replaceChildren(notice("err", errorText(r))); });
     const acc = p.accesses || [];
     body.replaceChildren(
       h("section", { class: "card" }, h("div", { class: "promise" + (p.withdrawn ? " off" : "") }, h("div", { class: "seal", "aria-hidden": "true" }, p.withdrawn ? "!" : "✓"),
@@ -53,6 +54,7 @@ export async function render() {
       h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "What you agreed to"),
         h("p", {}, "Your data may be used for ", h("b", {}, use), mods.length ? ", with these limits: " + mods.join(", ") : "", c.population ? `, for the ${c.population} group only` : "", "."),
         c.consent_date ? h("p", { class: "muted", style: "margin:0" }, "Consent given on " + c.consent_date + ".") : null),
+      h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "Change what you agree to"), form),
       h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "Who used statistics that included you"),
         acc.length ? h("ul", { class: "timeline-d" }, acc.map((a) => h("li", {}, h("span", { class: "when" }, when(a.ts)), h("span", {}, `${a.institution || "A researcher"} studied ${plain(a.purpose)}${a.disease ? " (" + a.disease + ")" : ""}, receiving ${plain(a.level)} figures.`))))
           : h("p", { class: "muted" }, "No researcher has received statistics that included you yet."),
@@ -62,4 +64,28 @@ export async function render() {
   }
   await load();
   return root;
+}
+
+const DISEASES = ["diabetes", "cancer", "cardiovascular", "asthma"];
+
+function consentForm(p, done) {
+  const c = p.consent, mods = new Set((c.modifiers || []).map((m) => m.toUpperCase()));
+  const use = h("select", { id: "c-use", onchange: () => (dis.hidden = use.value !== "DS") },
+    [["GRU", "Any research"], ["HMB", "Health, medical or biomedical research"], ["DS", "Research on one disease"]].map(([v, t]) => h("option", { value: v }, t)));
+  use.value = (c.use || "GRU").toUpperCase();
+  const disSel = h("select", { id: "c-dis" }, DISEASES.map((d) => h("option", { value: d }, d)));
+  disSel.value = c.disease || DISEASES[0];
+  const dis = h("label", { class: "f", for: "c-dis", hidden: use.value !== "DS" }, "Which disease", disSel);
+  const boxes = Object.entries(MOD).map(([k, t]) => {
+    const cb = h("input", { type: "checkbox", id: "m-" + k, value: k.toUpperCase() });
+    cb.checked = mods.has(k.toUpperCase());
+    return h("label", { for: "m-" + k, style: "display:flex;gap:8px;align-items:center;font-family:var(--sans);font-size:14px" }, cb, "Do not allow: " + t.replace(/^no /, "").replace(/^not as a /, ""));
+  });
+  const save = h("button", { onclick: async () => {
+    const body = { use: use.value, disease: use.value === "DS" ? disSel.value : null, modifiers: boxes.map((l) => l.firstChild).filter((x) => x.checked).map((x) => x.value) };
+    save.disabled = true;
+    done(await donorApi(`/donor/${p.id}/consent`, { method: "PUT", body }));
+    save.disabled = false;
+  } }, "Save my choices");
+  return h("div", { class: "stack", style: "font-family:var(--sans)" }, h("label", { class: "f", for: "c-use" }, "My data may be used for", use), dis, h("div", { class: "stack", style: "gap:8px" }, boxes), h("div", {}, save));
 }
