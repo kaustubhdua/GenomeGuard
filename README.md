@@ -37,6 +37,20 @@ deterministic templates do. Docker: `docker compose up --build`.
 Demo accounts and the steward key are published at `/demo/requesters` (demo mode, synthetic data
 only). Use the "Acting as" selector in the app to switch roles.
 
+## What is real and what is simulated
+
+| Part | Status |
+|---|---|
+| AES-256-GCM encryption at rest, per-dataset keys | Real, tested |
+| Hash-chained audit log and tamper detection | Real, tested |
+| Differential privacy (Laplace) and epsilon ledger | Real mechanism, simplified accounting |
+| Secure aggregation across sites | Real protocol, runs in one process here |
+| Attack evaluation (`make eval`) | Real attacks, run on the cohort loaded |
+| Agents | Real; deterministic templates by default, an LLM when `ANTHROPIC_API_KEY` is set |
+| Genotypes | Synthetic by default; real 1000 Genomes with `make fetch-real` (run on your machine) |
+| Donor consent and requesters | Simulated. No real people consented to this system, so inventing "real" consent would be false |
+| Relatives | Simulated kinship model unless you load real trios |
+
 ## What it does
 
 ```mermaid
