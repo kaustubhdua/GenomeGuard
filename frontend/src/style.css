@@ -287,3 +287,4 @@ svg text{font:12px var(--sans);fill:var(--ink-3)}
 .donor .chipbtn[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .donor .card h2{margin-bottom:12px}
 .donor .stack{margin-top:16px}
+.prov{font-size:12.5px;text-decoration:none;color:var(--ink-2);max-width:46ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.prov.real{color:var(--permit);border-color:var(--permit)}.prov[hidden]{display:none}@media(max-width:700px){.prov{display:none}}

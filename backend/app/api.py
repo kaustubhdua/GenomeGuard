@@ -109,11 +109,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/health", "Liveness and dataset facts", "public")
     async def health(request):
         v = S().audit.verify()
-        return _j({"status": "ok", "synthetic_data_only": True, "donors": S().ds.n_donors,
-                   "variants": S().ds.n_variants, "k_min": S().p.k_min,
-                   "audit_chain_ok": v["ok"], "agents_use_llm": S().team.agents["explainer"].llm
-                   .available, "demo_mode": settings.demo_mode,
-                   "tamper_demo": settings.allow_tamper_demo})
+        prov = getattr(S(), "provenance", {})
+        return _j({"status": "ok", "synthetic_data_only": prov.get("genotypes") != "real_1000g",
+                   "donors": S().ds.n_donors, "variants": S().ds.n_variants,
+                   "k_min": S().p.k_min, "audit_chain_ok": v["ok"], "provenance": prov,
+                   "agents_use_llm": S().team.agents["explainer"].llm.available,
+                   "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo})
 
     @route("GET", "/demo/requesters", "Demo accounts and keys (demo mode only)", "public")
     async def demo_requesters(request):

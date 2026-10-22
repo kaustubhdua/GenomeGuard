@@ -697,6 +697,16 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     llm = llm or LLM(s.anthropic_api_key, s.llm_model)
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
                              admin_key=s.admin_api_key, **kwargs)
+    real = bool(s.real_cohort_file)
+    svc.provenance = {
+        "genotypes": "real_1000g" if real else "synthetic",
+        "genotypes_label": "Real genotypes (1000 Genomes)" if real else "Synthetic genotypes",
+        "consent": "simulated", "consent_label": "Simulated consent records",
+        "relatives": "kinship_model", "relatives_label": "Relative exposure is a model",
+        "agents": "llm" if llm.available else "templates",
+        "agents_label": "Agents: live LLM" if llm.available else "Agents: built-in templates",
+        "encryption": "AES-256-GCM at rest",
+    }
     if not store.requesters():
         if s.demo_mode:
             for name, role, level, inst, key in DEMO_REQUESTERS:

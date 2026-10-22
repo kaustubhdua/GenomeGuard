@@ -56,6 +56,15 @@ function drawNav(active) {
         h("a", { href, "aria-current": id === active ? "page" : false }, text, steward ? h("span", { class: "tag" }, "steward") : null)))));
 }
 
+function drawProv() {
+  const p = (state.health || {}).provenance || {};
+  const el = $("prov");
+  if (!p.genotypes) { el.hidden = true; return; }
+  el.textContent = p.genotypes_label + ", " + p.consent_label.toLowerCase();
+  el.title = [p.genotypes_label, p.consent_label, p.relatives_label, p.agents_label, p.encryption].join(". ");
+  el.classList.toggle("real", p.genotypes === "real_1000g");
+}
+
 function drawWho() {
   const sel = $("who");
   const reqs = state.demo ? state.demo.requesters : [];
@@ -117,4 +126,4 @@ $("scrim").addEventListener("click", () => $("shell").classList.remove("open"));
 $("who").addEventListener("change", (e) => { setWho(e.target.value); drawWho(); render(); });
 window.addEventListener("hashchange", render);
 window.addEventListener("gg:refresh-who", async () => { await boot(); drawWho(); });
-boot().then(() => { drawWho(); render(); });
+boot().then(() => { drawWho(); drawProv(); render(); });

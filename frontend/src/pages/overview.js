@@ -36,6 +36,14 @@ export async function render() {
       h("button", { class: "ghost", onclick: () => pipe.replay() }, "Replay")));
   root.append(hero);
 
+  const pv = hl.provenance || {};
+  if (pv.genotypes) root.append(card("Where the data comes from", "Labelled so nothing is overstated",
+    h("dl", { class: "facts" },
+      h("dt", {}, "Genotypes"), h("dd", {}, pv.genotypes_label),
+      h("dt", {}, "Consent records"), h("dd", {}, pv.consent_label + " (real donors never gave per-person consent for this demo)"),
+      h("dt", {}, "Relatives"), h("dd", {}, pv.relatives_label),
+      h("dt", {}, "Agents"), h("dd", {}, pv.agents_label + ". They never see genotypes."),
+      h("dt", {}, "Storage"), h("dd", {}, pv.encryption))));
   const chain = verify.ok ? verify.data : null;
   const evd = ev.ok ? ev.data : null;
   const diff = evd && evd.differencing ? evd.differencing.accuracy : null;
