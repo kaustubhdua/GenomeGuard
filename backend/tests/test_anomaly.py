@@ -157,3 +157,16 @@ def test_repeated_differencing_hits_escalate_throttle_then_freeze():
     assert [a.blocked for a in acts] == [True, True, True]
     assert [a.action for a in acts][1:] == ["throttle", "freeze"]
     assert 1 in m.frozen
+
+
+def test_pure_fast_scan_escalates_on_rate_alone():
+    """One variant at a time, many per minute: a low weighted score must not let it through."""
+    from app.core.anomaly import AnomalyConfig, AnomalyMonitor, QueryEvent
+
+    m = AnomalyMonitor(AnomalyConfig())
+    actions = []
+    for i in range(35):
+        ev = QueryEvent(ts=i * 1.0, variants=frozenset({i}), cohort_ids=frozenset(range(300)))
+        actions.append(m.observe(1, ev).action)
+    assert actions[5] == "ok" and "throttle" in actions and actions[-1] == "freeze"
+    assert 1 in m.frozen

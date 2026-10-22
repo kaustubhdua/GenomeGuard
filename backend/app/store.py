@@ -133,8 +133,10 @@ class Store:
         rels = [{"donor_a": r["donor_a"], "donor_b": r["donor_b"], "relation": r["relation"],
                  "meioses": r["meioses"], "shared": r["shared_fraction"]}
                 for r in self.q("SELECT * FROM relationships")]
+        coords = [(str(r["chrom"]), int(r["pos"]), r["ref"], r["alt"]) for r in var]
         return Dataset(np.vstack(rows).astype(np.int8), np.array([r["maf"] for r in var]),
-                       donors, rels, [i for i, r in enumerate(var) if r["planted"]], dataset_id)
+                       donors, rels, [i for i, r in enumerate(var) if r["planted"]], dataset_id,
+                       coords)
 
     # ------------------------------------------------------------------ requesters
     def add_requester(self, name: str, role: str, level: str, institution: str,

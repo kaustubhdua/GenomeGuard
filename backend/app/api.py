@@ -140,6 +140,47 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         d = await run_in_threadpool(S().submit, r, body)
         return _j(d if S().is_admin(request.headers.get("x-admin-key")) else requester_view(d), 201)
 
+    @route("GET", "/beacon/g_variants", "GA4GH Beacon v2 style allele lookup, governed by the "
+           "same consent, risk and audit pipeline", "requester")
+    async def beacon_g_variants(request):
+        r = requester(request)
+        q = request.query_params
+        try:
+            chrom, start = str(q["referenceName"]), int(q["start"])
+        except (KeyError, ValueError):
+            raise ServiceError(422, "invalid_request",
+                               "referenceName and integer start are required") from None
+        alt = q.get("alternateBases")
+        gran = q.get("requestedGranularity", "boolean")
+        if gran not in ("boolean", "count"):
+            raise ServiceError(422, "invalid_request", "requestedGranularity: boolean or count")
+        hits = [i for i, (c, p, _ref, a) in enumerate(S().ds.coords)
+                if c == chrom and p == start and (alt is None or a == alt)]
+        meta = {"beaconId": "genomeguard", "apiVersion": "v2.0",
+                "returnedGranularity": gran, "receivedRequestSummary": {
+                    "referenceName": chrom, "start": start, "alternateBases": alt}}
+        if not hits:
+            return _j({"meta": meta, "responseSummary": {"exists": False, "numTotalResults": 0},
+                       "info": {"note": "no such variant is registered in this beacon"}})
+        body = {"purpose": q.get("purpose", "general_research"), "disease": q.get("disease") or None,
+                "data_level": gran, "is_commercial": q.get("commercial") == "true",
+                "variant_filter": {"variant_ids": [hits[0] + 1]}}
+        d = await run_in_threadpool(S().submit, r, body)
+        rel = d.get("release") or {}
+        vals = rel.get("values") or []
+        if d["outcome"] in ("deny", "escalate") or not vals:
+            return _j({"meta": meta, "responseSummary": {"exists": None},
+                       "info": {"decision": d["outcome"], "request_id": d["id"],
+                                "explanation": d["explanation"]}}, 200)
+        v = vals[0]
+        exists = bool(v) if isinstance(v, bool) else v > 0
+        summ = {"exists": exists}
+        if gran == "count":
+            summ["numTotalResults"] = max(0, round(float(v)))
+        return _j({"meta": meta, "responseSummary": summ,
+                   "info": {"decision": d["outcome"], "request_id": d["id"],
+                            "note": "aggregate answer after consent, risk and noise checks"}})
+
     @route("GET", "/requests", "List requests (own; all with admin key)", "requester|admin")
     async def list_requests(request):
         if S().is_admin(request.headers.get("x-admin-key")):

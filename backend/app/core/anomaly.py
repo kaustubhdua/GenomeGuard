@@ -3,7 +3,9 @@
 Time is passed in with every event (seconds), so evaluations can replay simulated traffic.
 
 Detectors, each -> score in [0, 1] plus a reason (all constants are in AnomalyConfig):
-  rate         queries in the last 60 s above what a human researcher does
+  rate         queries in the last 60 s above what a human researcher does. Also acts alone:
+               15+ per minute throttles and 30+ freezes, because a pure scan (one variant at a
+               time) would otherwise hide inside the weighted average
   duplicate    many NEAR-identical queries (Jaccard on variant sets and cohort filters >= 0.8 but
                not identical): the signature of probing with tiny changes
   narrowing    cohort sizes shrinking step after step toward k_min: triangulating one person
@@ -48,6 +50,11 @@ class AnomalyConfig:
     freeze: float = 0.8
     diff_hits_throttle: int = 2  # differencing-guard hits in the window -> at least throttle
     diff_hits_freeze: int = 3  # ...and this many -> freeze (a human reviews)
+    # A single strong signal must not hide inside a weighted average: a scan that does nothing
+    # but send queries very fast (for example one variant at a time against a beacon) has a low
+    # weighted score. Past these per-minute rates the rate alone escalates the action.
+    rate_throttle_per_min: int = 15
+    rate_freeze_per_min: int = 30
 
     @classmethod
     def from_params(cls, p=None) -> AnomalyConfig:
@@ -191,10 +198,13 @@ class AnomalyMonitor:
         hits = sum(1 for e in recent if e.blocked) + (1 if blocked else 0)
         if blocked:
             det["differencing"]["reason"] += f"; {hits} guard hit(s) in the window"
+        per_min = 1 + sum(1 for e in recent if ev.ts - e.ts <= 60.0)
         if (requester in self.frozen or score >= self.cfg.freeze
-                or hits >= self.cfg.diff_hits_freeze):
+                or hits >= self.cfg.diff_hits_freeze
+                or per_min >= self.cfg.rate_freeze_per_min):
             action = "freeze"
-        elif score >= self.cfg.throttle or hits >= self.cfg.diff_hits_throttle:
+        elif (score >= self.cfg.throttle or hits >= self.cfg.diff_hits_throttle
+              or per_min >= self.cfg.rate_throttle_per_min):
             action = "throttle"
         elif score >= self.cfg.warn:
             action = "warn"

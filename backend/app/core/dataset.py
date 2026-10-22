@@ -21,6 +21,7 @@ class Dataset:
     relationships: list[dict]  # donor_a, donor_b, relation, meioses, shared
     planted: list[int] = field(default_factory=list)  # variant indices used in the demo
     dataset_id: str = "synthetic-v1"
+    coords: list = field(default_factory=list)  # (chrom, pos, ref, alt) per variant, for Beacon lookups
     alt_freq: np.ndarray = field(init=False)
     relatives: dict[int, list[tuple[int, str, float]]] = field(init=False)
 
@@ -48,8 +49,11 @@ class Dataset:
     def from_cohort(cls, c, dataset_id: str = "synthetic-v1") -> Dataset:
         donors = [DonorView(d["id"], d["population"], d["cohort_id"], d["family_id"],
                             d["consent"], d["withdrawn"]) for d in c.donors]
-        return cls(c.genotypes, np.asarray(c.variants["maf"]), donors, c.relationships,
-                   list(c.planted), dataset_id)
+        v = c.variants
+        coords = [(str(v["chrom"][i]), int(v["pos"][i]), str(v["ref"][i]), str(v["alt"][i]))
+                  for i in range(len(v["maf"]))] if "pos" in v else []
+        return cls(c.genotypes, np.asarray(v["maf"]), donors, c.relationships,
+                   list(c.planted), dataset_id, coords)
 
     @classmethod
     def synthetic(cls, **kwargs) -> Dataset:

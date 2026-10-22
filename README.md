@@ -61,6 +61,7 @@ flowchart LR
   C & K & L & M & D --> G[(Hash-chained audit log)]
 ```
 
+- **Beacon v2 style endpoint** (`GET /beacon/g_variants?referenceName=&start=&alternateBases=`): an interoperable yes/no or count lookup that is governed by the same consent, risk, privacy budget and anomaly checks as every other request. It follows the GA4GH Beacon v2 response shape but is not a certified Beacon.
 - **Consent engine** (DUO-inspired): withdrawal, general / health / disease-specific use,
   no-commercial, no-methods, no-aggregate, no-controls, population limits. Reports how many donors
   were excluded and why, never who.
