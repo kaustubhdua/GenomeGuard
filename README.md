@@ -9,6 +9,17 @@ re-identification risk (including the risk to donors' **relatives**), protected 
 monitored for attack patterns, and written to a tamper-evident audit log. Agents explain
 decisions in plain language but never see genomic data and never hold final authority.
 
+**Hackathon track: Track 2, Agentic AI for Healthcare.** GenomeGuard covers all four themes:
+
+| Track 2 theme | Where it shows up |
+|---|---|
+| Decision support | Agents give stewards a case summary and the questions to answer on held requests; a human approves or denies. |
+| Information management | Consent, risk, privacy budget and a tamper-evident audit chain for every genomic release. |
+| Patient interaction | The patient portal: donors see who used statistics that included them, ask a consent concierge (fixed questions only) and withdraw in two clicks. |
+| Workflow automation | Requests are triaged automatically: approve, approve with protections, deny, or hold for review. Anomalous accounts are frozen. |
+
+"Agents advise, rules decide": the agents never see genotypes and never hold final authority.
+
 **Data statement: all data in this repository is synthetic.** An optional path builds a cohort
 from real, openly released 1000 Genomes genotypes (see below); consent records are always
 simulated. Designed around the ideas of DPDP, GDPR and HIPAA. **It makes no claim of legal

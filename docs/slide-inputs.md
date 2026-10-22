@@ -6,6 +6,10 @@ link, demo video link. (Fill the three links after deploying; keep them live thr
 **Hook:** "Genomic data can expose your relatives, so we built a guard that decides who can see
 what, explains why, and proves it never looked the other way."
 
+> **Track:** Track 2, Agentic AI for Healthcare. Pitch it as: a steward copilot (decision support),
+> consent and audit records (information management), a patient consent concierge (patient
+> interaction) and automatic triage with human sign-off (workflow automation).
+
 ## Problem
 - DNA cannot be changed like a password, and it is shared with relatives who never consented.
 - Erlich et al., *Science* 2018: with data from 1.28 million people who took consumer genomics
