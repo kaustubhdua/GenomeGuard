@@ -150,3 +150,10 @@ def test_researcher_never_sees_carrier_counts_relatives_or_detector_scores():
             assert forbidden not in text, forbidden
         assert body["risk"]["consent"]["eligible"] > 0  # what they may know is still there
         assert body["risk"]["before"]["band"] == "high"
+
+
+def test_he_endpoint_public_and_correct():
+    svc, c = make_client()
+    r = c.get("/federated/he")
+    assert r.status_code == 200 and r.json()["matches_plaintext"] is True
+    assert r.json()["aggregator_saw"]["plaintexts"] == "none"

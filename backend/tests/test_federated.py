@@ -79,3 +79,11 @@ def test_demo_runs_and_reports_equivalence():
     assert out["allele_frequency"]["max_abs_error_vs_pooled"] < 1e-5
     assert out["logistic_regression"]["max_weight_difference_vs_centralised"] < 1e-3
     assert len(out["sites"]) >= 2
+
+
+def test_he_demo_matches_plaintext_and_is_cached():
+    from app.core.federated import he_demo
+
+    a = he_demo(seed=5, variants=3, bits=512)
+    assert a["matches_plaintext"] is True and a["key_bits"] == 512
+    assert he_demo(seed=5, variants=3, bits=512) is a

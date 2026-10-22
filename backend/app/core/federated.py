@@ -193,6 +193,29 @@ def demo(seed: int = 1337) -> dict:
     }
 
 
+_HE_CACHE: dict = {}
+
+
+def he_demo(seed: int = 1337, variants: int = 8, bits: int = 2048) -> dict:
+    """Paillier demo on the synthetic cohort, cached because a 2048-bit key takes seconds."""
+    k = (seed, variants, bits)
+    if k not in _HE_CACHE:
+        from app.core.paillier import he_allele_counts
+        from app.data.synth import generate
+
+        c = generate(n_donors=600, n_variants=300, n_families=120, seed=seed)
+        sites = split_into_sites([d["cohort_id"] for d in c.donors])
+        out = he_allele_counts(c.genotypes, sites, list(range(variants)), bits=bits)
+        out["note"] = ("Simulated hospitals on SYNTHETIC data. Counts are encrypted with Paillier "
+                       "(additively homomorphic); the aggregator adds ciphertexts and never sees a "
+                       "plaintext. Educational pure-Python implementation, not audited.")
+        out["limits"] = ["additive only: sums, not model training",
+                         "the key holder must be trusted (threshold keys are future work)",
+                         "pure-Python, not constant-time: use OpenFHE/SEAL or an enclave in production"]
+        _HE_CACHE[k] = out
+    return _HE_CACHE[k]
+
+
 if __name__ == "__main__":
     import json
 

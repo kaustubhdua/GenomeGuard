@@ -9,7 +9,7 @@ export async function render() {
   const res = await api("/federated/demo");
   if (!res.ok) { root.append(notice("err", errorText(res))); return root; }
   const d = res.data, lr = d.logistic_regression, af = d.allele_frequency;
-  root.append(notice("warn", h("b", {}, "Simulated hospitals on synthetic data. "), "This is secure aggregation, not homomorphic encryption or a secure enclave."));
+  root.append(notice("warn", h("b", {}, "Simulated hospitals on synthetic data. "), "Model training and frequencies use secret sharing. The encrypted-counts section below uses real Paillier homomorphic encryption."));
   const ledger = h("div", { class: "ledger" });
   ledger.append(row("Sites", "Each cohort plays one hospital",
     h("div", { class: "tablewrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Hospital"), h("th", { class: "num" }, "Donors kept on site"))),
@@ -25,5 +25,19 @@ export async function render() {
     h("p", { class: "muted" }, "Same model as training on pooled data, without pooling it. The phenotype is simulated from a few variants so there is a real signal.")));
   ledger.append(row("Limits", "Read before quoting", h("ul", { class: "plain" }, d.limits.map((t) => h("li", {}, t)))));
   root.append(ledger);
+  const he = h("div", { class: "ledger", style: "margin-top:14px" }, row("Homomorphic encryption", "Paillier, computing on encrypted counts", h("div", { class: "skeleton", style: "height:80px" })));
+  root.append(he);
+  api("/federated/he").then((r) => {
+    if (!r.ok) { he.replaceChildren(row("Homomorphic encryption", "", notice("err", errorText(r)))); return; }
+    const x = r.data;
+    he.replaceChildren(row("Homomorphic encryption", `${x.key_bits}-bit key, ${x.variants} variants`,
+      h("p", { style: "margin:0 0 8px" }, "Each hospital encrypts its allele counts. An aggregator adds the ciphertexts without being able to read any of them. Only the total is decrypted."),
+      h("dl", { class: "facts" }, h("dt", {}, "Decrypted totals"), h("dd", {}, x.totals.join(", ")),
+        h("dt", {}, "Equals plain sum"), h("dd", {}, x.matches_plaintext ? "yes, exactly" : "NO"),
+        h("dt", {}, "Plaintexts the aggregator saw"), h("dd", {}, x.aggregator_saw.plaintexts)),
+      h("p", { class: "muted", style: "margin:8px 0 4px" }, "What the aggregator actually holds (start of one ciphertext):"),
+      h("code", { class: "hash" }, x.aggregator_saw.first_ciphertext_hex_prefix),
+      h("ul", { class: "plain" }, x.limits.map((t) => h("li", {}, t)))));
+  });
   return root;
 }

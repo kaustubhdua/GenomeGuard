@@ -62,6 +62,7 @@ flowchart LR
 ```
 
 - **Beacon v2 style endpoint** (`GET /beacon/g_variants?referenceName=&start=&alternateBases=`): an interoperable yes/no or count lookup that is governed by the same consent, risk, privacy budget and anomaly checks as every other request. It follows the GA4GH Beacon v2 response shape but is not a certified Beacon.
+- **Homomorphic encryption**: `core/paillier.py` is a real Paillier implementation (stdlib only). Hospitals encrypt allele counts, an aggregator adds ciphertexts, and only the total is decrypted (`GET /federated/he`, Federated page). Educational and unaudited; secure enclaves are not implemented.
 - **Consent engine** (DUO-inspired): withdrawal, general / health / disease-specific use,
   no-commercial, no-methods, no-aggregate, no-controls, population limits. Reports how many donors
   were excluded and why, never who.

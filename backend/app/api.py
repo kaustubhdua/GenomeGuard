@@ -320,6 +320,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         b = await _body(request)
         return _j(await run_in_threadpool(S().donor_ask, did, str(b.get("intent", ""))))
 
+    @route("GET", "/federated/he", "Homomorphic (Paillier) allele-count aggregation demo "
+           "(synthetic)", "public")
+    async def federated_he(request):
+        from app.core.federated import he_demo
+
+        return _j(await run_in_threadpool(he_demo))
+
     @route("GET", "/federated/demo", "Simulated hospitals with secure aggregation (synthetic)",
            "public")
     async def federated_demo(request):
