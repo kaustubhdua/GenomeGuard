@@ -1,5 +1,5 @@
 import { api, isSteward, state } from "../api.js";
-import { h, row, badge, lane, when, notice, errorText, reasonText, stepText, OUTCOME_LABEL, pct } from "../ui.js";
+import { h, row, badge, lane, when, notice, errorText, reasonText, stepText, OUTCOME_LABEL, pct, workflow, timeline, pipeline } from "../ui.js";
 
 export async function render([id]) {
   const res = await api("/requests/" + id);
@@ -13,6 +13,8 @@ export async function render([id]) {
     h("h1", { style: "margin-top:8px" }, "Request #" + d.id),
     h("p", { class: "lede" }, `${d.requester} asked for ${q.data_level} data for ${(q.purpose || "").replaceAll("_", " ")}${q.disease ? " (" + q.disease + ")" : ""}${q.is_commercial ? ", commercial use" : ""}. ${when(d.ts)}`));
 
+  const flow = workflow(d);
+  root.append(h("section", { class: "card", style: "margin-bottom:14px" }, h("div", { class: "card-h" }, h("h3", { style: "margin:0" }, "How the agents handled it"), h("span", {}, "Agents advise, rules decide")), pipeline(flow), h("div", { style: "margin-top:18px" }, timeline(flow))));
   const ledger = h("div", { class: "ledger" });
   ledger.append(row("Decision", "Made by rules, explained by an agent",
     h("p", { class: "verdict o-" + d.outcome }, OUTCOME_LABEL[d.outcome] || d.outcome),

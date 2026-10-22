@@ -8,7 +8,7 @@ export function h(tag, attrs, ...kids) {
     else if (k === "html") el.innerHTML = v;
     else el.setAttribute(k, v === true ? "" : v);
   }
-  for (const kid of kids.flat()) {
+  for (const kid of kids.flat(Infinity)) {
     if (kid == null || kid === false) continue;
     el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   }
@@ -113,4 +113,68 @@ export function lineChart({ series, xLabel, yLabel, xMin, xMax, yMin = 0, yMax =
 export function legend(items) {
   return h("div", { class: "legend", style: "margin-top:6px" }, items.map(([name, color]) =>
     h("span", {}, h("span", { style: `display:inline-block;width:14px;height:4px;background:${color};margin-right:6px;vertical-align:middle` }), name)));
+}
+
+// ---- agentic workflow components ----
+const OUT_STATE = { permit: "ok", permit_with_transform: "warn", deny: "bad", escalate: "hold" };
+const BAND_STATE = { low: "ok", medium: "warn", high: "bad" };
+export const outState = (o) => OUT_STATE[o] || "ok";
+
+// Turn one stored decision into the ordered steps the agents and rules took.
+export function workflow(d) {
+  const risk = d.risk || {}, cons = risk.consent || {}, before = risk.before || {}, after = risk.assessment || {};
+  const tr = d.transform || {}, steps = tr.steps || [], reasons = d.reasons || [];
+  const notes = tr.agent_notes || {};
+  const frozen = reasons.includes("requester_frozen"), thr = reasons.includes("requester_throttled");
+  const consentBad = cons.considered != null && !cons.eligible;
+  return [
+    { id: "consent", t: "Consent agent", short: "Consent", kind: "agent",
+      state: consentBad ? "bad" : "ok",
+      says: cons.considered == null ? "Checked the request against donor consent."
+        : `${cons.eligible} of ${cons.considered} donors have consent that fits this use.`,
+      note: notes.consent },
+    { id: "risk", t: "Privacy risk agent", short: "Risk", kind: "agent",
+      state: BAND_STATE[before.band] || "ok",
+      says: before.band ? `Re-identification risk ${before.band}${after.band && after.band !== before.band ? `, ${after.band} after protections` : ""}.` : "No risk score was needed.",
+      note: notes.risk || notes.privacy },
+    { id: "protect", t: "Protection ladder", short: "Protect", kind: "rule",
+      state: steps.length ? "warn" : "ok",
+      says: steps.length ? `${steps.length} protection${steps.length > 1 ? "s" : ""} applied: ${steps.map((s) => stepText(s.step).toLowerCase()).join("; ")}.` : "No protection was needed." },
+    { id: "monitor", t: "Anomaly monitor", short: "Watch", kind: "agent",
+      state: frozen ? "bad" : thr ? "warn" : "ok",
+      says: frozen ? "Account frozen after unusual query patterns." : thr ? "Query pattern looked unusual, so a human check was required." : "Query pattern looked normal.",
+      note: notes.anomaly },
+    { id: "decide", t: "Access decision", short: "Decide", kind: "rule",
+      state: outState(d.outcome), says: (OUTCOME_LABEL[d.outcome] || d.outcome) + ". Made by fixed rules, not by a model." },
+    { id: "explain", t: "Explainer agent", short: "Explain", kind: "agent", state: "ok",
+      says: "Wrote the plain-language reason for the researcher.", note: notes.explainer },
+    { id: "audit", t: "Audit agent", short: "Record", kind: "agent", state: "ok",
+      says: "Added the decision to the tamper-evident chain." },
+  ];
+}
+
+// horizontal pipeline; call .classList.add('play') to run the reveal
+export function pipeline(stages, { play = true } = {}) {
+  const el = h("div", { class: "pipe" + (play ? " play" : ""), style: `--n:${stages.length}`, role: "list" },
+    stages.map((s, i) => h("div", { class: "stage on " + (s.state || "ok"), style: `--i:${i}`, role: "listitem" },
+      h("div", { class: "node" }, String(i + 1)), h("div", { class: "t" }, s.short || s.t), s.d ? h("div", { class: "d" }, s.d) : null)));
+  el.replay = () => { el.classList.remove("play"); void el.offsetWidth; el.classList.add("play"); };
+  return el;
+}
+
+export function timeline(stages, { play = true } = {}) {
+  return h("ol", { class: "tl" + (play ? " play" : "") }, stages.map((s, i) =>
+    h("li", { class: s.state || "ok", style: `--i:${i}` },
+      h("span", { class: "dot", "aria-hidden": "true" }, String(i + 1)),
+      h("div", { class: "who2" }, s.t, h("span", { class: "mode" }, s.kind === "agent" ? "advises" : "rule")),
+      h("p", { class: "says" }, s.says),
+      s.note ? h("div", { class: "chips" }, h("span", { class: "pill" }, "Agent note: " + s.note)) : null)));
+}
+
+export function card(title, aside, ...kids) {
+  return h("section", { class: "card" }, title ? h("div", { class: "card-h" }, h("h3", { style: "margin:0" }, title), aside ? h("span", {}, aside) : null) : null, kids);
+}
+
+export function kpi(label, value, sub, tone) {
+  return h("div", { class: "card kpi" + (tone ? " o-" + tone : "") }, h("div", { class: "l" }, label), h("div", { class: "v" }, String(value)), sub ? h("div", { class: "s" }, sub) : null);
 }
