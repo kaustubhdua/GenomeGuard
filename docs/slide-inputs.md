@@ -56,7 +56,7 @@ yes more safely, lets donors see their consent honoured, and gives auditors evid
 
 ## Limitations and future scope (say these yourself before a judge does)
 Synthetic data; simplified attacks; simple epsilon accounting (formal DP accountant is future
-work); consent records simulated for real genomes; no homomorphic encryption or secure enclave
+work); consent records simulated for real genomes; Paillier homomorphic aggregation is a one-process educational demo and there is no secure enclave
 (future); no real consent-management integration; no independent security review; single-writer
 audit log.
 

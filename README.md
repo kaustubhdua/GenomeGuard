@@ -108,7 +108,7 @@ and `--ped`). Check IGSR's data-use terms and never commit downloaded data.
 Synthetic data; simplified attacks written by the defenders; simple epsilon accounting (not a
 formal DP accountant); the hash chain detects tampering but cannot prevent it unless the head hash
 is anchored outside the system; slow probing beyond the 15-minute window evades the rate-based
-detectors; secure aggregation assumes honest-but-curious sites; no homomorphic encryption, secure
+detectors; secure aggregation assumes honest-but-curious sites; the Paillier demo is educational and unaudited and runs in one process; no secure
 enclave or real consent-management integration; no independent security review. Details in
 [`docs/threat-model.md`](docs/threat-model.md).
 
