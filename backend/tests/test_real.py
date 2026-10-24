@@ -97,7 +97,9 @@ def test_build_save_load_roundtrip():
         assert meta["genotypes_real"] and meta["consent_simulated"]
         assert meta["source_vcf_file"] == "t.vcf.gz"
         assert len(meta["source_vcf_sha256"]) == 64
-        assert len(meta["source_pedigree_sha256"]) == 64
+        assert len(meta["source_sample_metadata_sha256"]) == 64
+        assert meta["source_sample_metadata_file"] == "provided-sample-metadata"
+        assert meta["pedigree_relationships_present"] is True
         assert meta["build_parameters"] == {
             "requested_samples": 44, "max_variants": 50, "keep_prob": 1.0,
             "rare_maf": 0.01, "withdrawn_rate": 0.03,
