@@ -595,7 +595,8 @@ class GenomeGuardService:
                                                                        len(new["modifiers"])]})
         return self.donor_profile(donor_id)
 
-    FHIR_EXT = "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition"
+    FHIR_BASE = "https://github.com/kaustubhdua/GenomeGuard/fhir"
+    FHIR_EXT = FHIR_BASE + "/StructureDefinition"
 
     def donor_consent_fhir(self, donor_id: int) -> dict:
         """The donor's consent as a FHIR R4 `Consent` resource, so it can travel to other systems.
@@ -625,11 +626,14 @@ class GenomeGuardService:
             ext.append({"url": f"{self.FHIR_EXT}/population", "valueString": c["population"]})
         res = {
             "resourceType": "Consent", "id": ref,
-            "meta": {"tag": [{"system": f"{self.FHIR_EXT}/tags", "code": "simulated-consent",
+            "meta": {"tag": [{"system": f"{self.FHIR_BASE}/CodeSystem/genomeguard-tags", "code": "simulated-consent",
                               "display": "Simulated consent record (demo data, not a real person)"}]},
+            "text": {"status": "generated", "div": '<div xmlns="http://www.w3.org/1999/xhtml"><p>Simulated consent record; this is not actual consent.</p></div>'},
             "status": "inactive" if d.withdrawn else "active",
             "scope": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/consentscope",
                                   "code": "research", "display": "Research"}]},
+            "policy": [{"authority": "https://github.com/kaustubhdua/GenomeGuard",
+                        "uri": "https://github.com/kaustubhdua/GenomeGuard/blob/main/docs/consent-policy.md"}],
             "category": [{"coding": [{"system": "http://loinc.org", "code": "59284-0",
                                       "display": "Consent Document"}]}],
             "patient": {"reference": f"Patient/{ref}", "display": "Pseudonymous donor"},
