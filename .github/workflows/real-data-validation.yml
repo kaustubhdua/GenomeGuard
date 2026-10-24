@@ -29,7 +29,7 @@ jobs:
         run: make eval-real COHORT=data_real/1000g_chr22.npz
       - name: Verify generated provenance and aggregate evaluation report
         run: |
-          .venv/bin/python - <<'PY'
+          PYTHONPATH=backend .venv/bin/python - <<'PY'
           import json
           from pathlib import Path
           from app.data.real import read_meta
