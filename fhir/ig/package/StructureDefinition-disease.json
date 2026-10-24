@@ -1,7 +1,7 @@
 {
   "resourceType": "StructureDefinition",
   "id": "disease",
-  "url": "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition/disease",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-disease.json",
   "version": "0.1.0",
   "name": "GenomeGuardDisease",
   "title": "GenomeGuard disease extension",
@@ -31,7 +31,7 @@
       {
         "id": "Extension.url",
         "path": "Extension.url",
-        "fixedUri": "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition/disease"
+        "fixedUri": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-disease.json"
       },
       {
         "id": "Extension.value[x]",
