@@ -1,6 +1,6 @@
 # Running on real genomes (1000 Genomes)
 
-GenomeGuard runs on synthetic data by default so a clean clone works without downloading genomes. The hosted GitHub Actions runner has now completed an end-to-end download, cohort build, and evaluation against the public 1000 Genomes Phase 3 chromosome 22 data. See [successful real-data validation run #40133801168](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133801168). Local reproduction still requires internet access.
+GenomeGuard runs on synthetic data by default so a clean clone works without downloading genomes. The hosted GitHub Actions runner has now completed an end-to-end download, cohort build, and evaluation against the public 1000 Genomes Phase 3 chromosome 22 data. See [successful real-data validation run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133801168). Local reproduction still requires internet access.
 
 That run verifies the real-genotype ingestion/evaluation path only. It does **not** verify real participant consent or a family-relative exposure cohort; the Phase 3 panel is unrelated by design.
 
@@ -71,4 +71,4 @@ Selected results from the generated evaluation report (attack/query traffic rema
 - Membership-inference AUC varied with release size and noise; at 500 variants, the simulated attack AUC was 0.721 for raw frequencies and 0.511 for binned frequencies with epsilon 0.5, with very low utility for the latter (correlation 0.020).
 - The query monitor froze all tested attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. This is a measured limitation of the simulated sliding-window monitor, not a claim that slow attacks are stopped.
 
-These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated report is preserved as an artifact in [run #40133801168](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133801168) for 30 days.
+These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The source sample-metadata file is `integrated_call_samples_v3.20130502.ALL.panel`; its SHA-256 is `b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858`. The full generated Markdown and JSON reports are preserved as artifacts in [run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40134445686) for 30 days.
