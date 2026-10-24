@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 
-.PHONY: setup seed run test eval eval-smoke demo lint fetch-real real-trios eval-real fetch-duo federated bench ui-smoke
+.PHONY: setup seed run test eval eval-smoke demo lint fetch-real real-trios eval-real fetch-duo federated bench ui-smoke deploy-smoke
 
 setup:
 	python3 -m venv .venv
@@ -60,6 +60,11 @@ fetch-duo:
 
 federated:
 	PYTHONPATH=backend $(PY) -m app.core.federated
+
+# Read-only checks against an already deployed synthetic demo; never prints demo keys.
+deploy-smoke:
+	@test -n "$(URL)" || (echo "usage: make deploy-smoke URL=https://your-service.onrender.com"; exit 2)
+	$(PY) scripts/deploy_smoke.py --base $(URL)
 
 # Drives the real UI in a headless browser (needs: pip install playwright && playwright install chromium)
 ui-smoke:
