@@ -603,8 +603,8 @@ class GenomeGuardService:
         The patient is a pseudonymous reference (never the donor number). DUO terms and limits
         are carried in namespaced extensions rather than mapped onto FHIR purpose codes we cannot
         verify. The record is tagged as simulated: no real person consented to this system.
-        Structure follows the FHIR R4 Consent resource but has NOT been run through a FHIR
-        validator."""
+        Structure follows FHIR R4 and is checked in CI with the HL7 FHIR Validator against the
+        project extension package. Structural conformance does not make simulated consent legally valid."""
         d = self._donor(donor_id)
         c = d.consent
         ref = self._donor_ref(donor_id)
