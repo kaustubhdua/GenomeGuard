@@ -168,6 +168,19 @@ def main() -> None:
                 except Exception:
                     pass  # the audit below reports "h1 count 0" if it truly never appears
                 pg.wait_for_timeout(600)
+                axe_path = os.environ.get("AXE_CORE_PATH")
+                if axe_path:
+                    pg.add_script_tag(path=axe_path)
+                    axe_violations = pg.evaluate("""async () => {
+                      const result = await axe.run(document, {runOnly: {type: "tag", values: [
+                        "wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"
+                      ]}});
+                      return result.violations.map(v => ({id:v.id, impact:v.impact, help:v.help,
+                        targets:v.nodes.slice(0, 4).map(n => n.target)}));
+                    }""")
+                    blocking = [v for v in axe_violations if v["impact"] in ("critical", "serious")]
+                    check(f"{hsh} axe critical/serious", not blocking,
+                          str(blocking)[:260] if blocking else f"{len(axe_violations)} non-blocking finding(s)")
                 r = pg.evaluate(AUDIT_JS)
                 bad = {k: v for k, v in r.items() if isinstance(v, list) and v}
                 check(f"{hsh}", r["h1"] == 1 and not bad,
