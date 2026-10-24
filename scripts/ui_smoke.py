@@ -103,6 +103,14 @@ def main() -> None:
         check("route transition uses entrance class", has_enter_class)
         lazy_ctx.close()
 
+        motion_ctx = browser.new_context(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+        motion_pg = motion_ctx.new_page()
+        motion_pg.goto(base + "/#/overview")
+        motion_pg.wait_for_selector("#view > .page-enter", timeout=15000)
+        duration = motion_pg.locator("#view > .page-enter").evaluate("(e) => getComputedStyle(e).animationDuration")
+        check("reduced-motion preference disables page animation", float(duration.removesuffix("s")) <= 0.001, duration)
+        motion_ctx.close()
+
         print("\n1. The guided tour, with its two live actions (fresh database expected)")
         ctx = browser.new_context(viewport={"width": 1280, "height": 900})
         pg = ctx.new_page()
