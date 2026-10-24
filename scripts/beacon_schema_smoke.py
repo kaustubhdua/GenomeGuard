@@ -55,10 +55,11 @@ def main() -> None:
 
     # Denials and malformed requests use BeaconErrorResponse, not a null exists value.
     service, client = make_client()
-    params = {**common_variant(service), "purpose": "disease_research",
-              "disease": "not_a_real_disease"}
+    for donor in service.ds.donors:
+        donor["consent"]["use"] = "NCU"
+    params = {**common_variant(service), "purpose": "general_research", "commercial": "true"}
     response = client.get("/beacon/g_variants", params=params, headers=H(RESEARCHER))
-    assert response.status_code in (403, 503), (response.status_code, response.text)
+    assert response.status_code == 403, (response.status_code, response.text)
     validate(schema_root, "beaconErrorResponse.json", response.json(), "governance denial")
 
     response = client.get("/beacon/g_variants",
