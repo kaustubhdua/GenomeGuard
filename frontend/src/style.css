@@ -318,3 +318,20 @@ svg.chart text{paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-lin
 .tour-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 body.tour-open .main{padding-bottom:300px}
 @media (max-width:640px){.tour{right:8px;left:8px;bottom:8px;width:auto;max-height:46vh}body.tour-open .main{padding-bottom:46vh}}
+
+
+/* ---------- polished motion and progressive loading ---------- */
+#view > .page-enter{animation:gg-page-in .28s cubic-bezier(.2,.7,.2,1) both}
+#view .page-enter .card,#view .page-enter .row,#view .page-enter .notice{animation:gg-card-in .34s cubic-bezier(.2,.7,.2,1) both}
+#view .page-enter .card:nth-child(2),#view .page-enter .row:nth-child(2){animation-delay:35ms}
+#view .page-enter .card:nth-child(3),#view .page-enter .row:nth-child(3){animation-delay:70ms}
+#view .page-enter .card:nth-child(4),#view .page-enter .row:nth-child(4){animation-delay:105ms}
+#view .page-enter .card:nth-child(5),#view .page-enter .row:nth-child(5){animation-delay:140ms}
+@keyframes gg-page-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes gg-card-in{from{opacity:.45;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+button,.btn,.iconbtn,.chipbtn,.nav a{transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .16s ease,box-shadow .16s ease}
+button:hover:not(:disabled),.btn:hover:not(:disabled),.iconbtn:hover,.chipbtn:hover{transform:translateY(-1px)}
+button:active:not(:disabled),.btn:active:not(:disabled),.iconbtn:active,.chipbtn:active{transform:translateY(0)}
+.card{transition:border-color .18s ease,box-shadow .18s ease}
+.card:hover{border-color:color-mix(in srgb,var(--ink-3) 35%,var(--line))}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
