@@ -27,6 +27,8 @@ jobs:
       - run: make eval
       - run: make demo
       - run: for f in $(find frontend -name '*.js'); do node --check "$f" || exit 1; done
+      - name: Compile all Python application and script files
+        run: .venv/bin/python -m compileall -q backend scripts
       - name: Install browser smoke-test dependencies
         run: |
           .venv/bin/pip install playwright
