@@ -201,7 +201,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         body = {"purpose": q.get("purpose", "general_research"), "disease": q.get("disease") or None,
                 "data_level": gran, "is_commercial": q.get("commercial") == "true",
                 "variant_filter": {"variant_ids": [hits[0] + 1]}}
-        d = await run_in_threadpool(S().submit, r, body)
+        try:
+            d = await run_in_threadpool(S().submit, r, body)
+        except ServiceError as exc:
+            return _j({"meta": meta, "error": {"errorCode": exc.status,
+                       "errorMessage": "Request parameters failed governance validation"}}, exc.status)
         rel = d.get("release") or {}
         vals = rel.get("values") or []
         if d["outcome"] in ("deny", "escalate") or not vals:
