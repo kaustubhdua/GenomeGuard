@@ -227,9 +227,9 @@ def test_unrelated_phase3_style_panel_does_not_claim_family_enrichment():
     with tempfile.TemporaryDirectory() as d:
         v = Path(d) / "unrelated.vcf.gz"
         make_vcf(v)
-        panel = "sample pop super_pop gender\\n" + "\\n".join(
+        panel = "sample pop super_pop gender\n" + "\n".join(
             f"{sample} GBR EUR male" for sample in SAMPLES
-        ) + "\\n"
+        ) + "\n"
         _, meta = real.build_cohort(v, panel, n_samples=44, max_variants=50, keep_prob=1.0,
                                     seed=7, family_first=True)
         assert meta["relative_pairs"] == 0
