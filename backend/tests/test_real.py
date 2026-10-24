@@ -95,6 +95,13 @@ def test_build_save_load_roundtrip():
         make_vcf(v)
         c, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=1)
         assert meta["genotypes_real"] and meta["consent_simulated"]
+        assert meta["source_vcf_file"] == "t.vcf.gz"
+        assert len(meta["source_vcf_sha256"]) == 64
+        assert len(meta["source_pedigree_sha256"]) == 64
+        assert meta["build_parameters"] == {
+            "requested_samples": 44, "max_variants": 50, "keep_prob": 1.0,
+            "rare_maf": 0.01, "withdrawn_rate": 0.03,
+        }
         assert c.genotypes.shape == (44, 50)
         assert all("consent" in x for x in c.donors)
         assert meta["relative_pairs"] == 5  # 2 parents x 2 kids + the sibling pair
