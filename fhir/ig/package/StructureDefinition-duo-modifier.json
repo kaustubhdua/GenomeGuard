@@ -1,7 +1,7 @@
 {
   "resourceType": "StructureDefinition",
   "id": "duo-modifier",
-  "url": "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition/duo-modifier",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-duo-modifier.json",
   "version": "0.1.0",
   "name": "GenomeGuardDuoModifier",
   "title": "GenomeGuard duo-modifier extension",
@@ -31,7 +31,7 @@
       {
         "id": "Extension.url",
         "path": "Extension.url",
-        "fixedUri": "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition/duo-modifier"
+        "fixedUri": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-duo-modifier.json"
       },
       {
         "id": "Extension.value[x]",
