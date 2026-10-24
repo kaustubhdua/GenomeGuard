@@ -4,9 +4,9 @@ Last updated: 25 October 2026. This document separates automated evidence from w
 
 ## Latest verified repository baseline
 
-The merge commit on `main` is `6e9c5ab927a659af0fde3ba9bd852b66310362f1`. GitHub Actions run [#40](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40119696605) completed successfully on that exact commit. Its steps passed `make setup`, `make lint`, `make seed`, `make test` (**256 passed**), `make eval-smoke`, `make eval`, `make demo`, JavaScript syntax checks, and `make ui-smoke`. The browser suite reported all nine routes passing in light and dark themes, no tour JavaScript errors, and no horizontal overflow at 320, 375, and 414 px.
+The latest verified `main` commit is `e78aaf8912a64bb7bd07a2342a5de1f68767988a`. GitHub Actions run [#56](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40122146271) completed successfully on that exact commit. Its steps passed `make setup`, `make lint`, `make seed`, `make test` (**257 passed**), `make eval-smoke`, `make eval`, `make demo`, JavaScript syntax checks, Python compile checks, the read-only deployment smoke test, and `make ui-smoke`. The browser suite reported all nine routes passing in light and dark themes, no tour JavaScript errors, and no horizontal overflow at 320, 375, and 414 px.
 
-This is strong automated prototype evidence, not a hosted-service test. The latest CI run does not establish a public Render URL, persistent hosted storage, end-to-end ingestion of real 1000 Genomes files, formal differential-privacy guarantees, FHIR conformance, or production security assurance. Those remain open gates below.
+The deployment smoke test ran against the CI-local demo service; it is not evidence that a public Render service exists. The following remain unverified: public URL and hosting persistence, end-to-end ingestion of real 1000 Genomes files, formal differential-privacy guarantees, external FHIR R4 conformance, and production security assurance. Those remain open gates below.
 
 ## Product framing
 
