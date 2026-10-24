@@ -53,13 +53,16 @@ AUDIT_JS = r"""
 
 OVERFLOW_JS = """() => {
   const vw = document.documentElement.clientWidth;
-  const offenders = [...document.querySelectorAll('body *')].map((e) => {
+  const offenders = [...document.querySelectorAll('body *')].filter((e) => {
+    const r = e.getBoundingClientRect();
+    return r.width > 0 && r.right > vw + 1 && getComputedStyle(e).position !== 'fixed';
+  }).slice(0, 12).map((e) => {
     const r = e.getBoundingClientRect();
     const s = getComputedStyle(e);
     return {tag:e.tagName.toLowerCase(), id:e.id, cls:typeof e.className === 'string' ? e.className.slice(0,70) : '',
       left:Math.round(r.left), right:Math.round(r.right), width:Math.round(r.width),
-      scrollWidth:e.scrollWidth, clientWidth:e.clientWidth, position:s.position, text:(e.innerText||'').trim().slice(0,50)};
-  }).filter((x) => x.width > 0 && x.right > vw + 1 && x.position !== 'fixed');
+      scrollWidth:e.scrollWidth, clientWidth:e.clientWidth, position:s.position, text:(e.textContent||'').trim().slice(0,50)};
+  });
   return {overflow:document.documentElement.scrollWidth > vw + 1,
     viewport:vw, documentWidth:document.documentElement.scrollWidth, offenders:offenders.slice(0,12)};
 }"""
