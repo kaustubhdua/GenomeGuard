@@ -18,6 +18,8 @@ def validate(schema_root: Path, schema_name: str, payload: dict, label: str) -> 
     registry = Registry()
     for path in schema_root.rglob("*.json"):
         contents = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(contents, dict) or "$schema" not in contents:
+            continue
         uri = path.resolve().as_uri()
         contents.setdefault("$id", uri)
         registry = registry.with_resource(uri, Resource.from_contents(contents))
