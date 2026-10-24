@@ -17,6 +17,8 @@ def test_resource_has_the_required_fhir_consent_fields():
     assert r["scope"]["coding"][0]["code"] == "research"
     assert r["category"][0]["coding"][0]["system"] == "http://loinc.org"
     assert r["provision"]["type"] == "permit"
+    assert r["policy"][0]["uri"].endswith("/docs/consent-policy.md")
+    assert "not actual consent" in r["text"]["div"]
     assert r["patient"]["reference"] == f"Patient/{r['id']}"
     assert json.loads(json.dumps(r)) == r  # plain JSON, round-trips
 
@@ -27,6 +29,7 @@ def test_it_is_tagged_simulated_and_does_not_leak_the_donor_number():
     r = svc.donor_consent_fhir(d.id)
     tags = [t["code"] for t in r["meta"]["tag"]]
     assert "simulated-consent" in tags
+    assert r["meta"]["tag"][0]["system"].endswith("/CodeSystem/genomeguard-tags")
     flat = json.dumps(r)
     assert f"Patient/{d.id}" not in flat and f'"id": "{d.id}"' not in flat
     assert r["id"] == svc._donor_ref(d.id) and len(r["id"]) == 12
