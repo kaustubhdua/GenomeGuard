@@ -220,3 +220,17 @@ def test_parse_official_phase3_panel_without_private_working_pedigree():
     }
     assert info["NA12340"]["pop"] == "YRI"
     assert real.relationships_from_pedigree(info, ["HG00096", "HG00097", "NA12340"]) == []
+
+
+def test_unrelated_phase3_style_panel_does_not_claim_family_enrichment():
+    """Family-first sampling must not imply enrichment when the source has no pedigrees."""
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "unrelated.vcf.gz"
+        make_vcf(v)
+        panel = "sample pop super_pop gender\\n" + "\\n".join(
+            f"{sample} GBR EUR male" for sample in SAMPLES
+        ) + "\\n"
+        _, meta = real.build_cohort(v, panel, n_samples=44, max_variants=50, keep_prob=1.0,
+                                    seed=7, family_first=True)
+        assert meta["relative_pairs"] == 0
+        assert meta["family_enriched"] is False
