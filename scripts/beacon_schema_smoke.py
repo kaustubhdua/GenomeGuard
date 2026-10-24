@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
-from jsonschema.validators import RefResolver
+from referencing import Registry, Resource
 
 from tests.helpers import H, RESEARCHER, make_client
 
@@ -15,8 +15,15 @@ from tests.helpers import H, RESEARCHER, make_client
 def validate(schema_root: Path, schema_name: str, payload: dict, label: str) -> None:
     schema_path = schema_root / "responses" / schema_name
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    resolver = RefResolver(base_uri=schema_path.resolve().as_uri(), referrer=schema)
-    errors = sorted(Draft202012Validator(schema, resolver=resolver).iter_errors(payload),
+    registry = Registry()
+    for path in schema_root.rglob("*.json"):
+        contents = json.loads(path.read_text(encoding="utf-8"))
+        uri = path.resolve().as_uri()
+        contents.setdefault("$id", uri)
+        registry = registry.with_resource(uri, Resource.from_contents(contents))
+    schema["$id"] = schema_path.resolve().as_uri()
+    registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
+    errors = sorted(Draft202012Validator(schema, registry=registry).iter_errors(payload),
                     key=lambda e: (list(e.absolute_path), e.message))
     if errors:
         details = "; ".join(f"{list(e.absolute_path)}: {e.message}" for e in errors)
