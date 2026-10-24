@@ -35,3 +35,5 @@ src = ["backend"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# E501: line length is a style preference; long prose lines and docstrings are tolerated.
+ignore = ["E501"]

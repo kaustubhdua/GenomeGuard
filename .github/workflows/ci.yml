@@ -1,15 +1,35 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+concurrency:
+  group: genomeguard-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
       - run: make setup
       - run: make lint
+      - run: make seed
       - run: make test
       - run: make eval-smoke
+      - run: make eval
       - run: make demo
+      - run: for f in $(find frontend -name '*.js'); do node --check "$f" || exit 1; done
+      - name: Install browser smoke-test dependencies
+        run: |
+          .venv/bin/pip install playwright
+          .venv/bin/python -m playwright install --with-deps chromium
+      - name: Test all pages, responsive layouts, accessibility basics and guided tour
+        run: make ui-smoke

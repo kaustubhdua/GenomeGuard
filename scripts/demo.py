@@ -90,7 +90,21 @@ def main():
     held = [r for r in lst.get("requests", []) if r.get("status") == "held"]
     check("an escalation is waiting for a human", bool(held), f"{len(held)} held")
 
-    print("\n4. Audit log: valid, tamper, broken at that entry, anchor")
+    print("\n4. Steward copilot investigates the held request (read-only agent, advisory)")
+    if held:
+        hid = held[0]["id"]
+        st, cop = call(base, "POST", f"/requests/{hid}/copilot", admin=admin)
+        check("copilot ran for the steward", st == 200, f"HTTP {st}")
+        tools = [x["tool"] for x in cop.get("steps", [])]
+        check("copilot chose and called several read-only tools", len(tools) >= 3, ", ".join(tools))
+        check("copilot recommends denying a frozen probing account",
+              cop.get("recommendation") == "deny", str(cop.get("recommendation")))
+        check("recommendation is advisory (a human still decides)",
+              "Advisory" in str(cop.get("authority", "")))
+        st, _ = call(base, "POST", f"/requests/{hid}/copilot", key="demo-researcher")
+        check("copilot is hidden from researchers", st in (401, 403), f"HTTP {st}")
+
+    print("\n5. Audit log: valid, tamper, broken at that entry, anchor")
     st, head = call(base, "GET", "/audit/head", admin=admin)
     anchor = head.get("head_hash")
     check("head hash published", bool(anchor), (anchor or "")[:16] + "...")
@@ -104,7 +118,7 @@ def main():
     else:
         check("tamper endpoint (start server with GG_ALLOW_TAMPER_DEMO=true)", False, f"HTTP {st}")
 
-    print("\n5. Evaluation results available")
+    print("\n6. Evaluation results available")
     st, ev = call(base, "GET", "/eval/results")
     check("eval results served", st == 200 and bool(ev))
 

@@ -24,10 +24,19 @@ async function call(path, { method = "GET", body, headers = {} } = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// `opts.key` sends that requester key instead of the "acting as" choice (the guided tour uses it).
 export function api(path, opts = {}) {
   const headers = {};
-  if (isSteward() && state.demo) headers["X-Admin-Key"] = state.demo.admin_key;
+  if (opts.key) headers["X-API-Key"] = opts.key;
+  else if (isSteward() && state.demo) headers["X-Admin-Key"] = state.demo.admin_key;
   else if (state.who) headers["X-API-Key"] = state.who;
+  const { key, ...rest } = opts; // eslint-disable-line no-unused-vars
+  return call(path, { ...rest, headers });
+}
+
+// steward-level call regardless of who the app is acting as (admin key from the demo accounts)
+export function stewardApi(path, opts = {}) {
+  const headers = state.demo ? { "X-Admin-Key": state.demo.admin_key } : {};
   return call(path, { ...opts, headers });
 }
 

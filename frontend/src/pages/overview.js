@@ -1,5 +1,6 @@
 import { api, state, isSteward } from "../api.js";
 import { h, card, kpi, badge, pipeline, workflow, when, pct } from "../ui.js";
+import { startTour, tourAvailable } from "../tour.js";
 
 const ROSTER = [
   ["Consent agent", "Reads each donor's permissions and keeps out anyone who did not agree to this use."],
@@ -30,7 +31,8 @@ export async function render() {
     h("h1", { style: "margin:0 0 6px" }, "Genomic data, shared with proof."),
     h("p", { class: "lede" }, "GenomeGuard is a team of AI agents that sits in front of a genomic data store. They check consent, weigh re-identification risk, add protections and keep a tamper-evident record. The agents advise. Fixed rules decide, and a person signs off on anything risky."),
     h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px" },
-      h("a", { class: "btn", href: "#/requests" }, isSteward() ? "Review requests" : "Send a request"),
+      tourAvailable() ? h("button", { onclick: startTour }, "Take the 3-minute tour") : null,
+      h("a", { class: tourAvailable() ? "btn ghost" : "btn", href: "#/requests" }, isSteward() ? "Review requests" : "Send a request"),
       h("a", { class: "btn ghost", href: "#/donor" }, "See the patient view")),
     pipe, h("p", { class: "muted", style: "margin:12px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap" }, caption,
       h("button", { class: "ghost", onclick: () => pipe.replay() }, "Replay")));
@@ -59,7 +61,7 @@ export async function render() {
   const proof = h("dl", { class: "facts" },
     h("dt", {}, "Differencing attack, no defence"), h("dd", {}, diff ? pct(diff.none.mean, 0) + " recovered" : "run make eval"),
     h("dt", {}, "Same attack with GenomeGuard"), h("dd", {}, diff ? pct(diff.ladder_plus_guard.mean, 0) + " (guessing is " + pct(diff.baseline.mean, 0) + ")" : "n/a"),
-    h("dt", {}, "Donors / variants"), h("dd", {}, `${hl.donors ?? "n/a"} / ${hl.variants ?? "n/a"} (synthetic)`),
+    h("dt", {}, "Donors / variants"), h("dd", {}, `${hl.donors ?? "n/a"} / ${hl.variants ?? "n/a"} (${{ real_1000g: "real 1000 Genomes", custom: "custom cohort file" }[pv.genotypes] || "synthetic"})`),
     h("dt", {}, "Smallest cohort released"), h("dd", {}, String(hl.k_min ?? "n/a")));
   root.append(h("div", { class: "grid g-main" },
     card("Recent activity", rows.length ? h("a", { href: "#/requests" }, "All requests") : null, feed),

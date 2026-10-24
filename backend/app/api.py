@@ -9,6 +9,7 @@ membership: only aggregates, transformed releases, counts and reason codes.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -18,12 +19,14 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from app.config import get_settings
+from app.config import get_settings, validate_settings
 from app.core.audit_chain import jsonable
 from app.service import DEMO_REQUESTERS, GenomeGuardService, ServiceError, bootstrap
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
-EVAL_JSON = Path(__file__).resolve().parents[2] / "docs" / "eval-results.json"
+# GG_EVAL_JSON points the UI at docs/eval-results-real.json when you deploy on a real cohort
+EVAL_JSON = Path(os.environ.get("GG_EVAL_JSON")
+                 or Path(__file__).resolve().parents[2] / "docs" / "eval-results.json")
 
 # (method, path, summary, who): drives both routing documentation and /docs
 ROUTES_DOC: list[tuple[str, str, str, str]] = []
@@ -73,6 +76,7 @@ async def _body(request: Request) -> dict:
 
 def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     settings = get_settings()
+    validate_settings(settings)
     state = {"svc": svc}
 
     def S() -> GenomeGuardService:
@@ -110,7 +114,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def health(request):
         v = S().audit.verify()
         prov = getattr(S(), "provenance", {})
-        return _j({"status": "ok", "synthetic_data_only": prov.get("genotypes") != "real_1000g",
+        return _j({"status": "ok", "synthetic_data_only": prov.get("genotypes") == "synthetic",
                    "donors": S().ds.n_donors, "variants": S().ds.n_variants,
                    "k_min": S().p.k_min, "audit_chain_ok": v["ok"], "provenance": prov,
                    "agents_use_llm": S().team.agents["explainer"].llm.available,
@@ -208,6 +212,14 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                                     bool(b.get("approve")))
         return _j(d)
 
+    @route("POST", "/requests/{id:int}/copilot", "Steward copilot: a read-only, tool-using agent "
+           "investigates one request and gives an advisory recommendation (?refresh=true to rerun)",
+           "admin")
+    async def copilot(request):
+        admin(request)
+        refresh = request.query_params.get("refresh", "false").lower() == "true"
+        return _j(await run_in_threadpool(S().copilot_review, request.path_params["id"], refresh))
+
     @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model); "
            "steward-only because it describes withheld variants and registry relatives", "admin")
     async def exposure(request):
@@ -299,6 +311,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def donor_get(request):
         return _j(S().donor_profile(donor_auth(request)))
 
+    @route("GET", "/donor/{id:int}/consent.fhir.json", "Download your consent as a FHIR R4 Consent "
+           "resource (pseudonymous; tagged as simulated demo data)", "donor")
+    async def donor_fhir(request):
+        return JSONResponse(jsonable(S().donor_consent_fhir(donor_auth(request))),
+                            media_type="application/fhir+json")
+
     @route("POST", "/donor/{id:int}/withdraw", "Withdraw consent for all future requests", "donor")
     async def donor_withdraw(request):
         return _j(S().donor_set_withdrawn(donor_auth(request), True))
@@ -347,7 +365,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "<!doctype html><meta charset=utf-8><title>GenomeGuard API</title>"
             "<style>body{font:15px system-ui;margin:2rem;max-width:60rem}td,th{padding:.3rem .8rem;"
             "text-align:left;border-bottom:1px solid #ddd}</style><h1>GenomeGuard API</h1>"
-            "<p>All data is synthetic. Send <code>X-API-Key</code> (requester) or "
+            f"<p>{'Real 1000 Genomes genotypes with simulated consent.' if getattr(S(), 'provenance', {}).get('genotypes') == 'real_1000g' else 'All data is synthetic.'} "
+            "Send <code>X-API-Key</code> (requester) or "
             f"<code>X-Admin-Key</code> (reviewer).</p><table><tr><th>Method<th>Path<th>What<th>Auth"
             f"</tr>{rows}</table>")
 

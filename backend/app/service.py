@@ -32,11 +32,12 @@ from datetime import UTC, datetime
 import numpy as np
 
 from app.agents.base import AgentTeam
+from app.agents.copilot import Copilot
 from app.agents.llm import LLM
 from app.core import crypto
 from app.core.anomaly import AnomalyConfig, AnomalyMonitor, QueryEvent
 from app.core.audit_chain import AuditChain, jsonable
-from app.core.consent import RESEARCH_PURPOSES, ConsentRequest, eligible_cohort
+from app.core.consent import DUO_REFERENCE, RESEARCH_PURPOSES, ConsentRequest, eligible_cohort
 from app.core.dataset import Dataset
 from app.core.params import DATA_LEVELS, DEFAULT, Params
 from app.core.transform import TransformPlan, materialize, run_ladder
@@ -81,6 +82,7 @@ class GenomeGuardService:
         self.monitor = AnomalyMonitor(AnomalyConfig.from_params(p))
         self.team = AgentTeam(llm or LLM(None, "template"), llm_roles)
         self.timeline: dict[int, list[dict]] = {}
+        self._copilot_cache: dict[tuple, dict] = {}
         for r in store.requesters():
             if r["frozen_at"]:
                 self.monitor.freeze(r["id"])
@@ -426,6 +428,74 @@ class GenomeGuardService:
         self.store.set_request_status(req_id, "released")
         return self.store.decision(req_id)
 
+    # ================================================================== steward copilot
+    def copilot_review(self, req_id: int, refresh: bool = False) -> dict:
+        """Run the read-only steward copilot on one request. The copilot is handed ONLY the
+        zero-argument read functions below, never `self`, so it cannot approve, deny, freeze,
+        release or edit anything. Its tool calls and recommendation go to the audit chain."""
+        d = self.store.decision(req_id, with_release=False)
+        if not d:
+            raise ServiceError(404, "not_found", "no such request")
+        rid = d["requester_id"]
+        key = (req_id, d["outcome"], d["reviewed_by"], rid in self.monitor.frozen)
+        if not refresh and key in self._copilot_cache:
+            return self._copilot_cache[key]
+        q, risk, tr = d["request"], d.get("risk") or {}, d.get("transform") or {}
+        who = self.store.requester(rid) or {}
+
+        def brief(r: dict) -> dict:
+            keys = ("n", "level", "n_variants", "band", "band_reasons", "uniqueness_rate",
+                    "rare_variants", "rare_few_carriers", "membership_signal", "min_carriers")
+            out = {k: r.get(k) for k in keys if r.get(k) is not None}
+            out["relatives_exposed_total"] = (r.get("relatives_exposed") or {}).get("total", 0)
+            return out
+
+        def case_summary() -> dict:
+            return {"outcome": d["outcome"], "reasons": d["reasons"], "purpose": q["purpose"],
+                    "disease": q["disease"], "data_level": q["data_level"],
+                    "is_commercial": q["is_commercial"], "tier": who.get("credential_level"),
+                    "needs_human": d["needs_human"]}
+
+        def consent_counts() -> dict:
+            return {"consent": risk.get("consent") or {}}
+
+        def risk_profile() -> dict:
+            return {"risk_before": brief(risk.get("before") or {}),
+                    "risk_after": brief(risk.get("assessment") or {}),
+                    "final": tr.get("final") or {}}
+
+        def family_exposure() -> dict:
+            t = self.exposure(req_id)["totals"]
+            return {"subjects": t["subjects"], "relatives_exposed_total": t["exposed_relatives"],
+                    "by_degree": t["by_degree"]}
+
+        def requester_history() -> dict:
+            kinds: dict[str, int] = {}
+            for a in self.store.alerts(500):
+                if a["requester_id"] == rid:
+                    kinds[a["kind"]] = kinds.get(a["kind"], 0) + 1
+            return {**self._history(rid), "frozen": rid in self.monitor.frozen,
+                    "alerts_by_kind": kinds}
+
+        def privacy_budget() -> dict:
+            return {**self.budget(rid), "epsilon": (tr.get("final") or {}).get("epsilon") or 0}
+
+        def audit_status() -> dict:
+            v = self.audit.verify()
+            return {"chain_ok": v["ok"], "chain_length": v["length"]}
+
+        tools = {"case_summary": case_summary, "consent_counts": consent_counts,
+                 "risk_profile": risk_profile, "family_exposure": family_exposure,
+                 "requester_history": requester_history, "privacy_budget": privacy_budget,
+                 "audit_status": audit_status}
+        reviewer = self.team.agents["reviewer"]
+        cop = Copilot(reviewer.llm, tools, use_llm=reviewer.use_llm, request_id=req_id,
+                      on_event=lambda kind, payload: self.audit.append(
+                          "agent:copilot", "copilot." + kind, payload))
+        out = {**cop.run().to_json(), "outcome": d["outcome"], "status": d["status"]}
+        self._copilot_cache[key] = out
+        return out
+
     # ================================================================== donor portal (patient side)
     def _record_donor_access(self, req_id: int, rid: int, donor_ids: list[int]) -> None:
         """Remember which donors were counted in an aggregate release, for their own portal.
@@ -525,6 +595,55 @@ class GenomeGuardService:
                                                                        len(new["modifiers"])]})
         return self.donor_profile(donor_id)
 
+    FHIR_EXT = "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition"
+
+    def donor_consent_fhir(self, donor_id: int) -> dict:
+        """The donor's consent as a FHIR R4 `Consent` resource, so it can travel to other systems.
+        The patient is a pseudonymous reference (never the donor number). DUO terms and limits
+        are carried in namespaced extensions rather than mapped onto FHIR purpose codes we cannot
+        verify. The record is tagged as simulated: no real person consented to this system.
+        Structure follows the FHIR R4 Consent resource but has NOT been run through a FHIR
+        validator."""
+        d = self._donor(donor_id)
+        c = d.consent
+        ref = self._donor_ref(donor_id)
+
+        def duo(code: str) -> dict:
+            info = DUO_REFERENCE.get(code, {})
+            coding = {"system": "http://purl.obolibrary.org/obo/duo.owl",
+                      "code": info.get("id") or code, "display": info.get("meaning") or code}
+            if not info.get("id"):
+                coding["userSelected"] = False  # short name only: the official id is not confirmed
+            return coding
+
+        ext = [{"url": f"{self.FHIR_EXT}/duo-use", "valueCoding": duo(str(c.get("use")))}]
+        ext += [{"url": f"{self.FHIR_EXT}/duo-modifier", "valueCoding": duo(m)}
+                for m in (c.get("modifiers") or [])]
+        if c.get("disease"):
+            ext.append({"url": f"{self.FHIR_EXT}/disease", "valueString": c["disease"]})
+        if c.get("population"):
+            ext.append({"url": f"{self.FHIR_EXT}/population", "valueString": c["population"]})
+        res = {
+            "resourceType": "Consent", "id": ref,
+            "meta": {"tag": [{"system": f"{self.FHIR_EXT}/tags", "code": "simulated-consent",
+                              "display": "Simulated consent record (demo data, not a real person)"}]},
+            "status": "inactive" if d.withdrawn else "active",
+            "scope": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/consentscope",
+                                  "code": "research", "display": "Research"}]},
+            "category": [{"coding": [{"system": "http://loinc.org", "code": "59284-0",
+                                      "display": "Consent Document"}]}],
+            "patient": {"reference": f"Patient/{ref}", "display": "Pseudonymous donor"},
+            "provision": {
+                "type": "permit",
+                "purpose": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ActReason",
+                             "code": "HRESCH", "display": "healthcare research"}],
+                "extension": ext},
+        }
+        if c.get("consent_date"):
+            res["dateTime"] = c["consent_date"]
+        self.audit.append(f"donor:{ref}", "consent.exported", {"donor_ref": ref, "format": "fhir_r4"})
+        return res
+
     def donor_ask(self, donor_id: int, intent: str) -> dict:
         from app.agents.templates import INTENTS
 
@@ -598,7 +717,8 @@ class GenomeGuardService:
         for s in subjects:
             by_family.setdefault(fam[s], []).append(s)
         families, total, by_degree = [], 0, {}
-        for k, (fid, subs) in enumerate(sorted(by_family.items(), key=lambda kv: -len(kv[1]))[:6]):
+        for k, (_fid, subs) in enumerate(
+                sorted(by_family.items(), key=lambda kv: -len(kv[1]))[:6]):
             nodes, edges, seen = [], [], {}
             for i, s in enumerate(subs):
                 sid = f"S{k + 1}.{i + 1}"
@@ -628,8 +748,11 @@ class GenomeGuardService:
         return {"request_id": req_id, "families": families,
                 "totals": {"subjects": len(subjects), "exposed_relatives": total,
                            "by_degree": by_degree},
-                "model": "SIMULATED: expected-average kinship from a synthetic pedigree; real "
-                         "sharing varies and this is not a forecast about any real database.",
+                "model": ("SIMULATED: expected-average kinship from the pedigree file (real "
+                          "parent/child links where it has them); " if getattr(
+                              self, "provenance", {}).get("genotypes") == "real_1000g" else
+                          "SIMULATED: expected-average kinship from a synthetic pedigree; ")
+                         + "real sharing varies and this is not a forecast about any real database.",
                 "note": "Nodes are pseudonyms for this view only."}
 
     def _is_a(self, subject: int, other: int, relation: str) -> bool:
@@ -728,10 +851,16 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     llm = llm or LLM(s.anthropic_api_key, s.llm_model)
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
                              admin_key=s.admin_api_key, **kwargs)
-    real = bool(s.real_cohort_file)
+    kind = "synthetic"
+    if s.real_cohort_file:  # a cohort file is real only if ITS metadata says so
+        from app.data.real import read_meta
+
+        kind = "real_1000g" if read_meta(s.real_cohort_file).get("genotypes_real") else "custom"
     svc.provenance = {
-        "genotypes": "real_1000g" if real else "synthetic",
-        "genotypes_label": "Real genotypes (1000 Genomes)" if real else "Synthetic genotypes",
+        "genotypes": kind,
+        "genotypes_label": {"real_1000g": "Real genotypes (1000 Genomes)",
+                            "custom": "Custom cohort file (provenance not stated)",
+                            "synthetic": "Synthetic genotypes"}[kind],
         "consent": "simulated", "consent_label": "Simulated consent records",
         "relatives": "kinship_model", "relatives_label": "Relative exposure is a model",
         "agents": "llm" if llm.available else "templates",

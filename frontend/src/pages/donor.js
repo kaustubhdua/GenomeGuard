@@ -15,7 +15,7 @@ export async function render() {
   pick.value = state.donor.id;
   root.append(h("h1", {}, "Your data, in your hands"),
     h("p", { class: "lede" }, "This is the patient's side of GenomeGuard. You can see what you agreed to, who used statistics that included you, and withdraw whenever you like."),
-    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Demo patient (synthetic)", pick), body);
+    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Demo patient (simulated consent)", pick), body);
   const flash = h("div", { "aria-live": "polite" });
 
   async function load() {
@@ -53,7 +53,9 @@ export async function render() {
         h("div", { class: "confirm" }, h("button", { class: p.withdrawn ? "" : "ghost danger", onclick: askConfirm }, p.withdrawn ? "Restore my consent" : "Withdraw my consent")), confirm, flash),
       h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "What you agreed to"),
         h("p", {}, "Your data may be used for ", h("b", {}, use), mods.length ? ", with these limits: " + mods.join(", ") : "", c.population ? `, for the ${c.population} group only` : "", "."),
-        c.consent_date ? h("p", { class: "muted", style: "margin:0" }, "Consent given on " + c.consent_date + ".") : null),
+        c.consent_date ? h("p", { class: "muted", style: "margin:0 0 10px" }, "Consent given on " + c.consent_date + ".") : null,
+        h("button", { class: "ghost", onclick: () => download(p) }, "Download my consent (FHIR)"),
+        h("p", { class: "muted", style: "margin:8px 0 0" }, "A standard health-data format your clinic or another system can read. These are demo records, so the file is marked as simulated.")),
       h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "Change what you agree to"), form),
       h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "Who used statistics that included you"),
         acc.length ? h("ul", { class: "timeline-d" }, acc.map((a) => h("li", {}, h("span", { class: "when" }, when(a.ts)), h("span", {}, `${a.institution || "A researcher"} studied ${plain(a.purpose)}${a.disease ? " (" + a.disease + ")" : ""}, receiving ${plain(a.level)} figures.`))))
@@ -88,4 +90,12 @@ function consentForm(p, done) {
     save.disabled = false;
   } }, "Save my choices");
   return h("div", { class: "stack", style: "font-family:var(--sans)" }, h("label", { class: "f", for: "c-use" }, "My data may be used for", use), dis, h("div", { class: "stack", style: "gap:8px" }, boxes), h("div", {}, save));
+}
+
+async function download(p) {
+  const r = await donorApi(`/donor/${p.id}/consent.fhir.json`);
+  if (!r.ok) return;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(r.data, null, 2)], { type: "application/fhir+json" }));
+  const a = h("a", { href: url, download: `consent-${r.data.id}.fhir.json` });
+  document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }

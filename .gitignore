@@ -9,3 +9,11 @@ dist/
 .ruff_cache/
 .pytest_cache/
 *.egg-info/
+# downloaded real genomes and cohorts built from them: never commit
+data_real/
+*.vcf
+*.vcf.gz
+*.bcf
+*.bam
+*.cram
+*.sqlite3

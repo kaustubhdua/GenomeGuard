@@ -54,10 +54,10 @@ def differencing_attack(ds: Dataset, trials: int = 40, seed: int = 1, n: int = 6
     is the accuracy of just guessing the most likely genotype from allele frequency."""
     rng = np.random.default_rng(seed)
     G = ds.genotypes
-    common = np.where((ds.maf >= 0.15))[0]
+    common = np.where(ds.maf >= 0.15)[0]
     res = {k: [] for k in ("none", "dp_only", "ladder_only", "ladder_plus_guard", "baseline")}
     guard_blocked = 0
-    for t in range(trials):
+    for _ in range(trials):
         cohort = rng.choice(ds.n_donors, n, replace=False)
         target = int(cohort[0])
         a_ids = [int(i) + 1 for i in cohort]
@@ -134,7 +134,7 @@ def membership_inference(ds: Dataset, n: int, V: int, bin_w: float | None, eps: 
         p = np.clip(G[R][:, vidx].mean(0) / 2.0, 0.005, 0.995)
         w1, w0 = np.log(f / p), np.log((1 - f) / (1 - p))
 
-        def score(rows):
+        def score(rows, vidx=vidx, w1=w1, w0=w0):
             x = G[rows][:, vidx] / 2.0
             return x @ w1 + (1 - x) @ w0
 

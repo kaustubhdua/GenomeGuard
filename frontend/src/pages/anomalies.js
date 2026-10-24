@@ -37,6 +37,12 @@ function requesterRow(r, redraw) {
       last ? h("span", { class: "muted" }, `${tl.length} queries, latest cohort ${last.cohort_n}, action ${last.action}`) : h("span", { class: "muted" }, "No queries yet"),
       r.frozen ? h("button", { class: "ghost", onclick: () => act("unfreeze") }, "Unfreeze") : h("button", { class: "ghost", onclick: () => act("freeze") }, "Freeze")),
     tl.length ? [lineChart({ series: [{ name: "score", color: "var(--ink)", points: pts("score") }, { name: "rate", color: "#2f6fe4", points: pts("rate"), dash: "4 3" }, { name: "similarity", color: "var(--glow)", points: pts("similarity"), dash: "2 3" }, { name: "differencing", color: "var(--deny)", points: pts("differencing") }],
-      xLabel: "query number", yLabel: "score (0 to 1)", yMax: 1, hlines: TH, fmtX: (v) => Math.round(v), fmtY: (v) => v.toFixed(2), height: 230 }),
+      xLabel: "query number", yLabel: "score (0 to 1)", yMax: 1, hlines: TH, fmtX: (v) => Math.round(v), fmtY: (v) => v.toFixed(2), height: 230, xTicks: queryTicks(tl.length) }),
       legend([["total score", "var(--ink)"], ["query rate", "#2f6fe4"], ["near-duplicate similarity", "var(--glow)"], ["differencing guard", "var(--deny)"]])] : null);
+}
+
+// whole query numbers only: every one for short series, five spread evenly for long ones
+function queryTicks(n) {
+  if (n <= 6) return Array.from({ length: n }, (_, i) => i + 1);
+  return [...new Set([0, 1, 2, 3, 4].map((i) => Math.round(1 + ((n - 1) * i) / 4)))];
 }

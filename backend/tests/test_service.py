@@ -2,7 +2,7 @@ import numpy as np
 
 from app.agents.base import grounded
 from app.service import ServiceError
-from tests.helpers import ADMIN, ANON, ATTACKER, CONTROLLED, DEMO_REQ, RESEARCHER, make_service
+from tests.helpers import ANON, ATTACKER, CONTROLLED, DEMO_REQ, RESEARCHER, make_service
 
 
 def U(svc, key):
@@ -222,10 +222,11 @@ def test_audit_entries_for_agents_record_model_and_prompt_hash():
 
 def test_llm_path_accepts_grounded_and_rejects_ungrounded_text():
     from app.agents.llm import LLM
-    from app.service import bootstrap
     from app.config import Settings
+    from app.service import bootstrap
 
-    s = Settings(); s.db_path = ":memory:"
+    s = Settings()
+    s.db_path = ":memory:"
     s.n_donors, s.n_variants, s.n_families = 300, 800, 60
     seen = {}
 
@@ -257,7 +258,8 @@ def test_llm_failure_falls_back_to_template():
     def boom(*a, **k):
         raise TimeoutError("network down")
 
-    s = Settings(); s.db_path = ":memory:"
+    s = Settings()
+    s.db_path = ":memory:"
     s.n_donors, s.n_variants, s.n_families = 300, 800, 60
     svc = bootstrap(s, llm=LLM("k", "m", transport=boom))
     d = svc.submit(U(svc, RESEARCHER), DEMO_REQ)

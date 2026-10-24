@@ -6,9 +6,10 @@ link, demo video link. (Fill the three links after deploying; keep them live thr
 **Hook:** "Genomic data can expose your relatives, so we built a guard that decides who can see
 what, explains why, and proves it never looked the other way."
 
-> **Track:** Track 2, Agentic AI for Healthcare. Pitch it as: a steward copilot (decision support),
-> consent and audit records (information management), a patient consent concierge (patient
-> interaction) and automatic triage with human sign-off (workflow automation).
+> **Track:** Track 2, Agentic AI for Healthcare. Pitch it as: a **steward copilot that investigates
+> held cases with read-only tools** (decision support), consent and audit records plus a FHIR
+> consent export (information management), a patient consent concierge (patient interaction) and
+> automatic triage with human sign-off (workflow automation).
 
 ## Problem
 - DNA cannot be changed like a password, and it is shared with relatives who never consented.
@@ -56,11 +57,18 @@ yes more safely, lets donors see their consent honoured, and gives auditors evid
 
 ## Limitations and future scope (say these yourself before a judge does)
 Synthetic data; simplified attacks; simple epsilon accounting (formal DP accountant is future
-work); consent records simulated for real genomes; no homomorphic encryption or secure enclave
+work); consent records simulated for real genomes; Paillier homomorphic aggregation is a one-process educational demo and there is no secure enclave
 (future); no real consent-management integration; no independent security review; single-writer
 audit log.
 
 ## Likely judge questions
+- **Where is the agent actually deciding something?** The steward copilot chooses which evidence
+  to gather for each case (it skips family exposure when no rare variants are involved, and checks
+  the budget only when a release would spend any), then recommends. Its recommendation can never
+  be more permissive than the fixed rules, it has no write tools, and a human clicks the decision.
+- **How fast is it?** Run `make bench` and quote that output with its hardware line. On the
+  2-vCPU machine used while building: about 30 requests a second in one process, median 33 ms per
+  decision at 600 donors and 50 ms at 5,000 donors. See `docs/scalability.md`.
 - **Why agents if rules decide?** Agents turn numbers into explanations stewards and researchers
   can read, and give advisory second opinions. A deterministic core holds authority because an
   LLM gate can be prompt-injected. Agents see only whitelisted numbers.
@@ -73,7 +81,9 @@ audit log.
   the official gazette before putting them on a slide.
 - **Can the log be forged?** Someone with full database write access can recompute it. Publishing
   the head hash externally makes that detectable.
-- **Why not full homomorphic encryption?** It cannot run these statistics at useful speed on a
-  free tier; secure aggregation covers multi-site analysis, and HE is future work.
+- **Why not full homomorphic encryption?** `core/paillier.py` is a real additively homomorphic
+  scheme (educational, unaudited, one process), which is enough to sum allele counts across sites.
+  Fully homomorphic encryption cannot run the rest of these statistics at useful speed on a free
+  tier, so it is future work.
 - **Is the real-data mode real?** Genotypes are real 1000 Genomes data; consent is simulated; the
   Phase 3 samples are unrelated so family exposure is sparse. Only claim it after you ran it.

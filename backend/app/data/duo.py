@@ -25,7 +25,7 @@ NS = {"rdfs": "http://www.w3.org/2000/01/rdf-schema#",
       "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
       "owl": "http://www.w3.org/2002/07/owl#",
       "oboInOwl": "http://www.geneontology.org/formats/oboInOwl#"}
-RDF_ABOUT = "{%s}about" % NS["rdf"]
+RDF_ABOUT = f"{{{NS['rdf']}}}about"
 
 # Words we expect in the official label for each code (a hint for matching, not a claim).
 LABEL_HINTS = {
@@ -39,7 +39,7 @@ def parse_terms(owl_xml: str) -> dict[str, dict]:
     """Return {DUO:0000046: {"label": ..., "definition": ..., "deprecated": bool}}."""
     root = ET.fromstring(owl_xml)
     out = {}
-    for cls in root.iter("{%s}Class" % NS["owl"]):
+    for cls in root.iter(f"{{{NS['owl']}}}Class"):
         about = cls.get(RDF_ABOUT, "")
         m = re.search(r"DUO_(\d{7})$", about)
         label = cls.find("rdfs:label", NS)

@@ -46,7 +46,8 @@ def test_canary_in_genotype_data_and_free_text_never_reaches_any_prompt():
     from app.config import Settings
     from app.service import bootstrap
 
-    s = Settings(); s.db_path = ":memory:"
+    s = Settings()
+    s.db_path = ":memory:"
     s.n_donors, s.n_variants, s.n_families = 300, 800, 60
     llm = LLM("k", "claude-test", transport=spy)
     svc = bootstrap(s, llm=llm, llm_roles={"explainer", "reviewer", "compliance", "consent",
