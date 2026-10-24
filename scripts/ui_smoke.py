@@ -141,9 +141,11 @@ def main() -> None:
             for hsh in PAGES:
                 pg.goto(base + "/" + hsh)
                 pg.wait_for_timeout(1200)
-                if pg.evaluate(OVERFLOW_JS):
-                    over.append(hsh)
-            check(f"{width}px wide", not over, ", ".join(over))
+                layout = pg.evaluate(OVERFLOW_JS)
+                if layout["overflow"]:
+                    over.append(f"{hsh}: {layout['viewport']}px viewport / {layout['documentWidth']}px document; "
+                                + str(layout["offenders"][:5]))
+            check(f"{width}px wide", not over, "; ".join(over)[:900])
         browser.close()
 
     print("\n" + ("ALL UI CHECKS PASSED" if not failures else f"{len(failures)} UI CHECK(S) FAILED"))
