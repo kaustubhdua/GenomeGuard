@@ -1,6 +1,12 @@
 # Tech Eximius Track 2 — release gate and completion audit
 
-Last repository inspection: 24 October 2026. This is a source-level audit of the roadmap branch, not a claim that a hosted deployment or external dataset was verified.
+Last updated: 25 October 2026. This document separates automated evidence from work that still requires a real hosting account, external dataset access, or independent review.
+
+## Latest verified repository baseline
+
+The merge commit on `main` is `6e9c5ab927a659af0fde3ba9bd852b66310362f1`. GitHub Actions run [#40](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40119696605) completed successfully on that exact commit. Its steps passed `make setup`, `make lint`, `make seed`, `make test` (**256 passed**), `make eval-smoke`, `make eval`, `make demo`, JavaScript syntax checks, and `make ui-smoke`. The browser suite reported all nine routes passing in light and dark themes, no tour JavaScript errors, and no horizontal overflow at 320, 375, and 414 px.
+
+This is strong automated prototype evidence, not a hosted-service test. The latest CI run does not establish a public Render URL, persistent hosted storage, end-to-end ingestion of real 1000 Genomes files, formal differential-privacy guarantees, FHIR conformance, or production security assurance. Those remain open gates below.
 
 ## Product framing
 
