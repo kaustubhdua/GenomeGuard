@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import io
 import json
 import re
@@ -264,6 +265,15 @@ def read_vcf(path: Path, sample_ids: list[str], keep_prob: float, max_variants: 
 
 # ------------------------------------------------------------------------------ build / load
 
+def sha256_file(path: Path) -> str:
+    """Hash a source file in bounded memory for reproducible data provenance."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: int = 3000,
                  keep_prob: float = 0.004, seed: int = 1337, rare_maf: float = 0.01,
                  withdrawn_rate: float = 0.03,
@@ -292,7 +302,12 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                 "planted": np.zeros(len(maf), dtype=bool)}
     meta = {"source": "1000 Genomes (IGSR)", "samples": n, "variants": int(G.shape[1]),
             "relative_pairs": len(rels), "consent_simulated": True, "genotypes_real": True,
-            "family_enriched": family_first, "seed": seed}
+            "family_enriched": family_first, "seed": seed,
+            "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
+                                 "keep_prob": keep_prob, "rare_maf": rare_maf,
+                                 "withdrawn_rate": withdrawn_rate},
+            "source_vcf_file": vcf.name, "source_vcf_sha256": sha256_file(vcf),
+            "source_pedigree_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest()}
     return SyntheticCohort(donors, G, variants, rels, [], seed), meta
 
 
