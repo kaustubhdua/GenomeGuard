@@ -42,7 +42,7 @@ makes the cohort **family-enriched on purpose**, and the cohort metadata records
 `family_enriched: true`. Do not describe it as representative of a population. Use
 `--no-family-first` on the module (`python -m app.data.real build ...`) for random sampling.
 
-The pedigree parser accepts tab- or whitespace-separated files and several header spellings
+The default public Phase 3 panel provides sample and population labels but no family relationships; each sample is treated as unrelated. For real parent/child links, pass a separate pedigree file with family, individual, father, mother and population columns. The parser accepts tab- or whitespace-separated files and several header spellings
 (`Family ID / Individual ID / Paternal ID / Maternal ID`, or `FamilyID / SampleID / FatherID /
 MotherID`, with a `Population` column). If your file uses different headers it stops with a
 message naming the missing column and showing the header it found; add the spelling to `_ALIASES`
