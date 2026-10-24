@@ -611,11 +611,12 @@ class GenomeGuardService:
 
         def duo(code: str) -> dict:
             info = DUO_REFERENCE.get(code, {})
-            coding = {"system": "http://purl.obolibrary.org/obo/duo.owl",
-                      "code": info.get("id") or code, "display": info.get("meaning") or code}
-            if not info.get("id"):
-                coding["userSelected"] = False  # short name only: the official id is not confirmed
-            return coding
+            if info.get("id"):
+                return {"system": "http://purl.obolibrary.org/obo/duo.owl",
+                        "code": info["id"], "display": info.get("meaning") or code}
+            # Never label an unconfirmed short code as an official DUO term.
+            return {"system": f"{self.FHIR_BASE}/CodeSystem/consent-use-codes",
+                    "code": code, "display": info.get("meaning") or code}
 
         ext = [{"url": f"{self.FHIR_EXT}/duo-use", "valueCoding": duo(str(c.get("use")))}]
         ext += [{"url": f"{self.FHIR_EXT}/duo-modifier", "valueCoding": duo(m)}
