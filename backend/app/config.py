@@ -47,3 +47,32 @@ def get_settings() -> Settings:
 
 
 settings = Settings()
+
+
+def validate_settings(s: Settings) -> None:
+    """Fail closed for non-demo deployments with unsafe security settings.
+
+    Demo mode intentionally publishes synthetic demo credentials and may enable the
+    audit-tamper exercise. Those settings must never silently carry into a deployment
+    intended to handle anything beyond the bundled synthetic cohort.
+    """
+    if s.demo_mode:
+        return
+
+    problems: list[str] = []
+    if s.admin_api_key == "demo-admin-key" or not s.admin_api_key.strip():
+        problems.append("GG_ADMIN_API_KEY must be a unique, non-default secret")
+    if s.allow_tamper_demo:
+        problems.append("GG_ALLOW_TAMPER_DEMO must be false")
+    if not s.master_key:
+        problems.append("GG_MASTER_KEY must be set to a random base64-encoded 32-byte key")
+    else:
+        import base64
+        try:
+            key = base64.b64decode(s.master_key, validate=True)
+        except (ValueError, base64.binascii.Error):
+            key = b""
+        if len(key) != 32:
+            problems.append("GG_MASTER_KEY must decode to exactly 32 bytes")
+    if problems:
+        raise ValueError("Unsafe non-demo configuration: " + "; ".join(problems))
