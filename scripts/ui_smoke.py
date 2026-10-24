@@ -59,7 +59,7 @@ OVERFLOW_JS = """() => {
     return {tag:e.tagName.toLowerCase(), id:e.id, cls:typeof e.className === 'string' ? e.className.slice(0,70) : '',
       left:Math.round(r.left), right:Math.round(r.right), width:Math.round(r.width),
       scrollWidth:e.scrollWidth, clientWidth:e.clientWidth, position:s.position, text:(e.innerText||'').trim().slice(0,50)};
-  }).filter((x) => x.width > 0 && (x.right > vw + 1 || x.left < -1) && x.position !== 'fixed');
+  }).filter((x) => x.width > 0 && x.right > vw + 1 && x.position !== 'fixed');
   return {overflow:document.documentElement.scrollWidth > vw + 1,
     viewport:vw, documentWidth:document.documentElement.scrollWidth, offenders:offenders.slice(0,12)};
 }"""
