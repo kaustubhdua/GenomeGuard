@@ -65,6 +65,7 @@ Do not quote performance or evaluation figures from a different commit, dataset,
 Before calling the prototype “deployed and working”:
 
 - [ ] Confirm the public URL loads from a fresh browser session and from a phone network.
+- [ ] Run `make deploy-smoke URL=https://your-service.onrender.com`; it checks the landing page, static assets, health/audit status, synthetic-data provenance, demo account availability and core API documentation without mutating state or printing keys.
 - [ ] Exercise the full guided tour on the deployed service, not only localhost.
 - [ ] Confirm /health reports the expected data provenance and a valid audit chain.
 - [ ] Verify that API errors, reloads, and a cold start do not leave the UI stuck.
