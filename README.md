@@ -25,6 +25,12 @@ from real, openly released 1000 Genomes genotypes (see below); consent records a
 simulated. Designed around the ideas of DPDP, GDPR and HIPAA. **It makes no claim of legal
 compliance.**
 
+## Deploy the synthetic demo
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/kaustubhdua/GenomeGuard)
+
+This opens Render's Blueprint flow; it does **not** mean a public instance is already deployed. Sign in, review the generated environment settings, set `GG_MASTER_KEY` as a base64-encoded random 32-byte key in Render's secret manager, and wait for the service health check to pass. The blueprint intentionally uses demo mode and simulated data. Never use its published demo credentials or tamper-demo controls with real participant data. A live URL must be copied from the Render dashboard and tested before it is listed as a working deployment.
+
 ## Run it
 
 ```
