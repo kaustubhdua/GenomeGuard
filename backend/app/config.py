@@ -60,8 +60,8 @@ def validate_settings(s: Settings) -> None:
         return
 
     problems: list[str] = []
-    if s.admin_api_key == "demo-admin-key" or not s.admin_api_key.strip():
-        problems.append("GG_ADMIN_API_KEY must be a unique, non-default secret")
+    if s.admin_api_key == "demo-admin-key" or len(s.admin_api_key.strip()) < 32:
+        problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:
         problems.append("GG_ALLOW_TAMPER_DEMO must be false")
     if not s.master_key:
