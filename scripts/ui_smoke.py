@@ -86,6 +86,31 @@ def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(**launch)
 
+        print("\\n0. Route-level lazy loading and page entrance motion")
+        lazy_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        lazy_pg = lazy_ctx.new_page()
+        lazy_pg.goto(base + "/#/overview")
+        lazy_pg.wait_for_selector("#view h1", timeout=15000)
+        loaded_before = lazy_pg.evaluate("performance.getEntriesByType('resource').map(e => e.name)")
+        requests_loaded_early = any(name.endswith("/pages/requests.js") for name in loaded_before)
+        lazy_pg.goto(base + "/#/requests")
+        lazy_pg.wait_for_selector("#view h1", timeout=15000)
+        loaded_after = lazy_pg.evaluate("performance.getEntriesByType('resource').map(e => e.name)")
+        requests_loaded_on_visit = any(name.endswith("/pages/requests.js") for name in loaded_after)
+        has_enter_class = lazy_pg.locator("#view > .page-enter").count() == 1
+        check("non-current route module is not loaded at startup", not requests_loaded_early)
+        check("route module loads when visited", requests_loaded_on_visit)
+        check("route transition uses entrance class", has_enter_class)
+        lazy_ctx.close()
+
+        motion_ctx = browser.new_context(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+        motion_pg = motion_ctx.new_page()
+        motion_pg.goto(base + "/#/overview")
+        motion_pg.wait_for_selector("#view > .page-enter", timeout=15000)
+        duration = motion_pg.locator("#view > .page-enter").evaluate("(e) => getComputedStyle(e).animationDuration")
+        check("reduced-motion preference disables page animation", float(duration.removesuffix("s")) <= 0.001, duration)
+        motion_ctx.close()
+
         print("\n1. The guided tour, with its two live actions (fresh database expected)")
         ctx = browser.new_context(viewport={"width": 1280, "height": 900})
         pg = ctx.new_page()
