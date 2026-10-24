@@ -4,9 +4,11 @@ Last updated: 25 October 2026. This document separates automated evidence from w
 
 ## Latest verified repository baseline
 
-The latest verified `main` commit is `e78aaf8912a64bb7bd07a2342a5de1f68767988a`. GitHub Actions run [#56](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40122146271) completed successfully on that exact commit. Its steps passed `make setup`, `make lint`, `make seed`, `make test` (**257 passed**), `make eval-smoke`, `make eval`, `make demo`, JavaScript syntax checks, Python compile checks, the read-only deployment smoke test, and `make ui-smoke`. The browser suite reported all nine routes passing in light and dark themes, no tour JavaScript errors, and no horizontal overflow at 320, 375, and 414 px.
+The latest merged UI/performance commit is `131001516e4858eb20bdcb22c17165d3ac74dfed`. GitHub Actions run [#63](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40131295161) completed successfully on that exact `main` commit. It passed setup, lint, seed, the 257-test suite, evaluation smoke/full evaluation, demo, JavaScript syntax checks, Python compilation, and the browser UI suite.
 
-The deployment smoke test ran against the CI-local demo service; it is not evidence that a public Render service exists. The following remain unverified: public URL and hosting persistence, end-to-end ingestion of real 1000 Genomes files, formal differential-privacy guarantees, external FHIR R4 conformance, and production security assurance. Those remain open gates below.
+The UI changes in this commit split page modules by route, prefetch chunks on link hover/focus, add reduced-motion-aware entrance and interaction motion, expose route loading with `aria-busy`, recover from failed route imports, and apply native lazy loading/async decoding to images added by pages. The browser regression checks verify that non-current route code is not fetched at startup, that the requests route is fetched when visited, that the page entrance class is applied, and that reduced-motion preference suppresses animation. The existing UI suite also checks the nine routes, light/dark themes, guided tour, and overflow at 320, 375, and 414 px.
+
+The deployment smoke test and browser checks run against a CI-local synthetic demo service; they are not evidence that a public Render service exists. The following remain unverified: public URL and hosting persistence, end-to-end ingestion of real 1000 Genomes files, formal differential-privacy guarantees, external FHIR R4 conformance, and production security assurance. Those remain open gates below.
 
 ## Product framing
 
