@@ -61,7 +61,8 @@ GitHub Actions downloaded the public Phase 3 chromosome 22 VCF, built a cohort w
 
 - Source: 1000 Genomes (IGSR), file `chr22.vcf.gz`
 - Source VCF SHA-256: `a90c16c4ff2b3196476d506ae13cb3047fae8670163c7c932c4b0239aef3daf5`
-- Sample-panel SHA-256: `b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858`
+- Source sample metadata file: `integrated_call_samples_v3.20130502.ALL.panel`
+- Source sample-metadata SHA-256: `b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858`
 - Build parameters: 600 requested samples, 3,000 max variants, keep probability 0.004, rare-MAF threshold 0.01, simulated withdrawn rate 0.03
 - Observed relative pairs: 0; `family_enriched: false`; `genotypes_real: true`; `consent_simulated: true`
 
@@ -71,4 +72,4 @@ Selected results from the generated evaluation report (attack/query traffic rema
 - Membership-inference AUC varied with release size and noise; at 500 variants, the simulated attack AUC was 0.721 for raw frequencies and 0.511 for binned frequencies with epsilon 0.5, with very low utility for the latter (correlation 0.020).
 - The query monitor froze all tested attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. This is a measured limitation of the simulated sliding-window monitor, not a claim that slow attacks are stopped.
 
-These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The source sample-metadata file is `integrated_call_samples_v3.20130502.ALL.panel`; its SHA-256 is `b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858`. The full generated Markdown and JSON reports are preserved as artifacts in [run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40134445686) for 30 days.
+These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40134445686) for 30 days.
