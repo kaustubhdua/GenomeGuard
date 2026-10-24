@@ -276,8 +276,8 @@ def sha256_file(path: Path) -> str:
 
 def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: int = 3000,
                  keep_prob: float = 0.004, seed: int = 1337, rare_maf: float = 0.01,
-                 withdrawn_rate: float = 0.03,
-                 family_first: bool = False) -> tuple[SyntheticCohort, dict]:
+                 withdrawn_rate: float = 0.03, family_first: bool = False,
+                 source_metadata_file: str = "provided-sample-metadata") -> tuple[SyntheticCohort, dict]:
     rng = np.random.default_rng(seed)
     info = parse_ped(ped_text)
     in_vcf = [s for s in vcf_samples(vcf) if s in info]
@@ -307,7 +307,9 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                                  "keep_prob": keep_prob, "rare_maf": rare_maf,
                                  "withdrawn_rate": withdrawn_rate},
             "source_vcf_file": vcf.name, "source_vcf_sha256": sha256_file(vcf),
-            "source_pedigree_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest()}
+            "source_sample_metadata_file": source_metadata_file,
+            "source_sample_metadata_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest(),
+            "pedigree_relationships_present": bool(rels)}
     return SyntheticCohort(donors, G, variants, rels, [], seed), meta
 
 
@@ -352,11 +354,15 @@ def main(argv: list[str] | None = None) -> None:
     vcf = Path(a.vcf) if a.vcf else download(resolve_vcf_url(a.chrom),
                                               cache / f"chr{a.chrom}.vcf.gz")
     if a.ped and Path(a.ped).exists():
-        ped_text = Path(a.ped).read_text()
+        ped_path = Path(a.ped)
+        ped_text = ped_path.read_text()
+        metadata_file = ped_path.name
     else:
-        ped_text = download(a.ped or PED_URL, cache / "samples.ped").read_text()
+        metadata_url = a.ped or PED_URL
+        ped_text = download(metadata_url, cache / "samples.ped").read_text()
+        metadata_file = metadata_url.rsplit("/", 1)[-1]
     c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed,
-                           family_first=not a.no_family_first)
+                           family_first=not a.no_family_first, source_metadata_file=metadata_file)
     save_cohort(c, meta, Path(a.out))
     print(json.dumps(meta, indent=2))
     print(f"wrote {a.out}\nrun with: GG_REAL_COHORT_FILE={a.out} make run")
