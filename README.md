@@ -37,7 +37,7 @@ This opens Render's Blueprint flow; it does **not** mean a public instance is al
 make setup && make seed && make test && make eval && make run     # then open http://localhost:8000
 make demo                                                        # scripted 3-minute scenario, checked
 make bench                                                       # latency / audit-cost numbers, see docs/scalability.md
-make ui-smoke                                                    # headless-browser UI check (contrast, a11y, phones, tour
+make ui-smoke                                                    # headless-browser UI check (contrast, a11y, phones, tour)
 make deploy-smoke URL=https://your-service.onrender.com              # read-only check after deployment
 ```
 In demo mode the Overview has a **3-minute guided tour** that performs the real actions for you.
