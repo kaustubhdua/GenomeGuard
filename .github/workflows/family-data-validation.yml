@@ -31,21 +31,21 @@ jobs:
           make setup
           make lint
           make test
-      - name: Download official high-coverage chr22 VCF and pedigree metadata
+      - name: Download official high-coverage chr22 VCF and pedigree/population metadata
         run: |
           mkdir -p data_real
           curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
             "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz" \
             --output data_real/high_coverage_chr22.vcf.gz
           curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
-            "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/1kGP.3202_samples.pedigree_info.txt" \
-            --output data_real/1kGP.3202_samples.pedigree_info.txt
+            "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/20130606_g1k_3202_samples_ped_population.txt" \
+            --output data_real/20130606_g1k_3202_samples_ped_population.txt
       - name: Build a pedigree-aware real-genotype cohort
         run: |
           PYTHONPATH=backend .venv/bin/python -m app.data.real build \
             --vcf data_real/high_coverage_chr22.vcf.gz \
             --source-vcf-name 1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz \
-            --ped data_real/1kGP.3202_samples.pedigree_info.txt \
+            --ped data_real/20130606_g1k_3202_samples_ped_population.txt \
             --samples 600 --variants 3000 --keep-prob 0.004 --seed 1337 \
             --out data_real/1000g_high_coverage_chr22.npz
       - name: Verify real family provenance and evaluate
@@ -61,7 +61,7 @@ jobs:
           assert m.get("relative_pairs", 0) > 0, m
           assert m.get("pedigree_relationships_present") is True, m
           assert m.get("family_enriched") is True, m
-          assert m.get("source_sample_metadata_file") == "1kGP.3202_samples.pedigree_info.txt", m
+          assert m.get("source_sample_metadata_file") == "20130606_g1k_3202_samples_ped_population.txt", m
           assert len(m.get("source_vcf_sha256", "")) == 64, m
           assert len(m.get("source_sample_metadata_sha256", "")) == 64, m
           print(json.dumps({k: m[k] for k in ("source", "source_vcf_file", "source_vcf_sha256",
