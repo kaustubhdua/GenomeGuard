@@ -114,7 +114,7 @@ For real families (family-first sampling, 602 trios in the high-coverage release
 make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt
 make eval-real COHORT=data_real/1000g_trios.npz     # writes docs/eval-results-real.md
 ```
-A dataset is only labelled real if the cohort file's own metadata says so. **End-to-end real-genotype ingestion/evaluation is verified on a hosted GitHub Actions runner** ([run #40133801168](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133801168)); the source file hashes and build settings are documented in [`docs/real-data.md`](docs/real-data.md). This run has zero relative pairs because Phase 3 is unrelated by design. The high-coverage trio workflow still needs to be integrated and validated before claiming real-family relative-exposure evaluation.
+A dataset is only labelled real if the cohort file's own metadata says so. **End-to-end real-genotype ingestion/evaluation is verified on a hosted GitHub Actions runner** ([run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40134445686)); the source file hashes and build settings are documented in [`docs/real-data.md`](docs/real-data.md). This run has zero relative pairs because Phase 3 is unrelated by design. The high-coverage trio workflow still needs to be integrated and validated before claiming real-family relative-exposure evaluation.
 Real: genotypes, frequencies, population labels, parent/child links in the pedigree file.
 Simulated: consent. The Phase 3 release is built from deliberately unrelated people, so family
 exposure is sparse; for real families use the high-coverage release with 602 trios (pass `--vcf`
@@ -151,7 +151,7 @@ generators and real-data loaders | `backend/redteam/` attacks and evaluation | `
 
 - [Main CI, including axe-core browser checks](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133832193)
 - [Real 1000 Genomes Phase 3 ingestion and evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133801168)
-- [HL7 FHIR R4 validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40134152265)
+- [HL7 FHIR R4 validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40134315098)
 
 These runs prove specific automated gates only. They do not prove that a public Render instance is live, that real consent exists, that the high-coverage trio workflow works, that Beacon v2 conformance is complete, or that the custom privacy accountant is formally differentially private.
 
