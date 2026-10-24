@@ -41,7 +41,7 @@ def test_use_disease_and_modifiers_are_carried_as_duo_extensions():
     svc.donor_set_consent(d.id, {"use": "DS", "disease": "diabetes",
                                  "modifiers": ["NCU", "NMDS"]})
     r = svc.donor_consent_fhir(d.id)
-    ext = {e["url"].rsplit("/", 1)[1].removesuffix(".json"): [] for e in r["provision"]["extension"]}
+    ext = {e["url"].rsplit("/", 1)[1].removeprefix("StructureDefinition-").removesuffix(".json"): [] for e in r["provision"]["extension"]}
     for e in r["provision"]["extension"]:
         ext[e["url"].rsplit("/", 1)[1].removesuffix(".json")].append(e)
     assert ext["duo-use"][0]["valueCoding"]["code"] == "DS"
