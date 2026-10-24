@@ -302,7 +302,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                 "planted": np.zeros(len(maf), dtype=bool)}
     meta = {"source": "1000 Genomes (IGSR)", "samples": n, "variants": int(G.shape[1]),
             "relative_pairs": len(rels), "consent_simulated": True, "genotypes_real": True,
-            "family_enriched": family_first, "seed": seed,
+            "family_enriched": bool(family_first and rels), "seed": seed,
             "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
                                  "keep_prob": keep_prob, "rare_maf": rare_maf,
                                  "withdrawn_rate": withdrawn_rate},
