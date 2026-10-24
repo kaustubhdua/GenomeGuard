@@ -1,0 +1,36 @@
+name: FHIR R4 Consent validation
+
+on:
+  push:
+    branches: [release/real-data-validation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fhir-r4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build a synthetic Consent resource from the application
+        run: |
+          make setup
+          PYTHONPATH=backend .venv/bin/python scripts/export_fhir_fixture.py --out /tmp/genomeguard-consent-r4.json
+      - name: Download pinned HL7 FHIR Validator CLI
+        run: |
+          curl --fail --location --retry 3 --retry-delay 2 \
+            https://github.com/hapifhir/org.hl7.fhir.core/releases/download/7.0.1/validator_cli.jar \
+            --output /tmp/validator_cli.jar
+          echo "1178b6a3a3fe98d9cd9545cadee505274967332466001d857e4d8bed7138a5bc  /tmp/validator_cli.jar" | sha256sum --check
+      - name: Validate the exported resource against FHIR R4
+        run: java -jar /tmp/validator_cli.jar /tmp/genomeguard-consent-r4.json -version 4.0.1
