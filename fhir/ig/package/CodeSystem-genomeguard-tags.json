@@ -1,7 +1,7 @@
 {
   "resourceType": "CodeSystem",
   "id": "genomeguard-tags",
-  "url": "https://github.com/kaustubhdua/GenomeGuard/fhir/CodeSystem/genomeguard-tags",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/CodeSystem-genomeguard-tags.json",
   "version": "0.1.0",
   "name": "GenomeGuardConsentTags",
   "title": "GenomeGuard consent provenance tags",
