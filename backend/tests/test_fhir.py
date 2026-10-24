@@ -29,7 +29,7 @@ def test_it_is_tagged_simulated_and_does_not_leak_the_donor_number():
     r = svc.donor_consent_fhir(d.id)
     tags = [t["code"] for t in r["meta"]["tag"]]
     assert "simulated-consent" in tags
-    assert r["meta"]["tag"][0]["system"].endswith("/CodeSystem/genomeguard-tags")
+    assert r["meta"]["tag"][0]["system"].endswith("/CodeSystem-genomeguard-tags.json")
     flat = json.dumps(r)
     assert f"Patient/{d.id}" not in flat and f'"id": "{d.id}"' not in flat
     assert r["id"] == svc._donor_ref(d.id) and len(r["id"]) == 12
@@ -55,7 +55,7 @@ def test_unconfirmed_duo_ids_are_not_invented():
     d = _donor_with(svc, lambda c: c["use"] == "GRU")
     use = svc.donor_consent_fhir(d.id)["provision"]["extension"][0]["valueCoding"]
     assert use["code"] == "GRU" and not use["code"].startswith("DUO:")
-    assert use["system"].endswith("/CodeSystem/consent-use-codes")
+    assert use["system"].endswith("/CodeSystem-consent-use-codes.json")
 
 
 def test_withdrawal_makes_the_resource_inactive():
