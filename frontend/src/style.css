@@ -304,7 +304,7 @@ dl.facts dd{min-width:0;overflow-wrap:anywhere}
 }
 /* graph labels stay readable where they cross an edge */
 svg.chart text{paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
-@media (max-width:520px){.feed li{grid-template-columns:auto 1fr}.feed .m{grid-column:1 / -1}}
+@media (max-width:520px){.feed li{grid-template-columns:minmax(0,1fr);gap:4px;align-items:start}.feed .badge{white-space:normal;max-width:100%}.feed a{min-width:0;overflow-wrap:anywhere}.feed .m{grid-column:auto}}
 
 /* guided tour card */
 .tour{position:fixed;right:20px;bottom:20px;width:min(400px,calc(100vw - 32px));max-height:min(70vh,520px);overflow:auto;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:0 14px 40px rgba(19,26,34,.22);padding:16px 18px;font-family:var(--sans)}
