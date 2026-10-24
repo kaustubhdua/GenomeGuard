@@ -1,7 +1,12 @@
 // Tiny API client. The "acting as" choice picks which header is sent:
 // a researcher's X-API-Key, or the steward's X-Admin-Key. Demo keys come from /demo/requesters.
 // Donors use their own X-Donor-Key (kept in memory only, never in storage).
-export const state = { who: localStorage.getItem("gg_who") || "", demo: null, health: null, me: null, donors: [], donor: null };
+function readStorage(key) {
+  try { return localStorage.getItem(key) || ""; }
+  catch { return ""; } // storage can be blocked by browser privacy settings
+}
+
+export const state = { who: readStorage("gg_who"), demo: null, health: null, me: null, donors: [], donor: null };
 
 export const isSteward = () => state.who === "steward";
 
