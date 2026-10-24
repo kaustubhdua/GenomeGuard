@@ -86,6 +86,20 @@ def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(**launch)
 
+        print("\\n0. Startup resilience when browser storage is blocked")
+        blocked_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        blocked_ctx.add_init_script(
+            "Object.defineProperty(window, 'localStorage', {"
+            "get() { throw new DOMException('Blocked', 'SecurityError'); }"
+            "});"
+        )
+        blocked_pg = blocked_ctx.new_page()
+        blocked_pg.goto(base + "/#/overview")
+        blocked_pg.wait_for_selector("#view h1", timeout=15000)
+        check("overview renders when localStorage is unavailable",
+              blocked_pg.locator("#view h1").count() == 1)
+        blocked_ctx.close()
+
         print("\\n0. Route-level lazy loading and page entrance motion")
         lazy_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
         lazy_pg = lazy_ctx.new_page()
