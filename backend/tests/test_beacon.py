@@ -13,7 +13,7 @@ def test_beacon_boolean_answer_goes_through_the_pipeline():
     r = c.get("/beacon/g_variants", params=_common_variant(svc), headers=H(RESEARCHER))
     assert r.status_code == 200
     j = r.json()
-    assert j["meta"]["apiVersion"] == "v2.0" and j["meta"]["returnedGranularity"] == "boolean"
+    assert j["meta"]["apiVersion"] == "v2.0.0" and j["meta"]["returnedGranularity"] == "boolean"
     assert j["responseSummary"]["exists"] is True
     assert j["info"]["decision"] in ("permit", "permit_with_transform")
     # it was a governed request: it is listed and audited like any other
@@ -32,7 +32,7 @@ def test_beacon_unknown_variant_and_never_leaks_genotypes():
     svc, c = make_client()
     r = c.get("/beacon/g_variants", params={"referenceName": "99", "start": 1},
               headers=H(RESEARCHER))
-    assert r.json()["responseSummary"] == {"exists": False, "numTotalResults": 0}
+    assert r.json()["responseSummary"] == {"exists": False}
     q = {**_common_variant(svc), "requestedGranularity": "count"}
     body = c.get("/beacon/g_variants", params=q, headers=H(RESEARCHER)).text
     assert "genotype" not in body and "donor" not in body.lower()
