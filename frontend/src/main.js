@@ -32,7 +32,8 @@ async function render() {
   $("crumb").textContent = hit ? hit[0].title : "Not found";
   $("shell").classList.remove("open");
   const mine = ++token;
-  view.replaceChildren(h("div", { class: "skeleton", style: "height:120px" }));
+  view.setAttribute("aria-busy", "true");
+  view.replaceChildren(h("div", { class: "skeleton", style: "height:120px", role: "status", "aria-label": "Loading page" }));
   let page;
   try {
     if (hit) {
@@ -54,6 +55,7 @@ async function render() {
   if (mine !== token) return; // a newer navigation won
   if (page instanceof Element) page.classList.add("page-enter");
   view.replaceChildren(page);
+  view.setAttribute("aria-busy", "false");
   // Images added by future pages default to native lazy loading and async decode.
   view.querySelectorAll("img").forEach((img) => {
     if (!img.hasAttribute("loading")) img.loading = "lazy";
