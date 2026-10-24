@@ -1,6 +1,6 @@
 # Running on real genomes (1000 Genomes)
 
-GenomeGuard runs on synthetic data by default so a clean clone works without downloading genomes. The hosted GitHub Actions runner has now completed an end-to-end download, cohort build, and evaluation against the public 1000 Genomes Phase 3 chromosome 22 data. See [successful real-data validation run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133801168). Local reproduction still requires internet access.
+GenomeGuard runs on synthetic data by default so a clean clone works without downloading genomes. The hosted GitHub Actions runner has now completed an end-to-end download, cohort build, and evaluation against the public 1000 Genomes Phase 3 chromosome 22 data. See [successful real-data validation run #40135423030](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133801168). Local reproduction still requires internet access.
 
 That run verifies the real-genotype ingestion/evaluation path only. It does **not** verify real participant consent or a family-relative exposure cohort; the Phase 3 panel is unrelated by design.
 
@@ -23,7 +23,7 @@ That run verifies the real-genotype ingestion/evaluation path only. It does **no
 
 The official [IGSR 30x collection page](https://www.internationalgenome.org/data-portal/data-collection/1000genomes_30x) links the phased SNV/INDEL/SV VCFs and sample metadata for the 3,202-sample cohort. The publication identifies the pedigree metadata file as `1KGP.3202_samples.pedigree_info.txt` in the high-coverage working directory; see the [2022 Cell paper and its data availability](https://pmc.ncbi.nlm.nih.gov/articles/PMC9439720/).
 
-The exact chromosome-22 VCF URL has not yet been validated by this project. Confirm the filename from the live IGSR directory before using it; do not guess a URL or claim a family cohort has been evaluated until the download/build/evaluation workflow succeeds.
+The dedicated [high-coverage family-cohort workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/family-data-validation.yml) now downloads the official [chromosome-22 phased VCF](https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz) and the combined [pedigree/population metadata](https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/20130606_g1k_3202_samples_ped_population.txt). The current run is still in progress; do not claim the family cohort has passed until its metadata checks and evaluation succeed.
 
 ## Build it
 
@@ -59,7 +59,7 @@ in `backend/app/data/real.py` and a fixture test.
 
 GitHub Actions downloaded the public Phase 3 chromosome 22 VCF, built a cohort with 600 samples and 3,000 variants, and ran `eval-real` successfully. Provenance metadata from that run:
 
-- Source: 1000 Genomes (IGSR), file `chr22.vcf.gz`
+- Source: 1000 Genomes (IGSR), file `ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz`
 - Source VCF SHA-256: `a90c16c4ff2b3196476d506ae13cb3047fae8670163c7c932c4b0239aef3daf5`
 - Source sample metadata file: `integrated_call_samples_v3.20130502.ALL.panel`
 - Source sample-metadata SHA-256: `b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858`
@@ -72,4 +72,4 @@ Selected results from the generated evaluation report (attack/query traffic rema
 - Membership-inference AUC varied with release size and noise; at 500 variants, the simulated attack AUC was 0.721 for raw frequencies and 0.511 for binned frequencies with epsilon 0.5, with very low utility for the latter (correlation 0.020).
 - The query monitor froze all tested attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. This is a measured limitation of the simulated sliding-window monitor, not a claim that slow attacks are stopped.
 
-These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40134445686) for 30 days.
+These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40135423030) for 30 days.
