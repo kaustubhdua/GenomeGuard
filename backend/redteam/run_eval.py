@@ -126,9 +126,11 @@ def to_markdown(r: dict) -> str:
         "",
         "## What these results do NOT show",
         "",
-        ("- The genotypes are real, but they are a small sample (often family-enriched on purpose), "
-         "consent records and query traffic are simulated, and results from one cohort do not carry "
-         "over to another population or size." if real else
+        (("- The genotypes are real, but this is a small sample"
+          + (" selected with family enrichment by design" if m.get("family_enriched") else
+             " from the Phase 3 unrelated sample panel, with no observed pedigree pairs")
+          + "; consent records and query traffic are simulated, and results from one cohort do not carry "
+          "over to another population or size.") if real else
          "- This cohort file does not say its genotypes are real, so do not describe these as "
          "real-data results." if custom else
          "- All data is synthetic. Real genomes have linkage disequilibrium, population structure "
