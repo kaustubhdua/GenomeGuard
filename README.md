@@ -13,7 +13,7 @@ decisions in plain language but never see genomic data and never hold final auth
 
 | Track 2 theme | Where it shows up |
 |---|---|
-| Decision support | Agents give stewards a case summary and the questions to answer on held requests; a human approves or denies. |
+| Decision support | Agents give stewards a case summary and the questions to answer on held requests. A **steward copilot** chooses which read-only evidence to gather (consent, risk, relatives, history, audit) and recommends; a rules baseline caps it (it can never be more permissive than the rules), and a human decides. |
 | Information management | Consent, risk, privacy budget and a tamper-evident audit chain for every genomic release. |
 | Patient interaction | The patient portal: donors see who used statistics that included them, ask a consent concierge (fixed questions only) and withdraw in two clicks. |
 | Workflow automation | Requests are triaged automatically: approve, approve with protections, deny, or hold for review. Anomalous accounts are frozen. |
@@ -30,7 +30,10 @@ compliance.**
 ```
 make setup && make seed && make test && make eval && make run     # then open http://localhost:8000
 make demo                                                        # scripted 3-minute scenario, checked
+make bench                                                       # latency / audit-cost numbers, see docs/scalability.md
+make ui-smoke                                                    # headless-browser UI check (contrast, a11y, phones, tour)
 ```
+In demo mode the Overview has a **3-minute guided tour** that performs the real actions for you.
 No API key is needed. With `ANTHROPIC_API_KEY` set, agents write the explanations; without it,
 deterministic templates do. Docker: `docker compose up --build`.
 
@@ -50,6 +53,8 @@ only). Use the "Acting as" selector in the app to switch roles.
 | Genotypes | Synthetic by default; real 1000 Genomes with `make fetch-real` (run on your machine) |
 | Donor consent and requesters | Simulated. No real people consented to this system, so inventing "real" consent would be false |
 | Relatives | Simulated kinship model unless you load real trios |
+| FHIR R4 Consent export | Real JSON, built from simulated consent, tagged as such; not run through a FHIR validator |
+| Steward copilot | Real tool loop over read-only functions; sees only whitelisted summaries; template planner when no API key |
 
 ## What it does
 
@@ -98,6 +103,14 @@ make fetch-real            # downloads 1000 Genomes chr22, builds data_real/1000
 GG_REAL_COHORT_FILE=data_real/1000g_chr22.npz make seed && make run
 make fetch-duo             # official DUO terms vs the rules this engine implements
 ```
+For real families (family-first sampling, 602 trios in the high-coverage release):
+```
+make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt
+make eval-real COHORT=data_real/1000g_trios.npz     # writes docs/eval-results-real.md
+```
+A dataset is only labelled real if the cohort file's own metadata says so. **The end-to-end run
+on real files has not been done in the environment this was developed in** (no access to the
+servers); only the loaders are tested, against fixtures. See [`docs/real-data.md`](docs/real-data.md).
 Real: genotypes, frequencies, population labels, parent/child links in the pedigree file.
 Simulated: consent. The Phase 3 release is built from deliberately unrelated people, so family
 exposure is sparse; for real families use the high-coverage release with 602 trios (pass `--vcf`
@@ -116,7 +129,7 @@ enclave or real consent-management integration; no independent security review. 
 
 `backend/app/core/` rules and math | `backend/app/agents/` advisory agents | `backend/app/data/`
 generators and real-data loaders | `backend/redteam/` attacks and evaluation | `frontend/` UI |
-`docs/` architecture, threat model, eval, demo script, slide inputs | `scripts/demo.py`.
+`docs/` architecture, threat model, eval, scalability, real-data, roadmap, demo script, slide inputs | `scripts/` demo, bench, ui_smoke.
 
 ## References
 

@@ -18,7 +18,7 @@ export async function render([id]) {
   const ledger = h("div", { class: "ledger" });
   ledger.append(row("Summary", `Request #${g.request_id}`,
     h("p", { style: "margin:0" }, h("b", {}, t.subjects), " people in the request carry a very rare variant. ", h("b", {}, t.exposed_relatives), " of their relatives are not in the request, yet would be exposed by it."),
-    Object.keys(t.by_degree).length ? h("p", { class: "muted" }, "By genealogical distance: " + Object.entries(t.by_degree).map(([k, v]) => `${v} at 1/2^${k} expected sharing`).join(", ") + ".") : null));
+    Object.keys(t.by_degree).length ? h("p", { class: "muted" }, "How close they are: " + Object.entries(t.by_degree).sort((a, b) => a[0] - b[0]).map(([k, v]) => `${v} ${v === 1 ? "relative shares" : "relatives share"} about ${sharePct(k)} of their DNA with a carrier on average (${DEGREE[k] || "a distant relative"})`).join("; ") + ".") : null));
   if (!g.families.length) ledger.append(row("Families", "", h("p", { class: "empty" }, "This request included no carriers of very rare variants, so no relatives are exposed.")));
   else ledger.append(row("Families", "Dark = carrier in the request. Glowing = relative who would be exposed. Hollow = relative also in the request.",
     h("div", { class: "split" }, g.families.map(familyGraph))));
@@ -51,3 +51,7 @@ function familyGraph(f) {
   }
   return h("figure", { class: "fam", style: "margin:0" }, h("figcaption", { style: "padding:6px 10px;font-weight:600" }, f.family), root);
 }
+
+// by_degree keys are -log2(expected shared fraction), rounded: 1 -> 50%, 2 -> 25%, ...
+const sharePct = (k) => { const x = 100 / 2 ** Number(k); return (x >= 10 ? x.toFixed(0) : x < 1 ? x.toFixed(1) : x.toFixed(1).replace(/\.0$/, "")) + "%"; };
+const DEGREE = { 1: "parent, child or full sibling", 2: "grandparent, aunt, uncle or half sibling", 3: "first cousin or great-grandparent", 4: "first cousin once removed", 5: "second cousin", 6: "second cousin once removed", 7: "third cousin" };

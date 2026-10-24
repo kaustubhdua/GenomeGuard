@@ -76,30 +76,81 @@ def resolve_vcf_url(chrom: str = "22") -> str:
 
 # ------------------------------------------------------------------------------ pedigree file
 
+def _norm(h: str) -> str:
+    return re.sub(r"[\s_\-]+", "", h.strip().lower())
+
+
+# header aliases, after lower-casing and removing spaces/underscores. The original 1000 Genomes
+# .ped uses "Family ID / Individual ID / Paternal ID / Maternal ID / Population"; the 3,202-sample
+# high-coverage pedigree is understood to use "FamilyID / SampleID / FatherID / MotherID /
+# Population" (check the header of the file you download: the loader fails loudly if none match).
+_ALIASES = {
+    "family": ("familyid",),
+    "individual": ("individualid", "sampleid", "sample", "iid"),
+    "father": ("paternalid", "fatherid", "father", "pat"),
+    "mother": ("maternalid", "motherid", "mother", "mat"),
+    "pop": ("population", "pop"),
+}
+
+
 def parse_ped(text: str) -> dict[str, dict]:
-    """1000 Genomes .ped (tab separated, header row). Returns sample -> info. Columns are found
-    by header name so extra columns do not matter."""
+    """1000 Genomes pedigree file (tab- or whitespace-separated, header row). Returns
+    sample -> info. Columns are found by header name, so extra columns do not matter."""
     lines = [ln for ln in text.splitlines() if ln.strip()]
-    header = [h.strip().lower() for h in lines[0].split("\t")]
+    if not lines:
+        raise ValueError("pedigree file is empty")
+    sep = "\t" if "\t" in lines[0] else None  # None = any whitespace
+    split = (lambda ln: ln.rstrip("\n").split("\t")) if sep else (lambda ln: ln.split())
+    header = [_norm(h) for h in split(lines[0])]
 
-    def col(*names):
-        for n in names:
-            if n in header:
-                return header.index(n)
-        raise ValueError(f"pedigree file lacks any of {names}; header was {header}")
+    def col(key: str) -> int:
+        for name in _ALIASES[key]:
+            if name in header:
+                return header.index(name)
+        raise ValueError(f"pedigree file lacks a {key} column; header was {header}")
 
-    i_fam, i_ind = col("family id", "familyid"), col("individual id", "individualid")
-    i_pat, i_mat = col("paternal id", "paternalid"), col("maternal id", "maternalid")
-    i_pop = col("population", "pop")
+    i_fam, i_ind = col("family"), col("individual")
+    i_pat, i_mat, i_pop = col("father"), col("mother"), col("pop")
+    need = max(i_fam, i_ind, i_pat, i_mat, i_pop)
+    none = ("0", "", ".", "NA", "na")
     out = {}
     for ln in lines[1:]:
-        f = ln.split("\t")
-        if len(f) <= max(i_fam, i_ind, i_pat, i_mat, i_pop):
+        f = split(ln)
+        if len(f) <= need:
             continue
-        none = ("0", "", ".")
         out[f[i_ind]] = {"family": f[i_fam], "father": None if f[i_pat] in none else f[i_pat],
                          "mother": None if f[i_mat] in none else f[i_mat], "pop": f[i_pop]}
     return out
+
+
+def choose_samples(info: dict[str, dict], available: list[str], n: int,
+                   rng: np.random.Generator, family_first: bool) -> list[str]:
+    """Pick n samples. With family_first, whole families that have two or more members in the
+    VCF are taken first (so real parent/child and sibling links exist), then the rest are filled
+    with random unrelated people. This makes the cohort FAMILY-ENRICHED by design; it is recorded
+    in the cohort metadata so no slide can imply it mirrors the general population."""
+    if not family_first:
+        return sorted(rng.choice(available, size=n, replace=False).tolist())
+    have = set(available)
+    fam: dict[str, list[str]] = {}
+    for s in available:
+        fam.setdefault(info[s]["family"], []).append(s)
+    multi = [sorted(m) for m in fam.values() if len(m) >= 2]
+    singles = sorted(m[0] for m in fam.values() if len(m) == 1)
+    order = rng.permutation(len(multi))
+    chosen: list[str] = []
+    for i in order:
+        if len(chosen) + len(multi[i]) <= n:
+            chosen.extend(multi[i])
+    # then top up with unrelated people
+    pool = [s for s in singles if s not in set(chosen)]
+    rng.shuffle(pool)
+    chosen.extend(pool[: n - len(chosen)])
+    if len(chosen) < n:  # not enough singles: fill from anyone left
+        rest = sorted(have - set(chosen))
+        chosen.extend(rng.choice(rest, size=min(n - len(chosen), len(rest)),
+                                 replace=False).tolist())
+    return sorted(chosen)
 
 
 def relationships_from_pedigree(info: dict[str, dict], registered: list[str]) -> list[dict]:
@@ -199,14 +250,15 @@ def read_vcf(path: Path, sample_ids: list[str], keep_prob: float, max_variants: 
 
 def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: int = 3000,
                  keep_prob: float = 0.004, seed: int = 1337, rare_maf: float = 0.01,
-                 withdrawn_rate: float = 0.03) -> tuple[SyntheticCohort, dict]:
+                 withdrawn_rate: float = 0.03,
+                 family_first: bool = False) -> tuple[SyntheticCohort, dict]:
     rng = np.random.default_rng(seed)
     info = parse_ped(ped_text)
     in_vcf = [s for s in vcf_samples(vcf) if s in info]
     if len(in_vcf) < 30:
         raise ValueError("fewer than 30 VCF samples have pedigree/population info")
     n = min(n_samples, len(in_vcf))
-    chosen = sorted(rng.choice(in_vcf, size=n, replace=False).tolist())
+    chosen = choose_samples(info, in_vcf, n, rng, family_first)
     cols, G = read_vcf(vcf, chosen, keep_prob, max_variants, rng)
     freq = G.sum(axis=0) / (2.0 * n)
     maf = np.minimum(freq, 1 - freq)
@@ -224,7 +276,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                 "planted": np.zeros(len(maf), dtype=bool)}
     meta = {"source": "1000 Genomes (IGSR)", "samples": n, "variants": int(G.shape[1]),
             "relative_pairs": len(rels), "consent_simulated": True, "genotypes_real": True,
-            "seed": seed}
+            "family_enriched": family_first, "seed": seed}
     return SyntheticCohort(donors, G, variants, rels, [], seed), meta
 
 
@@ -243,6 +295,13 @@ def load_cohort(path: str | Path) -> SyntheticCohort:
                            json.loads(str(z["relationships"])), [], 0)
 
 
+def read_meta(path: str | Path) -> dict:
+    """The metadata saved with a cohort file (source, whether genotypes are real, ...). Whether a
+    dataset may be called real is decided by THIS, never by the fact that a file was supplied."""
+    z = np.load(path, allow_pickle=False)
+    return json.loads(str(z["meta"])) if "meta" in z.files else {}
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -255,6 +314,8 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--variants", type=int, default=3000)
     b.add_argument("--keep-prob", type=float, default=0.004)
     b.add_argument("--seed", type=int, default=1337)
+    b.add_argument("--no-family-first", action="store_true",
+                   help="sample at random instead of taking whole families first")
     a = ap.parse_args(argv)
     cache = Path("data_real")
     vcf = Path(a.vcf) if a.vcf else download(resolve_vcf_url(a.chrom),
@@ -263,7 +324,8 @@ def main(argv: list[str] | None = None) -> None:
         ped_text = Path(a.ped).read_text()
     else:
         ped_text = download(a.ped or PED_URL, cache / "samples.ped").read_text()
-    c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed)
+    c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed,
+                           family_first=not a.no_family_first)
     save_cohort(c, meta, Path(a.out))
     print(json.dumps(meta, indent=2))
     print(f"wrote {a.out}\nrun with: GG_REAL_COHORT_FILE={a.out} make run")

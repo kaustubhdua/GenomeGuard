@@ -116,3 +116,83 @@ def test_loaded_cohort_works_with_dataset_and_consent_engine():
         ds = Dataset.from_cohort(c, "real-test")
         res = eligible_cohort(ConsentRequest(purpose="general_research"), ds.donors)
         assert res.considered == 44
+
+
+# ---- the high-coverage release's pedigree: whitespace separated, different header names ----
+PED_HC = "\n".join([
+    "FamilyID SampleID FatherID MotherID Sex Population Superpopulation",
+    "T1 dad 0 0 1 GBR EUR",
+    "T1 mum 0 0 2 GBR EUR",
+    "T1 kid1 dad mum 1 GBR EUR",
+    "T2 d2 0 0 1 YRI AFR",
+    "T2 m2 0 0 2 YRI AFR",
+    "T2 k2 d2 m2 2 YRI AFR",
+    "T3 d3 0 0 1 CHB EAS",
+    "T3 m3 0 0 2 CHB EAS",
+    "T3 k3 d3 m3 2 CHB EAS",
+] + [f"U{i} s{i} 0 0 {1 + i % 2} {'GBR' if i % 2 else 'YRI'} EUR" for i in range(40)]) + "\n"
+SAMPLES_HC = ["dad", "mum", "kid1", "d2", "m2", "k2", "d3", "m3", "k3"] + [f"s{i}" for i in range(40)]
+
+
+def test_parse_ped_whitespace_separated_with_alternate_headers():
+    info = real.parse_ped(PED_HC)
+    assert info["kid1"] == {"family": "T1", "father": "dad", "mother": "mum", "pop": "GBR"}
+    assert info["dad"]["father"] is None and info["s2"]["pop"] == "YRI"
+    assert len(info) == 9 + 40
+
+
+def test_parse_ped_names_the_missing_column():
+    with pytest.raises(ValueError, match="mother"):
+        real.parse_ped("FamilyID SampleID FatherID Population\nF1 a 0 GBR\n")
+    with pytest.raises(ValueError):
+        real.parse_ped("")
+
+
+def test_family_first_takes_whole_families_so_real_relatives_exist():
+    info = real.parse_ped(PED_HC)
+    rng = np.random.default_rng(3)
+    chosen = real.choose_samples(info, SAMPLES_HC, 12, rng, family_first=True)
+    assert len(chosen) == 12 and len(set(chosen)) == 12
+    fams = {}
+    for s in chosen:
+        fams.setdefault(info[s]["family"], []).append(s)
+    trios = [f for f, m in fams.items() if f.startswith("T")]
+    assert len(trios) == 3 and all(len(fams[f]) == 3 for f in trios)  # whole trios, never a half
+    assert len(real.relationships_from_pedigree(info, chosen)) == 6  # 2 parent-child pairs per trio; the parents are unrelated
+
+
+def test_family_first_with_a_small_budget_never_splits_a_family():
+    info = real.parse_ped(PED_HC)
+    for seed in range(8):
+        chosen = real.choose_samples(info, SAMPLES_HC, 7, np.random.default_rng(seed), True)
+        per_fam = {}
+        for s in chosen:
+            per_fam.setdefault(info[s]["family"], []).append(s)
+        assert all(len(m) == 3 for f, m in per_fam.items() if f.startswith("T"))
+
+
+def test_random_sampling_is_still_available_and_deterministic():
+    info = real.parse_ped(PED_HC)
+    a = real.choose_samples(info, SAMPLES_HC, 10, np.random.default_rng(5), False)
+    b = real.choose_samples(info, SAMPLES_HC, 10, np.random.default_rng(5), False)
+    assert a == b and len(a) == 10
+
+
+def test_build_cohort_family_first_records_enrichment_and_finds_real_relatives():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        lines = ["##fileformat=VCFv4.1",
+                 "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + "\t".join(SAMPLES_HC)]
+        rng = np.random.default_rng(0)
+        for i in range(200):
+            gts = [f"{int(rng.random() < 0.2)}|{int(rng.random() < 0.2)}" for _ in SAMPLES_HC]
+            lines.append("\t".join(["22", str(1000 + i), ".", "A", "G", ".", "PASS", ".", "GT", *gts]))
+        with gzip.open(v, "wt") as f:
+            f.write("\n".join(lines) + "\n")
+        c, meta = real.build_cohort(v, PED_HC, n_samples=15, max_variants=100, keep_prob=1.0,
+                                    seed=4, family_first=True)
+        assert meta["family_enriched"] is True and meta["relative_pairs"] == 6
+        assert meta["genotypes_real"] and meta["consent_simulated"]
+        c2, meta2 = real.build_cohort(v, PED_HC, n_samples=15, max_variants=100, keep_prob=1.0,
+                                      seed=4)
+        assert meta2["family_enriched"] is False

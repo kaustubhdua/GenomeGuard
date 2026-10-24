@@ -9,6 +9,7 @@ import * as audit from "./pages/audit.js";
 import * as redteam from "./pages/redteam.js";
 import * as federated from "./pages/federated.js";
 import * as donor from "./pages/donor.js";
+import { startTour, tourAvailable } from "./tour.js";
 
 const ROUTES = [
   { re: /^#\/overview$/, mod: overview, nav: "overview", title: "Overview" },
@@ -93,6 +94,7 @@ const ACTIONS = () => [
   { text: "Switch to the steward view", hint: "Acting as", run: () => { setWho("steward"); drawWho(); render(); } },
   { text: "Switch to the researcher view", hint: "Acting as", run: () => { const r = (state.demo || { requesters: [] }).requesters[0]; if (r) { setWho(r.api_key); drawWho(); render(); } } },
   { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
+  ...(tourAvailable() ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
 ];
 let sel = 0, shown = [];
 function openPalette() { $("cmdk").classList.add("open"); const i = $("cmdk-input"); i.value = ""; filter(); i.focus(); }

@@ -17,6 +17,8 @@ flowchart LR
   subgraph Agents[Advisory agents, never see genotypes]
     E[Explainer] ; P[Privacy] ; N[Anomaly] ; S[Access] ; Q[Consent]
   end
+  H -.held case.-> CP[Steward copilot<br/>read-only tools, bounded loop]
+  CP -.recommendation only.-> H
   C -.reason codes.-> Agents
   K -.bands, counts.-> Agents
   Agents -.explanation text.-> O
@@ -39,6 +41,29 @@ can note whether it agrees with the ladder; the access agent summarises requeste
 - fall back to templates (`agents/templates.py`) when there is no API key, so the demo never fails.
 - have their outputs written to the audit chain with the model name and a hash of the prompt.
 
+### The steward copilot (the one agent that chooses what to do next)
+
+`agents/copilot.py` investigates a held or flagged request for a human steward. Unlike the other
+agents it is a loop: it picks a tool, reads the result, and decides whether to pick another or to
+recommend `approve`, `deny` or `more_info`. Its guardrails are code, not instructions to a model:
+
+- **Read-only by construction.** It is built from a dict of zero-argument read functions and is
+  never given the service object, so it has no way to approve, deny, freeze, release or edit. A
+  test inspects its source for any write call and rejects unknown (write-like) tool names.
+- **Sanitised.** Every tool result passes through the same `sanitize()` whitelist as the other
+  agents before it is stored or shown to a model. Planted canary strings and instruction text in
+  tool output never reach a prompt (tested).
+- **Bounded.** At most 6 tool calls, each tool once, and it refuses to advise before reading the
+  basics (case, consent, risk).
+- **Never more permissive than the rules.** A deterministic rule set computes a baseline
+  recommendation from the same evidence. If a model recommends something more permissive, its
+  answer is discarded and the rules' answer is used. A model can add caution, never remove it.
+- **Grounded.** Numbers in a model's rationale must appear in the evidence, or the rationale is
+  replaced by the deterministic one.
+- **Works with no key.** A deterministic planner chooses the tools and the rules write the text.
+- **Audited.** Each tool call and the final recommendation are written to the hash chain with the
+  model name and prompt hashes. Endpoint: `POST /requests/{id}/copilot` (steward only).
+
 ## Modules
 
 | Module | Job |
@@ -49,10 +74,13 @@ can note whether it agrees with the ladder; the access agent summarises requeste
 | `core/anomaly.py` | Rate, near-duplicate probing, cohort narrowing, differencing guard, cumulative exposure. Weighted score to ok, warn, throttle, freeze. |
 | `core/audit_chain.py` | `hash = SHA256(canonical_json({idx, ts, actor, action, payload, prev_hash}))`. `verify()` returns `{ok, length, head_hash, first_broken_index}`. |
 | `core/crypto.py` | AES-256-GCM at rest, key per dataset derived from a master key with HKDF, ciphertext bound to dataset and donor id. |
+| `agents/copilot.py` | The steward copilot described above: tool loop, rules baseline, safety caps. |
 | `core/federated.py` | Secure aggregation by additive secret sharing; federated allele frequencies and logistic regression across simulated hospitals. |
 | `data/synth.py`, `data/pedigree.py` | Synthetic cohort with real Mendelian transmission and a derived relationship graph. |
 | `data/real.py`, `data/duo.py` | Optional: build a cohort from real 1000 Genomes files; compare our rules with the official DUO. |
-| `service.py`, `api.py`, `store.py` | Orchestration, Starlette HTTP layer, SQLite store. |
+| `service.py`, `api.py`, `store.py` | Orchestration, Starlette HTTP layer, SQLite store. Also the FHIR R4 `Consent` export (`GET /donor/{id}/consent.fhir.json`, pseudonymous, tagged simulated). |
+| `frontend/` | Vanilla JS, no build step. `tour.js` is a guided tour whose two action steps call the real API. |
+| `scripts/` | `demo.py` (scripted scenario), `bench.py` (measured throughput), `ui_smoke.py` (headless-browser regression test: contrast, names, overflow, tour). |
 | `redteam/` | Attacks, benign traffic and the evaluation behind `make eval`. |
 
 ## Tiers and levels

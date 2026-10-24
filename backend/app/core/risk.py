@@ -82,7 +82,7 @@ def relative_exposure(ds: Dataset, subjects: set[int], p: Params) -> dict:
     by_relation: Counter[str] = Counter()
     exposed: dict[int, float] = {}
     for s in subjects:
-        for other, relation, shared in ds.relatives.get(s, []):
+        for other, _relation, shared in ds.relatives.get(s, []):
             if other in subjects or shared < p.exposure_min_shared:
                 continue
             if shared > exposed.get(other, 0.0):

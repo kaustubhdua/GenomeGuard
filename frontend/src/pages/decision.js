@@ -69,7 +69,7 @@ export async function render([id]) {
     ledger.append(row("Released data", "", h("p", { style: "margin:0" }, "Nothing was released.")));
   }
 
-  if (isSteward()) ledger.append(stewardPanel(d, before, after, tr));
+  if (isSteward()) ledger.append(copilotRow(d), stewardPanel(d, before, after, tr));
   root.append(ledger);
   return root;
 }
@@ -91,4 +91,73 @@ function stewardPanel(d, before, after, tr) {
     Object.keys(notes).length ? h("div", {}, h("h3", { style: "margin-top:12px" }, "Agent notes (advisory)"), h("ul", { class: "plain" }, Object.entries(notes).filter(([, t]) => t).map(([k, t]) => h("li", {}, h("b", {}, k + ": "), t)))) : null,
     d.status === "held" && d.needs_human ? h("div", { style: "margin-top:12px;display:flex;gap:10px" }, h("button", { onclick: () => review(true) }, "Approve release"), h("button", { class: "danger", onclick: () => review(false) }, "Deny")) : null,
     d.reviewed_by ? h("p", { class: "muted" }, `Reviewed by ${d.reviewed_by} on ${when(d.reviewed_at)}.`) : null, msg);
+}
+
+// ---- steward copilot: a read-only, tool-using agent. It advises; the human clicks. ----
+const TOOL_LABEL = {
+  case_summary: "Read the case", consent_counts: "Checked consent", risk_profile: "Measured risk",
+  family_exposure: "Looked at relatives", requester_history: "Checked the account's history",
+  privacy_budget: "Checked the privacy budget", audit_status: "Verified the audit chain",
+};
+const REC = {
+  approve: ["good", "Approve"], deny: ["bad", "Deny"], more_info: ["warn", "Ask for more information"],
+};
+
+function toolSummary(tool, r) {
+  const n = (x, d = 0) => (x == null ? d : x);
+  switch (tool) {
+    case "case_summary":
+      return `${OUTCOME_LABEL[r.outcome] || r.outcome}${(r.reasons || []).length ? ": " + r.reasons.map(reasonText).join("; ") : ""}.`;
+    case "consent_counts": {
+      const c = r.consent || {};
+      return c.considered != null ? `${c.eligible} of ${c.considered} donors have consent that fits.` : "No consent count was recorded.";
+    }
+    case "risk_profile": {
+      const b = r.risk_before || {}, a = r.risk_after || {};
+      return `Risk ${b.band || "n/a"} as requested, ${a.band || "n/a"} as released; ${n(a.rare_variants)} rare variants left in the release.`;
+    }
+    case "family_exposure":
+      return `${n(r.relatives_exposed_total)} relatives of ${n(r.subjects)} rare-variant carriers could be exposed (simulated model).`;
+    case "requester_history":
+      return `${n(r.history_requests)} earlier requests, ${n(r.history_denials)} denials, ${n(r.history_alerts)} alerts${r.frozen ? ", account frozen" : ""}.`;
+    case "privacy_budget":
+      return `${Number(n(r.epsilon_remaining)).toFixed(2)} of ${n(r.epsilon_budget)} epsilon left; this release costs ${n(r.epsilon)}.`;
+    case "audit_status":
+      return r.chain_ok === false ? "The audit chain does NOT verify." : `Intact, ${n(r.chain_length)} entries.`;
+    default: return "";
+  }
+}
+
+function copilotRow(d) {
+  const out = h("div", { "aria-live": "polite" });
+  const btn = h("button", { class: "ghost", onclick: () => run(true) }, "Investigate this request");
+  const autorun = d.status === "held" && d.needs_human && !d.reviewed_by;
+
+  function draw(c) {
+    const [tone, label] = REC[c.recommendation] || ["", c.recommendation];
+    out.replaceChildren(...[
+      h("ol", { class: "steps" }, (c.steps || []).map((s) => h("li", {},
+        h("div", {}, h("b", {}, `${s.step}. ${TOOL_LABEL[s.tool] || s.tool}`), h("div", { class: "muted" }, s.why), h("div", {}, toolSummary(s.tool, s.result || {}))),
+        h("span", { class: "muted" }, "read only")))),
+      h("div", { style: "margin-top:14px" }, h("span", { class: "pill " + tone }, "Copilot suggests: " + label), " ",
+        h("span", { class: "muted" }, c.used_llm ? `written by ${c.model}` : "built-in planner, no model needed")),
+      h("p", { style: "margin:10px 0" }, c.rationale),
+      (c.questions || []).length ? h("div", {}, h("b", {}, "Questions for you"), h("ul", { class: "plain" }, c.questions.map((q) => h("li", {}, q)))) : null,
+      c.rejected_reason ? h("p", { class: "muted" }, "A model answer was set aside (" + c.rejected_reason.replaceAll("_", " ") + "); the fixed rules' answer is shown.") : null,
+      h("p", { class: "muted" }, c.authority),
+      h("button", { class: "ghost", onclick: () => run(true) }, "Run again")].filter(Boolean));
+  }
+
+  async function run(refresh) {
+    btn.disabled = true;
+    out.replaceChildren(h("div", { class: "skeleton", style: "height:72px" }));
+    const r = await api(`/requests/${d.id}/copilot${refresh ? "?refresh=true" : ""}`, { method: "POST" });
+    btn.disabled = false;
+    if (r.ok) draw(r.data); else out.replaceChildren(notice("err", errorText(r)), btn);
+  }
+
+  if (autorun) run(false);
+  return row("Steward copilot", "An agent that investigates. Advisory only.",
+    autorun ? null : h("p", { class: "muted", style: "margin-top:0" }, "A read-only agent chooses which evidence to gather (consent, risk, relatives, history, audit), then recommends. It cannot approve, deny or freeze anything."),
+    autorun ? null : btn, out);
 }

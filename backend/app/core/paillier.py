@@ -139,7 +139,7 @@ def he_allele_counts(genotypes, sites: dict[str, list[int]], variants: list[int]
         per_site[name] = [encrypt(pk, int(v)) for v in counts]
     agg = [1] * len(variants)  # 1 is a valid encryption of 0 for the product
     for cts in per_site.values():
-        agg = [add(pk, a, c) for a, c in zip(agg, cts)]
+        agg = [add(pk, a, c) for a, c in zip(agg, cts, strict=True)]
     totals = [decrypt(sk, c) for c in agg]
     truth = g[:, variants].sum(axis=0)
     return {

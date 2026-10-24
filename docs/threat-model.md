@@ -23,6 +23,7 @@ claims legal compliance: GenomeGuard is **designed around the ideas of** DPDP, G
 | Stolen database file | Read genotypes from disk or a backup | AES-256-GCM per dataset, ciphertext bound to dataset and donor | `tests/test_crypto.py` |
 | Tampering with history | Edit or delete a log entry | Hash chain: change breaks the chain at that entry | `tests/test_audit_chain.py`, demo step 4 |
 | Prompt injection | Craft input so an LLM leaks or approves | Agents see whitelisted numbers only and decide nothing | `tests/test_agents.py` canary test |
+| Steward-copilot manipulation | Plant instructions in data the copilot reads, or make a model recommend approval | Tool outputs are whitelist-sanitised; the copilot has read-only tools only; a model answer more permissive than the deterministic rules is discarded | `tests/test_copilot.py` (canary, injected-text, permissiveness and write-access tests) |
 
 ## Thresholds (`app/core/params.py`, override with `GG_<NAME>`)
 
@@ -58,6 +59,12 @@ claims legal compliance: GenomeGuard is **designed around the ideas of** DPDP, G
 - **Secure aggregation** (`core/federated.py`) assumes honest-but-curious sites. It fails if all
   other sites collude, handles no dropouts, and does not stop a malicious site sending bad values.
   It is not homomorphic encryption and not an enclave.
+- **The copilot is advisory and its guardrails are partial.** It cannot act, and it cannot be more
+  permissive than the rules, but a model could still write a misleading rationale; only the
+  numbers in it are checked against the evidence. A human steward makes the call.
+- **FHIR export is not validated.** `consent.fhir.json` follows the R4 `Consent` structure but has
+  not been run through a FHIR validator. DUO terms travel in namespaced extensions, and only the
+  two DUO ids confirmed from the official ontology are emitted as ids.
 - **Demo mode is deliberately insecure.** `GG_DEMO_MODE=true` publishes the demo API keys and the
   steward key at `/demo/requesters` so judges can switch roles. That is only acceptable because
   the data is synthetic. Turn it off for anything else.

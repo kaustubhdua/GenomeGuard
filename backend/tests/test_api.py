@@ -1,6 +1,14 @@
 import json
 
-from tests.helpers import ADMIN, ANON, ATTACKER, DEMO_REQ, RESEARCHER, H, attack_queries, make_client
+from tests.helpers import (
+    ADMIN,
+    ATTACKER,
+    DEMO_REQ,
+    RESEARCHER,
+    H,
+    attack_queries,
+    make_client,
+)
 
 
 def test_health_and_docs_and_openapi():

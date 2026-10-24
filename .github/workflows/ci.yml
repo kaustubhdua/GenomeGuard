@@ -13,3 +13,4 @@ jobs:
       - run: make test
       - run: make eval-smoke
       - run: make demo
+      - run: for f in $(find frontend -name '*.js'); do node --check "$f" || exit 1; done

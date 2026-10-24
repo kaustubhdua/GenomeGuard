@@ -82,7 +82,7 @@ export function copy(text, btn) {
 }
 
 // minimal responsive SVG line chart. series: [{name, color, points:[[x,y],..], dash?}]
-export function lineChart({ series, xLabel, yLabel, xMin, xMax, yMin = 0, yMax = 1, hlines = [], width = 640, height = 260, fmtX = (v) => v, fmtY = (v) => v }) {
+export function lineChart({ series, xLabel, yLabel, xMin, xMax, yMin = 0, yMax = 1, hlines = [], width = 640, height = 260, fmtX = (v) => v, fmtY = (v) => v, xTicks }) {
   const m = { l: 46, r: 14, t: 12, b: 38 };
   const w = width - m.l - m.r, hh = height - m.t - m.b;
   const xs = series.flatMap((s) => s.points.map((p) => p[0]));
@@ -94,10 +94,8 @@ export function lineChart({ series, xLabel, yLabel, xMin, xMax, yMin = 0, yMax =
     root.append(svg("line", { x1: m.l, x2: m.l + w, y1: Y(v), y2: Y(v), stroke: "var(--rule-2)" }),
       svg("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, fmtY(v)));
   }
-  for (let i = 0; i <= 4; i++) {
-    const v = x0 + ((x1 - x0) * i) / 4;
-    root.append(svg("text", { x: X(v), y: height - 16, "text-anchor": "middle" }, fmtX(v)));
-  }
+  const ticks = xTicks || Array.from({ length: 5 }, (_, i) => x0 + ((x1 - x0) * i) / 4);
+  for (const v of ticks) root.append(svg("text", { x: X(v), y: height - 16, "text-anchor": "middle" }, fmtX(v)));
   for (const hl of hlines) root.append(svg("line", { x1: m.l, x2: m.l + w, y1: Y(hl.y), y2: Y(hl.y), stroke: hl.color, "stroke-dasharray": "5 4" }),
     svg("text", { x: m.l + w, y: Y(hl.y) - 4, "text-anchor": "end", style: `fill:${hl.color}` }, hl.label));
   for (const s of series) {

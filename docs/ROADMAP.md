@@ -3,6 +3,17 @@
 Written 24 Oct 2026 (IST). Submission window 25 Oct to 2 Nov, 11:59 PM. Final on 14 Nov in Delhi.
 Track 2: Agentic AI for Healthcare.
 
+## Status (24 Oct, end of build session)
+
+**Done and verified in the sandbox (248 tests, ruff clean, `scripts/demo.py` and `scripts/ui_smoke.py` pass):** steward copilot (read-only tool loop, rules cap), FHIR R4 Consent export, guided tour, accessibility and phone-width fixes, `make bench` + `docs/scalability.md`, family-first real-trio builder, `make eval-real`, provenance labelling driven by cohort-file metadata.
+
+**Only you can do these (the sandbox had no network access to 1000 Genomes, hosting or your accounts):**
+1. Run `make setup test lint demo` on your machine.
+2. Download one chromosome's VCF and the pedigree from IGSR (file names unconfirmed), then `make real-trios` and `make eval-real`.
+3. Deploy (re-check free-tier limits first), optionally set `ANTHROPIC_API_KEY`.
+4. Publish the audit head hash somewhere outside the system.
+5. Record the demo video, build the slides (slide 1 needs the five links), submit before 6 PM IST on 2 Nov.
+
 ## 0. Where the project stands (read from the repo, not assumed)
 
 Already built: consent engine (DUO-inspired), risk estimator with relative exposure, transform
