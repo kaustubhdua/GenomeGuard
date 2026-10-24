@@ -1,26 +1,17 @@
 import { boot, state, setWho, isSteward } from "./api.js";
 import { h } from "./ui.js";
-import * as overview from "./pages/overview.js";
-import * as requests from "./pages/requests.js";
-import * as decision from "./pages/decision.js";
-import * as family from "./pages/family.js";
-import * as anomalies from "./pages/anomalies.js";
-import * as audit from "./pages/audit.js";
-import * as redteam from "./pages/redteam.js";
-import * as federated from "./pages/federated.js";
-import * as donor from "./pages/donor.js";
 import { startTour, tourAvailable } from "./tour.js";
 
 const ROUTES = [
-  { re: /^#\/overview$/, mod: overview, nav: "overview", title: "Overview" },
-  { re: /^#\/requests$/, mod: requests, nav: "requests", title: "Requests" },
-  { re: /^#\/request\/(\d+)$/, mod: decision, nav: "requests", title: "Decision" },
-  { re: /^#\/family\/(\d+)$/, mod: family, nav: "family", title: "Family exposure" },
-  { re: /^#\/anomalies$/, mod: anomalies, nav: "anomalies", title: "Anomalies" },
-  { re: /^#\/audit$/, mod: audit, nav: "audit", title: "Audit log" },
-  { re: /^#\/donor$/, mod: donor, nav: "donor", title: "My data" },
-  { re: /^#\/redteam$/, mod: redteam, nav: "redteam", title: "Red-team results" },
-  { re: /^#\/federated$/, mod: federated, nav: "federated", title: "Federated analysis" },
+  { re: /^#\/overview$/, load: () => import("./pages/overview.js"), nav: "overview", title: "Overview" },
+  { re: /^#\/requests$/, load: () => import("./pages/requests.js"), nav: "requests", title: "Requests" },
+  { re: /^#\/request\/(\d+)$/, load: () => import("./pages/decision.js"), nav: "requests", title: "Decision" },
+  { re: /^#\/family\/(\d+)$/, load: () => import("./pages/family.js"), nav: "family", title: "Family exposure" },
+  { re: /^#\/anomalies$/, load: () => import("./pages/anomalies.js"), nav: "anomalies", title: "Anomalies" },
+  { re: /^#\/audit$/, load: () => import("./pages/audit.js"), nav: "audit", title: "Audit log" },
+  { re: /^#\/donor$/, load: () => import("./pages/donor.js"), nav: "donor", title: "My data" },
+  { re: /^#\/redteam$/, load: () => import("./pages/redteam.js"), nav: "redteam", title: "Red-team results" },
+  { re: /^#\/federated$/, load: () => import("./pages/federated.js"), nav: "federated", title: "Federated analysis" },
 ];
 const NAV = [
   [null, [["overview", "Overview", "#/overview"]]],
@@ -42,9 +33,22 @@ async function render() {
   $("shell").classList.remove("open");
   const mine = ++token;
   view.replaceChildren(h("div", { class: "skeleton", style: "height:120px" }));
-  const page = hit ? await hit[0].mod.render(hit[1].slice(1)) : h("div", { class: "empty" }, "That page does not exist. ", h("a", { href: "#/overview" }, "Go to the overview"));
+  let page;
+  if (hit) {
+    const mod = await hit[0].load(); // route code is fetched only when the route is first visited
+    if (mine !== token) return;
+    page = await mod.render(hit[1].slice(1));
+  } else {
+    page = h("div", { class: "empty" }, "That page does not exist. ", h("a", { href: "#/overview" }, "Go to the overview"));
+  }
   if (mine !== token) return; // a newer navigation won
+  if (page instanceof Element) page.classList.add("page-enter");
   view.replaceChildren(page);
+  // Images added by future pages default to native lazy loading and async decode.
+  view.querySelectorAll("img").forEach((img) => {
+    if (!img.hasAttribute("loading")) img.loading = "lazy";
+    if (!img.hasAttribute("decoding")) img.decoding = "async";
+  });
   document.title = (hit ? hit[0].title + " · " : "") + "GenomeGuard";
   view.focus({ preventScroll: true });
   window.scrollTo(0, 0);
