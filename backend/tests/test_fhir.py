@@ -55,6 +55,7 @@ def test_unconfirmed_duo_ids_are_not_invented():
     d = _donor_with(svc, lambda c: c["use"] == "GRU")
     use = svc.donor_consent_fhir(d.id)["provision"]["extension"][0]["valueCoding"]
     assert use["code"] == "GRU" and not use["code"].startswith("DUO:")
+    assert use["system"].endswith("/CodeSystem/consent-use-codes")
 
 
 def test_withdrawal_makes_the_resource_inactive():
