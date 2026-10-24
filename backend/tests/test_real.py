@@ -17,6 +17,21 @@ PED = "\n".join([
 
 SAMPLES = ["dad", "mum", "kid1", "kid2"] + [f"s{i}" for i in range(40)]
 
+def test_high_coverage_population_pedigree_panel_format():
+    text = "\n".join([
+        "FamilyID SampleID FatherID MotherID Sex Population Superpopulation",
+        "F1 father 0 0 1 YRI AFR",
+        "F1 mother 0 0 2 YRI AFR",
+        "F1 child father mother 1 YRI AFR",
+        "U2 unrelated 0 0 2 GBR EUR",
+    ]) + "\n"
+    info = real.parse_ped(text)
+    assert info["child"]["father"] == "father"
+    assert info["child"]["mother"] == "mother"
+    assert info["child"]["family"] == "F1"
+    assert info["child"]["pop"] == "YRI"
+    assert info["unrelated"]["pop"] == "GBR"
+
 
 def make_vcf(path: Path, n_sites=300, seed=0):
     rng = np.random.default_rng(seed)
