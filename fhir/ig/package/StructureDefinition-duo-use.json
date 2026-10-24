@@ -1,7 +1,7 @@
 {
   "resourceType": "StructureDefinition",
   "id": "duo-use",
-  "url": "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition/duo-use",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-duo-use.json",
   "version": "0.1.0",
   "name": "GenomeGuardDuoUse",
   "title": "GenomeGuard duo-use extension",
@@ -31,7 +31,7 @@
       {
         "id": "Extension.url",
         "path": "Extension.url",
-        "fixedUri": "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition/duo-use"
+        "fixedUri": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-duo-use.json"
       },
       {
         "id": "Extension.value[x]",
