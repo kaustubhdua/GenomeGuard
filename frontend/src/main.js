@@ -34,12 +34,22 @@ async function render() {
   const mine = ++token;
   view.replaceChildren(h("div", { class: "skeleton", style: "height:120px" }));
   let page;
-  if (hit) {
-    const mod = await hit[0].load(); // route code is fetched only when the route is first visited
+  try {
+    if (hit) {
+      const mod = await hit[0].load(); // route code is fetched only when the route is first visited
+      if (mine !== token) return;
+      page = await mod.render(hit[1].slice(1));
+    } else {
+      page = h("div", { class: "empty" }, "That page does not exist. ", h("a", { href: "#/overview" }, "Go to the overview"));
+    }
+  } catch {
     if (mine !== token) return;
-    page = await mod.render(hit[1].slice(1));
-  } else {
-    page = h("div", { class: "empty" }, "That page does not exist. ", h("a", { href: "#/overview" }, "Go to the overview"));
+    page = h("section", { class: "card error-boundary", role: "alert" },
+      h("h1", {}, "This page couldn't load"),
+      h("p", { class: "muted" }, "The page failed to load. Your existing data has not been changed by this display error."),
+      h("div", { class: "confirm" },
+        h("button", { onclick: () => render() }, "Try again"),
+        h("a", { class: "btn ghost", href: "#/overview" }, "Back to overview")));
   }
   if (mine !== token) return; // a newer navigation won
   if (page instanceof Element) page.classList.add("page-enter");
