@@ -115,6 +115,10 @@ Simulated: consent. The Phase 3 release is built from deliberately unrelated peo
 exposure is sparse; for real families use the high-coverage release with 602 trios (pass `--vcf`
 and `--ped`). Check IGSR's data-use terms and never commit downloaded data.
 
+## Deployment safety gate
+
+The default guided demo intentionally enables published synthetic demo accounts and may enable the audit-tamper exercise. Do not use demo mode with real participant data. When `GG_DEMO_MODE=false`, startup now fails closed unless `GG_ADMIN_API_KEY` is a unique non-default secret, `GG_MASTER_KEY` decodes from base64 to exactly 32 random bytes, and `GG_ALLOW_TAMPER_DEMO=false`. Generate a master key with `python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"` and store it in the host secret manager; never commit it. This guard is a baseline safety check, not a substitute for a KMS/HSM, identity integration, or security review.
+
 ## Limitations
 
 Synthetic data; simplified attacks written by the defenders; simple epsilon accounting (not a
