@@ -1,7 +1,7 @@
 {
   "resourceType": "CodeSystem",
   "id": "consent-use-codes",
-  "url": "https://github.com/kaustubhdua/GenomeGuard/fhir/CodeSystem/consent-use-codes",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/CodeSystem-consent-use-codes.json",
   "version": "0.1.0",
   "name": "GenomeGuardConsentUseCodes",
   "title": "GenomeGuard demo consent-use codes",
