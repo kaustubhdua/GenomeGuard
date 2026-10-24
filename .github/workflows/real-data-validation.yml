@@ -63,6 +63,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: genomeguard-real-data-evaluation
-          path: docs/eval-results-real.md
+          path: |
+            docs/eval-results-real.md
+            docs/eval-results-real.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 30
