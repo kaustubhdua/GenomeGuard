@@ -18,8 +18,8 @@
   "derivation": "constraint",
   "context": [
     {
-      "type": "resource",
-      "expression": "Consent"
+      "type": "element",
+      "expression": "Consent.provision"
     }
   ],
   "differential": {
