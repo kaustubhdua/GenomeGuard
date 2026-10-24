@@ -19,7 +19,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from app.config import get_settings
+from app.config import get_settings, validate_settings
 from app.core.audit_chain import jsonable
 from app.service import DEMO_REQUESTERS, GenomeGuardService, ServiceError, bootstrap
 
@@ -76,6 +76,7 @@ async def _body(request: Request) -> dict:
 
 def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     settings = get_settings()
+    validate_settings(settings)
     state = {"svc": svc}
 
     def S() -> GenomeGuardService:
