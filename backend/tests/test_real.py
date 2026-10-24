@@ -196,3 +196,20 @@ def test_build_cohort_family_first_records_enrichment_and_finds_real_relatives()
         c2, meta2 = real.build_cohort(v, PED_HC, n_samples=15, max_variants=100, keep_prob=1.0,
                                       seed=4)
         assert meta2["family_enriched"] is False
+
+
+# ---- the public Phase 3 panel has sample/population labels, not pedigree columns ----
+PHASE3_PANEL = """sample pop super_pop gender
+HG00096 GBR EUR male
+HG00097 GBR EUR female
+NA12340 YRI AFR male
+"""
+
+
+def test_parse_official_phase3_panel_without_private_working_pedigree():
+    info = real.parse_ped(PHASE3_PANEL)
+    assert info["HG00096"] == {
+        "family": "HG00096", "father": None, "mother": None, "pop": "GBR"
+    }
+    assert info["NA12340"]["pop"] == "YRI"
+    assert real.relationships_from_pedigree(info, ["HG00096", "HG00097", "NA12340"]) == []
