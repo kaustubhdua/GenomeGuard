@@ -80,8 +80,7 @@ flowchart LR
   cumulative exposure; ok, warn, throttle, freeze; human unfreeze.
 - **Audit log:** SHA-256 hash chain, verification, tamper demo, external anchor.
 - **Encryption at rest:** AES-256-GCM, key per dataset, bound to dataset and donor.
-- **Federated secure aggregation:** simulated hospitals compute frequencies and train a model
-  without pooling rows.
+- **Federated secure aggregation:** the protocol demo runs in one process with simulated hospital/site inputs; it demonstrates the flow, not a deployed multi-hospital network.
 - **Agents:** advisory, sanitized, with deterministic fallback. Decisions come from code.
 
 ## Measured results (`make eval`, fixed seeds, synthetic data)
@@ -129,7 +128,7 @@ enclave or real consent-management integration; no independent security review. 
 
 `backend/app/core/` rules and math | `backend/app/agents/` advisory agents | `backend/app/data/`
 generators and real-data loaders | `backend/redteam/` attacks and evaluation | `frontend/` UI |
-`docs/` architecture, threat model, eval, scalability, real-data, roadmap, demo script, slide inputs | `scripts/` demo, bench, ui_smoke.
+`docs/` architecture, threat model, eval, scalability, real-data, hackathon release gate, demo script, slide inputs | `scripts/` demo, bench, ui_smoke.
 
 ## References
 
@@ -138,6 +137,10 @@ generators and real-data loaders | `backend/redteam/` attacks and evaluation | `
 - Update-flip attack on beacons: arXiv:2001.08852. Differential privacy for GWAS statistics: arXiv:1205.0739.
 - GA4GH Beacon v2; GA4GH Data Use Ontology (DUO), https://github.com/EBISPOT/DUO (CC BY 4.0).
 - 1000 Genomes Project / IGSR; Byrska-Bishop et al., high-coverage 1000 Genomes cohort including 602 trios, *Cell* 2022.
+
+## Hackathon release verification
+
+Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) as the final evidence checklist against every Tech Eximius judging criterion. It separates source-level implementation from proof that still requires a clean-clone test run, browser QA, and a deployed walkthrough. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
 
 ## Audit anchor
 
