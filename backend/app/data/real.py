@@ -38,7 +38,7 @@ from app.data.synth import SyntheticCohort, _consent
 
 BASE = "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp"
 RELEASE_DIR = f"{BASE}/release/20130502/"
-PED_URL = f"{BASE}/technical/working/20130606_sample_info/20130606_g1k.ped"
+PED_URL = f"{RELEASE_DIR}integrated_call_samples_v3.20130502.ALL.panel"
 VCF_NAME_RE = r"ALL\.chr{chrom}\.phase3_shapeit2_mvncall_integrated_v5[a-z]\.20130502\.genotypes\.vcf\.gz"
 
 
@@ -103,23 +103,39 @@ def parse_ped(text: str) -> dict[str, dict]:
     split = (lambda ln: ln.rstrip("\n").split("\t")) if sep else (lambda ln: ln.split())
     header = [_norm(h) for h in split(lines[0])]
 
-    def col(key: str) -> int:
+    def col(key: str, required: bool = True) -> int | None:
         for name in _ALIASES[key]:
             if name in header:
                 return header.index(name)
-        raise ValueError(f"pedigree file lacks a {key} column; header was {header}")
+        if required:
+            raise ValueError(f"pedigree file lacks a {key} column; header was {header}")
+        return None
 
-    i_fam, i_ind = col("family"), col("individual")
-    i_pat, i_mat, i_pop = col("father"), col("mother"), col("pop")
-    need = max(i_fam, i_ind, i_pat, i_mat, i_pop)
+    i_fam = col("family", required=False)
+    i_ind = col("individual")
+    i_pop = col("pop")
+    # The official Phase 3 sample panel has sample/population labels but no pedigree columns.
+    # Treat each sample as unrelated instead of relying on a technical/working-only file.
+    # If a family column is present, this is a pedigree file and parent columns remain required.
+    i_pat = col("father", required=i_fam is not None)
+    i_mat = col("mother", required=i_fam is not None)
+    need = max(i_ind, i_pop, *(i for i in (i_fam, i_pat, i_mat) if i is not None))
     none = ("0", "", ".", "NA", "na")
     out = {}
     for ln in lines[1:]:
         f = split(ln)
         if len(f) <= need:
             continue
-        out[f[i_ind]] = {"family": f[i_fam], "father": None if f[i_pat] in none else f[i_pat],
-                         "mother": None if f[i_mat] in none else f[i_mat], "pop": f[i_pop]}
+        sample = f[i_ind]
+        family = f[i_fam] if i_fam is not None else sample
+        father = f[i_pat] if i_pat is not None else None
+        mother = f[i_mat] if i_mat is not None else None
+        out[sample] = {
+            "family": family,
+            "father": None if father in none else father,
+            "mother": None if mother in none else mother,
+            "pop": f[i_pop],
+        }
     return out
 
 
@@ -307,7 +323,7 @@ def main(argv: list[str] | None = None) -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--vcf", help="local VCF(.gz); default: download 1000G chr22")
-    b.add_argument("--ped", help="local pedigree file or URL; default: 1000G sample info")
+    b.add_argument("--ped", help="local pedigree file or URL; default: official Phase 3 sample/population panel (unrelated samples)")
     b.add_argument("--chrom", default="22")
     b.add_argument("--out", default="data_real/1000g_chr22.npz")
     b.add_argument("--samples", type=int, default=600)
