@@ -13,6 +13,13 @@ const ROUTES = [
   { re: /^#\/redteam$/, load: () => import("./pages/redteam.js"), nav: "redteam", title: "Red-team results" },
   { re: /^#\/federated$/, load: () => import("./pages/federated.js"), nav: "federated", title: "Federated analysis" },
 ];
+function prefetchRoute(hash) {
+  const hit = ROUTES.find((r) => hash.match(r.re));
+  if (!hit || hit.prefetched) return;
+  hit.prefetched = true;
+  hit.load().catch(() => { hit.prefetched = false; }); // a failed prefetch must remain retryable
+}
+
 const NAV = [
   [null, [["overview", "Overview", "#/overview"]]],
   ["Researcher", [["requests", "Requests", "#/requests"]]],
@@ -142,6 +149,17 @@ $("theme").addEventListener("click", toggleTheme);
 $("menu").addEventListener("click", () => $("shell").classList.toggle("open"));
 $("scrim").addEventListener("click", () => $("shell").classList.remove("open"));
 $("who").addEventListener("change", (e) => { setWho(e.target.value); drawWho(); render(); });
+// Warm the route chunk when a visitor signals intent, without loading every page at startup.
+for (const container of [ $("nav"), $("view") ]) {
+  container.addEventListener("pointerover", (e) => {
+    const link = e.target.closest("a[href^='#/']");
+    if (link) prefetchRoute(link.getAttribute("href"));
+  });
+  container.addEventListener("focusin", (e) => {
+    const link = e.target.closest("a[href^='#/']");
+    if (link) prefetchRoute(link.getAttribute("href"));
+  });
+}
 window.addEventListener("hashchange", render);
 window.addEventListener("gg:refresh-who", async () => { await boot(); drawWho(); });
 boot().then(() => { drawWho(); drawProv(); render(); });
