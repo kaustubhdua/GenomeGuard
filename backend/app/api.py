@@ -204,8 +204,10 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         try:
             d = await run_in_threadpool(S().submit, r, body)
         except ServiceError as exc:
+            message = ("Request not permitted by governance policy" if exc.status == 403
+                       else "Request parameters failed governance validation")
             return _j({"meta": meta, "error": {"errorCode": exc.status,
-                       "errorMessage": "Request parameters failed governance validation"}}, exc.status)
+                       "errorMessage": message}}, exc.status)
         rel = d.get("release") or {}
         vals = rel.get("values") or []
         if d["outcome"] in ("deny", "escalate") or not vals:
