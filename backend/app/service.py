@@ -595,8 +595,8 @@ class GenomeGuardService:
                                                                        len(new["modifiers"])]})
         return self.donor_profile(donor_id)
 
-    FHIR_BASE = "https://github.com/kaustubhdua/GenomeGuard/fhir"
-    FHIR_EXT = FHIR_BASE + "/StructureDefinition"
+    FHIR_BASE = "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package"
+    FHIR_EXT = FHIR_BASE + "/StructureDefinition-"
 
     def donor_consent_fhir(self, donor_id: int) -> dict:
         """The donor's consent as a FHIR R4 `Consent` resource, so it can travel to other systems.
@@ -615,19 +615,19 @@ class GenomeGuardService:
                 return {"system": "http://purl.obolibrary.org/obo/duo.owl",
                         "code": info["id"], "display": info.get("meaning") or code}
             # Never label an unconfirmed short code as an official DUO term.
-            return {"system": f"{self.FHIR_BASE}/CodeSystem/consent-use-codes",
+            return {"system": f"{self.FHIR_BASE}/CodeSystem-consent-use-codes.json",
                     "code": code, "display": info.get("meaning") or code}
 
-        ext = [{"url": f"{self.FHIR_EXT}/duo-use", "valueCoding": duo(str(c.get("use")))}]
-        ext += [{"url": f"{self.FHIR_EXT}/duo-modifier", "valueCoding": duo(m)}
+        ext = [{"url": f"{self.FHIR_EXT}duo-use.json", "valueCoding": duo(str(c.get("use")))}]
+        ext += [{"url": f"{self.FHIR_EXT}duo-modifier.json", "valueCoding": duo(m)}
                 for m in (c.get("modifiers") or [])]
         if c.get("disease"):
-            ext.append({"url": f"{self.FHIR_EXT}/disease", "valueString": c["disease"]})
+            ext.append({"url": f"{self.FHIR_EXT}disease.json", "valueString": c["disease"]})
         if c.get("population"):
-            ext.append({"url": f"{self.FHIR_EXT}/population", "valueString": c["population"]})
+            ext.append({"url": f"{self.FHIR_EXT}population.json", "valueString": c["population"]})
         res = {
             "resourceType": "Consent", "id": ref,
-            "meta": {"tag": [{"system": f"{self.FHIR_BASE}/CodeSystem/genomeguard-tags", "code": "simulated-consent",
+            "meta": {"tag": [{"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json", "code": "simulated-consent",
                               "display": "Simulated consent record (demo data, not a real person)"}]},
             "text": {"status": "generated", "div": '<div xmlns="http://www.w3.org/1999/xhtml"><p>Simulated consent record; this is not actual consent.</p></div>'},
             "status": "inactive" if d.withdrawn else "active",
