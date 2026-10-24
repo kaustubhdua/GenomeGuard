@@ -73,3 +73,20 @@ Selected results from the generated evaluation report (attack/query traffic rema
 - The query monitor froze all tested attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. This is a measured limitation of the simulated sliding-window monitor, not a claim that slow attacks are stopped.
 
 These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40135423030) for 30 days.
+## Verified high-coverage family-cohort evaluation (2026-10-24)
+
+The dedicated high-coverage workflow passed on GitHub Actions: [run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277). It downloaded the official IGSR high-coverage chromosome-22 phased variant VCF and the 3,202-sample pedigree/population metadata file, built a pedigree-aware cohort, and completed `eval-real`.
+
+Verified cohort metadata:
+
+- VCF: `1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz`
+- VCF SHA-256: `91aeaf0d1e805cf4223c5cbf12e22afc28db1709054c42bd668337219f8fddcc`
+- Sample metadata: `20130606_g1k_3202_samples_ped_population.txt`
+- Sample metadata SHA-256: `4e164b717433fc9bfc16e29b20e5b4659b4216185b3275322d421fe3d323c132`
+- Selected samples: 600; variants: 3,000
+- Observed relationship pairs: 355; `pedigree_relationships_present: true`; `family_enriched: true`
+- `genotypes_real: true`; `consent_simulated: true`
+
+The generated report shows strong trade-offs, not a production privacy guarantee. In this run, the differencing attack recovered 100% of target genotypes without a defence; Laplace noise alone reduced this to 31.0% ± 2.8%, and the ladder plus differencing guard reduced it to the guessing baseline of 55.1% ± 3.1% while blocking the second query in 100% of trials. The simulated monitor froze 100% of tested fast triangulation attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. The report itself documents simplified attackers, synthetic query/consent data, and simplified sequential epsilon accounting.
+
+The report is available as a 30-day aggregate-only artifact in the [family-cohort run](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277). Raw genomic cohorts are not uploaded as workflow artifacts.
