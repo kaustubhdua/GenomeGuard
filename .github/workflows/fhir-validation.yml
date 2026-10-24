@@ -33,4 +33,6 @@ jobs:
             --output /tmp/validator_cli.jar
           echo "1178b6a3a3fe98d9cd9545cadee505274967332466001d857e4d8bed7138a5bc  /tmp/validator_cli.jar" | sha256sum --check
       - name: Validate the exported resource against FHIR R4
-        run: java -jar /tmp/validator_cli.jar /tmp/genomeguard-consent-r4.json -version 4.0.1
+        run: |
+          tar -czf /tmp/genomeguard-fhir-ig.tgz -C fhir/ig package
+          java -jar /tmp/validator_cli.jar /tmp/genomeguard-consent-r4.json -version 4.0.1 -ig /tmp/genomeguard-fhir-ig.tgz
