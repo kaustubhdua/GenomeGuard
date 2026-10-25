@@ -1,0 +1,81 @@
+name: Remove Claude attribution from default-branch history
+
+on:
+  push:
+    branches:
+      - maintenance/remove-claude-contributor
+    paths:
+      - .github/workflows/remove-claude-contributor.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: genomeguard-history-attribution-cleanup
+  cancel-in-progress: false
+
+jobs:
+  rewrite-main:
+    if: github.event.head_commit.message == 'Maintenance: remove Claude attribution from main history'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out complete repository history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: maintenance/remove-claude-contributor
+      - name: Back up main and rewrite only its attribution metadata
+        id: rewrite
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          EXPECTED_MAIN="$(git rev-parse origin/main)"
+          BACKUP_BRANCH="backup/main-before-claude-attribution-20261025"
+          if git ls-remote --exit-code --heads origin "$BACKUP_BRANCH" >/dev/null 2>&1; then
+            echo "Backup branch already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+          git push origin "refs/remotes/origin/main:refs/heads/$BACKUP_BRANCH"
+          echo "old_sha=$EXPECTED_MAIN" >> "$GITHUB_OUTPUT"
+          git switch --force-create main origin/main
+
+          FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force \
+            --env-filter '
+              if printf "%s %s" "$GIT_AUTHOR_NAME" "$GIT_AUTHOR_EMAIL" | grep -Eiq "(claude|anthropic)"; then
+                export GIT_AUTHOR_NAME="GenomeGuard Maintainers"
+                export GIT_AUTHOR_EMAIL="maintainers@genomeguard.invalid"
+              fi
+              if printf "%s %s" "$GIT_COMMITTER_NAME" "$GIT_COMMITTER_EMAIL" | grep -Eiq "(claude|anthropic)"; then
+                export GIT_COMMITTER_NAME="GenomeGuard Maintainers"
+                export GIT_COMMITTER_EMAIL="maintainers@genomeguard.invalid"
+              fi
+            ' \
+            --msg-filter 'sed -E -e "/^[[:space:]]*Co-Authored-By:.*(Claude|Anthropic|noreply@anthropic\\.com).*$/Id" -e "/^[[:space:]]*Claude-Session:.*/Id"' \
+            -- main
+
+          if git log main --format='%an <%ae>' | grep -Eiq 'claude|anthropic'; then
+            echo "Claude/Anthropic author identity remains on main." >&2
+            exit 1
+          fi
+          if git log main --format='%B' | grep -Eiq '^[[:space:]]*Co-Authored-By:.*(Claude|Anthropic)|^[[:space:]]*Claude-Session:'; then
+            echo "Claude co-author/session attribution remains in main commit messages." >&2
+            exit 1
+          fi
+
+          NEW_SHA="$(git rev-parse main)"
+          echo "new_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
+          echo "Rewritten main: $EXPECTED_MAIN -> $NEW_SHA"
+          echo "Commit count before: $(git rev-list --count "$EXPECTED_MAIN")"
+          echo "Commit count after:  $(git rev-list --count main)"
+          git push origin "refs/heads/main:refs/heads/main" --force-with-lease="refs/heads/main:$EXPECTED_MAIN"
+
+      - name: Report rewrite summary
+        if: success()
+        run: |
+          echo "## History attribution cleanup" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Previous main: \`\${{ steps.rewrite.outputs.old_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rewritten main: \`\${{ steps.rewrite.outputs.new_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- A backup branch named \`backup/main-before-claude-attribution-20261025\` preserves the original main history." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Code trees and merge topology are preserved; only Claude/Anthropic author/committer identities and Claude co-author/session message lines are changed." >> "$GITHUB_STEP_SUMMARY"
