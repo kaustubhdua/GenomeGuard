@@ -82,3 +82,13 @@ def test_postgres_store_survives_connection_reopen(pg_store):
         assert reopened.requester(requester_id)["name"] == "Persistence Researcher"
     finally:
         reopened.close()
+
+
+def test_postgres_unit_of_work_rolls_back_all_store_writes(pg_store):
+    with pytest.raises(RuntimeError, match="injected failure"):
+        with pg_store.transaction():
+            pg_store.add_requester(
+                "Rollback Researcher", "researcher", "standard", "test-institution", "rollback-test-key"
+            )
+            raise RuntimeError("injected failure")
+    assert pg_store.one("SELECT id FROM requesters WHERE name=?", ("Rollback Researcher",)) is None
