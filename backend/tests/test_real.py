@@ -253,3 +253,14 @@ def test_unrelated_phase3_style_panel_does_not_claim_family_enrichment():
                                     seed=7, family_first=True)
         assert meta["relative_pairs"] == 0
         assert meta["family_enriched"] is False
+
+
+def test_explicit_1000_genomes_source_label_uses_1000g_namespace():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "official_chr22.vcf.gz"
+        make_vcf(v)
+        label = "1000 Genomes (IGSR) high-coverage 30x (GRCh38)"
+        cohort, meta = real.build_cohort(v, PED, n_samples=44, max_variants=20,
+                                         keep_prob=1.0, source=label)
+        assert meta["source"] == label
+        assert all(donor["cohort_id"].startswith("1000G-") for donor in cohort.donors)
