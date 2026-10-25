@@ -264,3 +264,34 @@ def test_explicit_1000_genomes_source_label_uses_1000g_namespace():
                                          keep_prob=1.0, source=label)
         assert meta["source"] == label
         assert all(donor["cohort_id"].startswith("1000G-") for donor in cohort.donors)
+
+
+def test_bootstrap_persists_provenance_and_does_not_trust_changed_env_path():
+    import base64
+    from app.config import Settings
+    from app.service import bootstrap
+
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        v = root / "fixture.vcf.gz"
+        make_vcf(v)
+        cohort, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50,
+                                         keep_prob=1.0, source="User-provided genomic cohort")
+        first = root / "first.npz"
+        real.save_cohort(cohort, meta, first)
+        cohort2, meta2 = real.build_cohort(v, PED, n_samples=44, max_variants=50,
+                                           keep_prob=1.0, source="1000 Genomes (IGSR) Phase 3")
+        second = root / "second.npz"
+        real.save_cohort(cohort2, meta2, second)
+        settings = Settings()
+        settings.db_path = str(root / "genomeguard.sqlite3")
+        settings.real_cohort_file = str(first)
+        settings.master_key = base64.b64encode(bytes(range(32))).decode("ascii")
+        settings.n_donors, settings.n_variants, settings.n_families = 44, 50, 10
+        service = bootstrap(settings=settings)
+        assert service.provenance["genotypes"] == "real_custom"
+        assert service.provenance["source_label"] == "User-provided genomic cohort"
+        settings.real_cohort_file = str(second)
+        service_again = bootstrap(settings=settings, store=service.store)
+        assert service_again.provenance["genotypes"] == "real_custom"
+        assert service_again.provenance["source_label"] == "User-provided genomic cohort"
