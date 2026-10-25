@@ -1,0 +1,19 @@
+{
+  "policy_id": "igsr-1000-genomes-public-release-v1",
+  "source_dataset": "1000 Genomes Project / International Genome Sample Resource (IGSR)",
+  "source_url": "https://www.internationalgenome.org/sample_collection_principles/",
+  "terms_summary": "The published project consent principles state that genomic data would be publicly available for future research by academic, commercial, and government researchers, and that participants would not be able to withdraw samples/data after database release.",
+  "scope": "dataset",
+  "duo_use": "GRU",
+  "disease": null,
+  "duo_modifiers": [],
+  "population": null,
+  "withdrawal_supported": false,
+  "review_status": "source_documented_not_legal_review",
+  "limitations": [
+    "This is a dataset-level mapping of public source terms to DUO-inspired policy fields, not a participant-specific consent record.",
+    "The source page does not provide per-sample signed consent documents or individual consent dates.",
+    "This mapping is not legal advice or independent ethics review; an institution must assess its intended use and jurisdiction.",
+    "Do not use this profile for controlled-access cohorts, private clinical records, or sources with additional restrictions."
+  ]
+}
