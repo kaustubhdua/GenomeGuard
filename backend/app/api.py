@@ -307,6 +307,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         admin(request)
         return _j(S().tamper(request.path_params["idx"]))
 
+    @route("POST", "/admin/untamper", "DEMO ONLY: remove the tamper-demo marker", "admin")
+    async def untamper(request):
+        admin(request)
+        return _j(S().untamper())
+
     @route("GET", "/anomalies", "Per-requester timelines and alerts", "admin")
     async def anomalies(request):
         admin(request)

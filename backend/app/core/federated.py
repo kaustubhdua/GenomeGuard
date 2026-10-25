@@ -10,7 +10,7 @@ Protocol (per aggregation round, n sites, vectors fixed-point encoded modulo P =
   3. Each site adds the shares it received and publishes that partial sum.
   4. The coordinator adds the n partial sums: that equals sum_i x_i, and nothing else is revealed.
 
-What this does and does NOT give you (say this plainly to judges):
+What this does and does NOT give you (stated plainly):
   + Honest-but-curious sites: a single site, or the coordinator, learns only the total.
   - Not secure if all other n-1 sites collude (they can reconstruct the missing site's vector).
   - No dropout handling and no protection against a site sending malicious values.

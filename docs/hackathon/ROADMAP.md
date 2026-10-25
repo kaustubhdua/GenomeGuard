@@ -103,7 +103,7 @@ test that it parses as valid JSON with the required fields. UI items 4 to 6.
 
 **Fri 30 Oct.** Full dry run on the deployed link. Fix only bugs. Measure scalability numbers.
 
-**Sat 31 Oct.** Record the demo video (3 minutes, scripted in `docs/demo-script.md`). Final README
+**Sat 31 Oct.** Record the demo video (3 minutes, scripted in `docs/walkthrough.md`). Final README
 with screenshots. Publish the audit head hash in the README and on slide 1's notes.
 
 **Sun 1 Nov.** Buffer. Hand slide inputs to teammates. Check every link while logged out.

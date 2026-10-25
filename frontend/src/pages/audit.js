@@ -36,7 +36,8 @@ export async function render() {
     const tIn = h("input", { type: "number", min: 1, max: head.length, value: Math.min(3, head.length), "aria-label": "Entry number", style: "width:90px" });
     const tamper = state.health && state.health.tamper_demo ? h("div", { style: "display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap" },
       h("button", { class: "danger", onclick: async () => { const r = await api("/admin/tamper/" + tIn.value, { method: "POST" }); if (!r.ok) body.prepend(notice("err", errorText(r))); else draw(); } }, "Tamper with entry"), tIn,
-      h("span", { class: "muted" }, "Demo only. A tampered chain stays tampered; restart with a fresh database to reset.")) : null;
+      h("button", { class: "ghost", onclick: async () => { const r = await api("/admin/untamper", { method: "POST" }); if (!r.ok) body.prepend(notice("err", errorText(r))); else draw(); } }, "Undo demo tamper"),
+      h("span", { class: "muted" }, "Demo only. Undo removes just the demo marker, so the demo can be repeated; any other change to an entry stays detected.")) : null;
     const ledger = h("div", { class: "ledger" },
       row("Status", "Recomputed on every view", status, a ? h("p", { class: "muted" }, `Also checked against your saved anchor (${a.length} entries): ${v.ok ? "matches" : "does not match"}.`) : null,
         h("div", { style: "margin-top:10px" }, h("button", { class: "ghost", onclick: draw }, "Verify now"))),

@@ -7,7 +7,7 @@ decrypt, and in this system only the TOTAL is ever decrypted.
 Used by `he_allele_counts` below: each hospital encrypts its per-variant allele counts, an
 untrusted aggregator adds the ciphertexts, and the key holder decrypts the sum.
 
-Honest limits (say them before a judge does):
+Honest limits (stated plainly):
   * Educational implementation: not constant-time, not audited. Production should use a vetted
     library (python-paillier, OpenFHE, Microsoft SEAL) or an enclave.
   * Additive only: sums and scalar multiples. No products of two encrypted values, so it cannot

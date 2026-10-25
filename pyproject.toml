@@ -16,6 +16,11 @@ dependencies = [
     "cryptography>=42",
 ]
 
+[project.urls]
+Homepage = "https://github.com/kaustubhdua/GenomeGuard"
+Issues = "https://github.com/kaustubhdua/GenomeGuard/issues"
+Documentation = "https://github.com/kaustubhdua/GenomeGuard/tree/main/docs"
+
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.26", "jsonschema>=4.22,<5"]
 llm = ["anthropic>=0.30"]
