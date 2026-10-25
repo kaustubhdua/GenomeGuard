@@ -40,7 +40,7 @@ jobs:
           AXE_CORE_PATH: /tmp/gg-axe/node_modules/axe-core/axe.min.js
           UI_SCREENSHOT_DIR: /tmp/genomeguard-ui-screenshots
         run: make ui-smoke
-      - name: Preserve judge-facing UI screenshots
+      - name: Preserve UI screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:

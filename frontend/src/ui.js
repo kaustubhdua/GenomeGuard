@@ -48,7 +48,7 @@ export const reasonText = (c) => REASONS[c] || String(c).replaceAll("_", " ");
 export const stepText = (s) => ({
   drop_rare_variants: "Very rare variants dropped", downgrade_to_count: "Rows replaced by counts",
   generalise_bins: "Values rounded into bins", limit_variants: "Number of variants capped",
-  laplace_noise: "Calibrated noise added (differential privacy)", downgrade_to_boolean: "Answer reduced to yes or no",
+  laplace_noise: "Noise added (simplified privacy-budget accounting)", downgrade_to_boolean: "Answer reduced to yes or no",
 }[s] || String(s).replaceAll("_", " "));
 
 export const when = (iso) => { try { return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); } catch { return iso; } };
@@ -155,7 +155,7 @@ export function workflow(d) {
 // horizontal pipeline; call .classList.add('play') to run the reveal
 export function pipeline(stages, { play = true } = {}) {
   const el = h("div", { class: "pipe" + (play ? " play" : ""), style: `--n:${stages.length}`, role: "list" },
-    stages.map((s, i) => h("div", { class: "stage on " + (s.state || "ok"), style: `--i:${i}`, role: "listitem" },
+    stages.map((s, i) => h("div", { class: "stage " + (s.state || "ok") + (s.state === "idle" ? "" : " on"), style: `--i:${i}`, role: "listitem" },
       h("div", { class: "node" }, String(i + 1)), h("div", { class: "t" }, s.short || s.t), s.d ? h("div", { class: "d" }, s.d) : null)));
   el.replay = () => { el.classList.remove("play"); void el.offsetWidth; el.classList.add("play"); };
   return el;

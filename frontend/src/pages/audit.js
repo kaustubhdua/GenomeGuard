@@ -8,7 +8,7 @@ export async function render() {
   const root = h("div", {});
   root.dataset.title = "Audit log";
   root.append(h("h1", {}, "Audit log"),
-    h("p", { class: "lede" }, "Every request, decision, protection, alert and agent note is chained to the entry before it. Changing any past entry breaks the chain at that entry."));
+    h("p", { class: "lede" }, "Every request, decision, protection, alert and agent note is chained to the entry before it. Editing an entry without rebuilding later hashes breaks verification; a trusted external anchor helps detect a rewritten history."));
   if (!isSteward()) { root.append(notice("warn", "The full log is for stewards. Anyone can still check that it is intact: "), h("p", {}, h("a", { href: "/audit/verify" }, "Verify the chain"), " · ", h("a", { href: "/audit/head" }, "Current head hash"))); return root; }
   const body = h("div", {});
   root.append(body);
@@ -42,7 +42,7 @@ export async function render() {
       row("Status", "Recomputed on every view", status, a ? h("p", { class: "muted" }, `Also checked against your saved anchor (${a.length} entries): ${v.ok ? "matches" : "does not match"}.`) : null,
         h("div", { style: "margin-top:10px" }, h("button", { class: "ghost", onclick: draw }, "Verify now"))),
       row("Head hash", `${head.length} entries`, h("code", { class: "hash" }, head.head_hash), h("div", { style: "display:flex;gap:8px;margin-top:8px;flex-wrap:wrap" }, copyBtn, anchorBtn),
-        h("p", { class: "muted" }, "Copy this somewhere outside the system, such as the README or a slide. Someone with full database access could rewrite every hash, but not the copy you hold. The chain makes tampering detectable, not impossible.")),
+        h("p", { class: "muted" }, "Store this hash in a trusted location outside this database. Someone with full database access could rewrite every hash in the database, but cannot change your external copy. The chain makes tampering detectable, not impossible.")),
       row("The chain", bad != null ? "Red block = first broken entry" : "Latest entries, oldest at the left", strip, tamper),
       row("Entries", "Newest first, click to expand", h("div", {}, entries.map((e) => h("details", { class: "entry" }, h("summary", {}, h("b", {}, "#" + e.idx), h("span", {}, `${e.action} `, h("span", { class: "muted" }, e.actor)), h("span", { class: "muted mono" }, e.ts.slice(11, 19))), h("pre", {}, JSON.stringify(e.payload, null, 2)))))));
     body.replaceChildren(ledger);

@@ -5,11 +5,11 @@ export async function render() {
   const root = h("div", {});
   root.dataset.title = "Federated analysis";
   root.append(h("h1", {}, "Federated analysis"),
-    h("p", { class: "lede" }, "Hospitals keep their own genomes. They combine results using secret sharing, so no site, and not even the coordinator, sees another site's numbers. Only the total is revealed."));
+    h("p", { class: "lede" }, "This experiment illustrates how sites could combine selected statistics using secret sharing without pooling their input rows. It uses simulated sites and does not represent a hardened multi-organization deployment."));
   const res = await api("/federated/demo");
   if (!res.ok) { root.append(notice("err", errorText(res))); return root; }
   const d = res.data, lr = d.logistic_regression, af = d.allele_frequency;
-  root.append(notice("warn", h("b", {}, "Simulated hospitals on synthetic data. "), "Model training and frequencies use secret sharing. The encrypted-counts section below uses real Paillier homomorphic encryption."));
+  root.append(notice("warn", h("b", {}, "Simulated hospitals on synthetic data. "), "The secret-sharing and Paillier sections are educational implementations using synthetic data; they are not independently audited security controls."));
   const ledger = h("div", { class: "ledger" });
   ledger.append(row("Sites", "Each cohort plays one hospital",
     h("div", { class: "tablewrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Hospital"), h("th", { class: "num" }, "Donors kept on site"))),

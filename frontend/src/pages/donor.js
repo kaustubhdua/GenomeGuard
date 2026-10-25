@@ -8,14 +8,14 @@ const plain = (s) => String(s || "").replaceAll("_", " ");
 
 export async function render() {
   const root = h("div", { class: "donor" });
-  if (!state.donors.length) return h("div", { class: "empty" }, "Patient demo personas are not available (demo mode is off).");
+  if (!state.donors.length) return h("div", { class: "empty" }, "Simulated participant records are unavailable because the sample-data mode is disabled.");
   const body = h("div", { class: "stack" });
-  const pick = h("select", { id: "persona", "aria-label": "Demo patient", onchange: (e) => { state.donor = state.donors.find((d) => String(d.id) === e.target.value); load(); } },
+  const pick = h("select", { id: "persona", "aria-label": "Simulated participant", onchange: (e) => { state.donor = state.donors.find((d) => String(d.id) === e.target.value); load(); } },
     state.donors.map((d) => h("option", { value: d.id }, d.label)));
   pick.value = state.donor.id;
   root.append(h("h1", {}, "Your data, in your hands"),
-    h("p", { class: "lede" }, "This is the patient's side of GenomeGuard. You can see what you agreed to, who used statistics that included you, and withdraw whenever you like."),
-    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Demo patient (simulated consent)", pick), body);
+    h("p", { class: "lede" }, "This view illustrates participant consent controls. The records are simulated; changes affect only this local demonstration and are not real-world consent actions."),
+    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Simulated participant (not a real consent record)", pick), body);
   const flash = h("div", { "aria-live": "polite" });
 
   async function load() {

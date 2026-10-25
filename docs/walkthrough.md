@@ -1,32 +1,43 @@
-# Three-minute walkthrough
+# Application walkthrough
 
-Run it on a **fresh database**: the probe account gets frozen (a steward can unfreeze it) and the
-tamper step breaks the audit chain until you press **Undo demo tamper**. `make demo` runs the same steps automatically and checks each one.
+This guide describes the main workflows in the local GenomeGuard interface. Use a fresh local database so the seeded records, anomaly demonstrations, and audit-integrity examples start in a known state.
 
-**Shortcut:** on the Overview, **Take the 3-minute tour** walks the same story and performs the
-two live actions (send the researcher's request, run the probing account) for you. Use it if you
-would rather talk than click. `make ui-smoke` replays it in a headless browser as a regression test.
+## Start the application
 
+From the repository root:
+
+```bash
+make setup
+make seed
+make run
 ```
-GG_DB_PATH=/tmp/demo.sqlite3 GG_ALLOW_TAMPER_DEMO=true make run
+
+Open http://127.0.0.1:8000. For a disposable database with the audit-tampering demonstration enabled, use a separate local environment and set `GG_DB_PATH` and `GG_ALLOW_TAMPER_DEMO=true` before starting the server. Never enable demonstration tampering on a non-demo environment.
+
+## Explore the workflows
+
+1. **Overview:** review the service status, cohort provenance, and summary metrics. Check whether the current cohort is synthetic or uses public genotype data.
+2. **Requests:** submit a research request using a demo requester. Review the policy outcome, reason codes, risk estimate, and any output transformation.
+3. **Decision details:** inspect the evidence and transformations behind a decision. Relative-exposure figures are model estimates, not predictions about any specific person's relatives.
+4. **Family exposure:** review the relationship model and its provenance. The default model is simulated; it must not be interpreted as an assessment of a real family.
+5. **Anomalies:** inspect flagged query patterns and the state of demo accounts. The included traffic is scripted and does not represent measured production traffic.
+6. **Steward review:** open a held request and run the read-only copilot. It can gather sanitized summaries and recommend next steps, but a human makes the final decision.
+7. **Audit log:** verify the hash chain and inspect the event history. The chain makes edits detectable when checked against a trusted anchor; it does not prevent a privileged operator from rewriting the database and recomputing hashes.
+8. **Donor view:** inspect the simulated consent record and available export. These records are not real participant consents.
+9. **Red-team results:** review the evaluation scenarios, assumptions, and limitations alongside the reported metrics.
+10. **Federated analysis:** explore the demonstration of multi-party analysis. The local implementation is not a hardened multi-organization service.
+
+## Guided tour and automated checks
+
+The Overview page includes a guided tour that demonstrates selected request and anomaly workflows. To replay the automated scenario and its assertions, run:
+
+```bash
+make demo
+make ui-smoke
 ```
-Open the app, say once: **"All data here is synthetic."**
 
-| Time | You do | You say |
-|---|---|---|
-| 0:00 | Requests page, acting as *Dr. Amara Nwosu*. Click **Send request** (diabetes preset). | "A researcher wants allele frequencies for a diabetes study. GenomeGuard checks consent first." |
-| 0:25 | Open the decision. Point at the consent bar and the exclusion reasons. | "453 of 600 donors consented to this use. 95 are excluded because their consent is for another disease, 15 withdrew. Withdrawal works immediately." |
-| 0:45 | Point at the risk gauge, before and after. Read the **Protections** line. | "The request included two very rare variants with only a few carriers. Those would point at individuals, so they were dropped. Risk goes from high to low." |
-| 1:05 | Switch to **Steward**. Open **Family exposure**. | "Rare variants run in families. Dark nodes are carriers; glowing nodes are relatives who never joined the study but would be exposed. This is a simulated model with expected-average kinship, not a forecast about any real database." |
-| 1:30 | Switch to *Probe Account*. Requests, **Run probe sequence**. | "Another account sends many slightly different narrow queries, the classic way to triangulate one person." |
-| 1:45 | Switch to Steward, **Anomalies**. | "The monitor's score rises, the differencing guard blocks one query because two cohorts differ by fewer than 20 people, and the account is frozen with a clear 403. An escalation waits for a human, who can unfreeze." |
-| 2:00 | Open the held request. The **Steward copilot** runs on its own. | "An agent investigates: it chooses to read consent, risk, the account's history and the audit chain, then recommends. It can read but not approve or freeze anything. Without an API key a built-in planner does the same, so this never fails on stage. A human clicks the decision." |
-| 2:20 | **Audit log**. Point at *Chain valid* and the head hash. Click **Tamper with entry** 3, then **Verify now**. | "Every step is in a hash chain. Change one past entry and the chain breaks at exactly that entry. It makes tampering detectable, not impossible, so we publish the head hash outside the system." |
-| 2:42 | **Red-team results**. | "We attack our own system and measure it. The tracker attack recovers 100% with no defence and falls to the guessing baseline with the guard. Noise that hides membership also destroys most of the signal; that trade-off is reported honestly. Zero false alarms on 500 simulated researchers, which is our assumed traffic, not measured logs." |
-| 2:55 | Optional: **Federated** tab. | "Hospitals can also analyse together without pooling genomes." |
+These checks run against local test/demo data. They do not verify a public deployment or substitute for manual accessibility and usability testing.
 
-## If something goes wrong
+## Resetting demo state
 
-- Chain already tampered: press **Undo demo tamper** on the Audit page (it removes only the demo marker; any other edit stays detected). Probe already frozen: unfreeze on Anomalies, or restart with a new `GG_DB_PATH`.
-- No API key: nothing to do. Explanations come from templates, which is the default.
-- Browser cached an old state: hard reload, or clear site data for the page.
+Some workflows intentionally change state: the probing account can be frozen, and the audit-integrity example can mark a demo entry as tampered. Use the corresponding demo-only recovery action or restart with a fresh `GG_DB_PATH`. Do not use these controls against real records.

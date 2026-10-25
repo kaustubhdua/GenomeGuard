@@ -10,7 +10,7 @@ That run verifies the real-genotype ingestion/evaluation path only. It does **no
 |---|---|
 | Genotypes, allele frequencies, population labels | Real. 1000 Genomes participants consented to open public release of their genetic data. |
 | Parent/child and sibling links | Real, from the pedigree file. Other relationships are derived with the same expected-average kinship model as the synthetic data. |
-| Donor consent records | **Still simulated.** No real person consented to *this* system, and 1000 Genomes has no per-person DUO consent. The app labels this on every page, and the README and slides must too. |
+| Donor consent records | **Still simulated.** No real person consented to *this* system, and 1000 Genomes has no per-person DUO consent. The interface and documentation must label this clearly in every relevant view and report. |
 | Requesters and query traffic | Demo accounts and scripted attacks. |
 
 ## Which release
@@ -51,7 +51,7 @@ in `backend/app/data/real.py` and a fixture test.
   called "real" is decided by the cohort file's own metadata (`genotypes_real`), never by the
   fact that a file was supplied; a file without it is labelled "custom cohort". The report records
   the file's SHA-256 and skips the seed-robustness section, which is synthetic-only. Say on the
-  slide which dataset the numbers came from; they will differ from the synthetic ones.
+  record which dataset produced the numbers; results will differ from synthetic-cohort results.
 - Real genomes have linkage disequilibrium and population structure that the synthetic generator
   only approximates, so attack success could move in either direction.
 

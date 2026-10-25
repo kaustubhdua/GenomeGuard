@@ -157,7 +157,7 @@ def main() -> None:
               and "403" not in m.text else None)
         pg.goto(base + "/#/overview")
         pg.wait_for_timeout(1500)
-        pg.get_by_role("button", name="Take the 3-minute tour").click()
+        pg.get_by_role("button", name="Guided walkthrough").click()
         notes: dict[int, str] = {}
         for step in range(1, 9):
             if step in (2, 4):

@@ -1,7 +1,5 @@
-// Guided tour: walks the scripted demo, and its two action steps call the real API (they send the
-// researcher's request and run the probing account for real). Nothing here is canned: every
-// outcome shown comes from the running system. State lives in this module, so the card survives
-// page changes while the tour moves between pages.
+// Guided walkthrough of selected workflows. Action steps call the API to submit a request and
+// exercise the query monitor. Results depend on the running service and its current state.
 import { api, stewardApi, state, setWho } from "./api.js";
 import { h, OUTCOME_LABEL } from "./ui.js";
 
@@ -28,7 +26,7 @@ async function heldId() {
 
 const STEPS = [
   { title: "What this is", hash: "#/overview",
-    text: "Genomic data can expose a person's relatives, who never agreed to anything. GenomeGuard sits in front of the data and decides who can see what, explains why, and keeps a record nobody can quietly edit. Agents advise. Fixed rules decide. A person signs off on anything risky." },
+    text: "Genomic data can expose a person's relatives, who never agreed to anything. GenomeGuard sits in front of the data and decides who can see what, explains why, and keeps a hash-chained record that makes unaltered history verifiable against a trusted external anchor. Agents advise. Fixed rules decide. A person signs off on anything risky." },
   { title: "A researcher asks for diabetes statistics", hash: () => (ctx.study ? "#/request/" + ctx.study : "#/requests"),
     text: "A registered researcher wants allele frequencies for a diabetes study, including two very rare variants. The system will check consent, score the risk, add protections and record everything.",
     action: { label: "Send the researcher's request", run: async () => {
@@ -54,13 +52,13 @@ const STEPS = [
       return { hash: "#/anomalies", note: frozen ? (n ? `The account was frozen after ${n} accepted queries. A held request is now waiting for a human.` : "That account was already frozen from an earlier run. A steward can unfreeze it on this page.") : `${n} queries were sent and the monitor has not frozen the account yet.` };
     } } },
   { title: "The steward copilot investigates", hash: async () => { ctx.held = await heldId(); return ctx.held ? "#/request/" + ctx.held : "#/requests"; },
-    text: "On the held request, an agent chooses which evidence to gather (consent, risk, relatives, history, audit) and recommends. It can read but cannot approve, deny or freeze anything. Without an API key a built-in planner does the same job, so it never fails on stage." },
+    text: "On the held request, an agent chooses which evidence to gather (consent, risk, relatives, history, audit) and recommends. It can read but cannot approve, deny or freeze anything. Without an API key a built-in planner does the same job, as a deterministic fallback when no model API key is configured." },
   { title: "Proof nothing was edited", hash: "#/audit",
     text: "Every step so far was added to a hash chain. Change any past entry and the chain breaks at exactly that entry. Press Verify now. Copy the head hash somewhere outside the system: that is what makes a full rewrite detectable. (The tamper button is demo-only; Undo demo tamper removes its marker so you can repeat it.)" },
   { title: "Measured, not claimed", hash: "#/redteam",
     text: "We attack our own system and report what happens, including where it fails and what the evaluation does not show. Every number comes from one command with fixed seeds." },
-  { title: "The patient's side", hash: "#/donor", last: true,
-    text: "Donors see what they agreed to, which statistics included them, and can change or withdraw consent. They can also download their consent as a standard FHIR record. This consent is simulated, because no real person consented to this system." },
+  { title: "Participant view", hash: "#/donor", last: true,
+    text: "Explore the simulated participant consent record, its controls, and the FHIR R4 export. These records are synthetic and changes do not alter real-world consent." },
 ];
 
 function close() {

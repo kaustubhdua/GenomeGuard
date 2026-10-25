@@ -51,8 +51,7 @@ claims legal compliance: GenomeGuard is **designed around the ideas of** DPDP, G
   is added to raw counts and binning is post-processing, which keeps the guarantee valid, but the
   per-release epsilon split is a design choice.
 - **The hash chain makes tampering detectable, not impossible.** Someone with full database
-  write access can recompute every hash. Publish the head hash outside the system (README, slide,
-  the Audit page's "Save as my anchor") so a rewritten history no longer matches.
+  write access can recompute every hash. Record the head hash in a trusted location outside the database (for example, a separately stored audit anchor) so a rewritten history can be detected.
 - **Encryption at rest protects a stolen file, not a compromised process.** The master key is an
   environment variable here; production needs a KMS or HSM. Transport security (TLS) comes from
   the hosting platform.
@@ -62,11 +61,9 @@ claims legal compliance: GenomeGuard is **designed around the ideas of** DPDP, G
 - **The copilot is advisory and its guardrails are partial.** It cannot act, and it cannot be more
   permissive than the rules, but a model could still write a misleading rationale; only the
   numbers in it are checked against the evidence. A human steward makes the call.
-- **FHIR export is not validated.** `consent.fhir.json` follows the R4 `Consent` structure but has
-  not been run through a FHIR validator. DUO terms travel in namespaced extensions, and only the
-  two DUO ids confirmed from the official ontology are emitted as ids.
+- **FHIR validation has a limited scope.** A generated synthetic Consent resource passed the pinned HL7 FHIR Validator CLI against R4 4.0.1 and the project's extension definitions. This does not establish legally valid consent or validate a real consent workflow. DUO terms travel in namespaced extensions, and only the two DUO ids confirmed from the official ontology are emitted as ids.
 - **Demo mode is deliberately insecure.** `GG_DEMO_MODE=true` publishes the demo API keys and the
-  steward key at `/demo/requesters` so judges can switch roles. That is only acceptable because
+  steward key at `/demo/requesters` for role switching during local demonstrations. That is only acceptable because
   the data is synthetic. Turn it off for anything else.
 - **Not modelled:** the DUO consent-form-date limit; per-jurisdiction legal tests; insider abuse
   by a steward; side channels such as timing.
