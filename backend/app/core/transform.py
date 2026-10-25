@@ -17,7 +17,7 @@ noising. Downgrading a frequency request to boolean destroys most of its utility
 boolean downgrade is the LAST automatic step; only record -> count happens early (individual
 rows must never leave without a human).
 
-Differential-privacy notes (be honest with judges):
+Differential-privacy notes (stated plainly):
   * Noise is added to RAW counts and binning is applied afterwards as post-processing, which is
     the order that keeps the guarantee valid.
   * One donor changes every released count by up to 2, so the L1 sensitivity of m counts is 2m and

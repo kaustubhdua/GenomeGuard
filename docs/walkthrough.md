@@ -1,7 +1,7 @@
-# Three-minute demo script
+# Three-minute walkthrough
 
-Run it on a **fresh database** (the probe account freezes and the audit chain gets tampered (Undo demo tamper reverses that), and
-those are permanent). `make demo` runs the same steps automatically and checks each one.
+Run it on a **fresh database**: the probe account gets frozen (a steward can unfreeze it) and the
+tamper step breaks the audit chain until you press **Undo demo tamper**. `make demo` runs the same steps automatically and checks each one.
 
 **Shortcut:** on the Overview, **Take the 3-minute tour** walks the same story and performs the
 two live actions (send the researcher's request, run the probing account) for you. Use it if you

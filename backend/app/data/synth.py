@@ -1,7 +1,7 @@
 """Synthetic cohort generator (section 7.1). Pure numpy: no database, no config import, so it is
 easy to test and reuse. ALL DATA IS SYNTHETIC; nothing here is derived from a real person.
 
-Simplifications (state these honestly to judges): variants are treated as unlinked (no
+Simplifications (stated plainly): variants are treated as unlinked (no
 recombination model), each family belongs to a single population, and population differences are
 a simple Beta perturbation of a shared base frequency, not a coalescent simulation (msprime is an
 optional upgrade, not a dependency).
