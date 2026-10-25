@@ -2,16 +2,18 @@ name: Real-data validation (1000 Genomes)
 
 on:
   push:
-    branches: [release/real-data-validation]
+    branches: [main, release/real-data-validation]
     paths:
       - "backend/app/data/real.py"
       - "backend/tests/test_real.py"
       - "backend/redteam/run_eval.py"
       - ".github/workflows/real-data-validation.yml"
+      - "Makefile"
+      - "backend/app/data/pedigree.py"
   workflow_dispatch:
 
 concurrency:
-  group: real-data-validation
+  group: real-data-validation-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
