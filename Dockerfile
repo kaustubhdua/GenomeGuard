@@ -17,9 +17,7 @@ COPY scripts ./scripts
 # Secrets come from the environment at run time, never from the image.
 # GG_MASTER_KEY: base64 of 32 random bytes (python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())")
 # GG_ADMIN_API_KEY: the steward key.
-ENV GG_DB_PATH=/data/genomeguard.sqlite3 PORT=8000 \\
-    GG_REAL_COHORT_FILE=/app/data_real/1000g_phase3_chr22.npz \\
-    GG_DATASET_ID=igsr-1000g-phase3-public-release
+ENV GG_DB_PATH=/data/genomeguard.sqlite3 PORT=8000 GG_REAL_COHORT_FILE=/app/data_real/1000g_phase3_chr22.npz GG_DATASET_ID=igsr-1000g-phase3-public-release
 RUN useradd -m app && mkdir -p /data && chown app /data
 USER app
 EXPOSE 8000
