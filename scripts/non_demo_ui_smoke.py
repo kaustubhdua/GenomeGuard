@@ -67,7 +67,7 @@ def main() -> int:
             if headers.get("x-api-key") == "valid-researcher-key":
                 return fulfill(route, 200, {"id": 17, "name": "Researcher", "tier": "registered"})
             return fulfill(route, 401, {"error": "unauthorized", "message": "requester key required"})
-        if path == "/audit/head":
+        if path == "/anomalies":
             if headers.get("x-admin-key") == "valid-steward-key":
                 return fulfill(route, 200, {"length": 0, "head_hash": "0" * 64})
             return fulfill(route, 401, {"error": "unauthorized", "message": "steward key required"})
