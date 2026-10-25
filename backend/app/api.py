@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -131,6 +132,28 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             {"id": reqs[n]["id"], "name": n, "role": ro, "tier": lv, "api_key": k,
              "frozen": reqs[n]["frozen_at"] is not None}
             for n, ro, lv, _i, k in DEMO_REQUESTERS if n in reqs]})
+
+    @route("POST", "/admin/requesters", "Provision a requester API key (returned once)", "admin")
+    async def provision_requester(request):
+        admin(request)
+        if settings.demo_mode:
+            raise ServiceError(404, "not_found", "requester provisioning is disabled in demo mode")
+        body = await _body(request)
+        name = body.get("name")
+        institution = body.get("institution")
+        level = body.get("credential_level", "registered")
+        if not isinstance(name, str) or not 2 <= len(name.strip()) <= 120:
+            raise ServiceError(422, "invalid_request", "name must contain 2 to 120 characters")
+        if not isinstance(institution, str) or not 2 <= len(institution.strip()) <= 200:
+            raise ServiceError(422, "invalid_request", "institution must contain 2 to 200 characters")
+        if level not in ("registered", "controlled"):
+            raise ServiceError(422, "invalid_request",
+                               "credential_level must be registered or controlled")
+        key = secrets.token_urlsafe(32)
+        requester_id = S().create_requester(name.strip(), "researcher", level,
+                                            institution.strip(), key)
+        return _j({"id": requester_id, "name": name.strip(), "institution": institution.strip(),
+                   "credential_level": level, "api_key": key, "shown_once": True}, 201)
 
     @route("GET", "/me", "Who am I, my budget", "requester")
     async def me(request):
