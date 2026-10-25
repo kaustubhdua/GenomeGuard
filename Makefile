@@ -5,7 +5,7 @@ PIP ?= .venv/bin/pip
 
 setup:
 	python3 -m venv .venv
-	$(PIP) install --upgrade pip
+	$(PIP) install --upgrade pip "setuptools>=84.1.0"
 	$(PIP) install -e ".[dev]"
 
 seed:
