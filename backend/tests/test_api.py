@@ -150,6 +150,17 @@ def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
     client = TestClient(create_app(svc))
 
     assert client.get("/demo/requesters").status_code == 404
+    for path in ("/demo/donors", "/donor/1", "/federated/demo", "/federated/he",
+                 "/eval/results", "/admin/tamper/1", "/admin/untamper"):
+        if path in ("/admin/tamper/1", "/admin/untamper"):
+            response = client.post(path, headers={"X-Admin-Key": admin_key})
+        else:
+            response = client.get(path)
+        assert response.status_code == 404, path
+    docs = client.get("/openapi.json").json()
+    documented_paths = {item["path"] for item in docs["endpoints"]}
+    assert not any(path.startswith(("/demo/", "/donor/", "/federated/")) for path in documented_paths)
+    assert "/eval/results" not in documented_paths
     assert client.post("/admin/requesters", json={"name": "Researcher One",
                                                    "institution": "Research Institute"}).status_code == 401
     response = client.post("/admin/requesters", headers={"X-Admin-Key": admin_key},

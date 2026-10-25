@@ -12,7 +12,11 @@ const ROSTER = [
 ];
 
 export async function render() {
-  const [reqs, verify, ev, me] = await Promise.all([api("/requests"), api("/audit/verify"), api("/eval/results"), isSteward() ? Promise.resolve({ ok: false }) : api("/me")]);
+  const [reqs, verify, ev, me] = await Promise.all([
+    api("/requests"), api("/audit/verify"),
+    state.demo ? api("/eval/results") : Promise.resolve({ ok: false }),
+    isSteward() ? Promise.resolve({ ok: false }) : api("/me"),
+  ]);
   const rows = reqs.ok ? reqs.data.requests || [] : [];
   const hl = state.health || {};
   const count = (o) => rows.filter((r) => r.outcome === o).length;
@@ -33,7 +37,7 @@ export async function render() {
     h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px" },
       tourAvailable() ? h("button", { onclick: startTour }, "Guided walkthrough") : null,
       h("a", { class: tourAvailable() ? "btn ghost" : "btn", href: "#/requests" }, isSteward() ? "Review requests" : "Send a request"),
-      h("a", { class: "btn ghost", href: "#/donor" }, "Participant view")),
+      state.demo ? h("a", { class: "btn ghost", href: "#/donor" }, "Participant view") : null),
     pipe, h("p", { class: "muted", style: "margin:12px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap" }, caption,
       latest ? h("button", { class: "ghost", onclick: () => pipe.replay() }, "Replay workflow") : null));
   root.append(hero);
@@ -42,7 +46,9 @@ export async function render() {
   if (pv.genotypes) root.append(card("Where the data comes from", "Labelled so nothing is overstated",
     h("dl", { class: "facts" },
       h("dt", {}, "Genotypes"), h("dd", {}, pv.genotypes_label),
-      h("dt", {}, "Consent records"), h("dd", {}, pv.consent_label + " (real donors never gave per-person consent for this demo)"),
+      h("dt", {}, "Consent records"), h("dd", {}, pv.consent_label + (pv.consent === "simulated"
+        ? " — simulated records; not valid participant consent."
+        : " — imported source records; legal validity is not independently verified.")),
       h("dt", {}, "Relatives"), h("dd", {}, pv.relatives_label),
       h("dt", {}, "Agents"), h("dd", {}, pv.agents_label + ". They never see genotypes."),
       h("dt", {}, "Storage"), h("dd", {}, pv.encryption))));
@@ -57,17 +63,20 @@ export async function render() {
 
   const feed = rows.length
     ? h("ul", { class: "feed" }, rows.slice(0, 6).map((r) => h("li", {}, badge(r.outcome), h("a", { href: "#/request/" + r.id }, `#${r.id} ${((r.request || {}).purpose || "").replaceAll("_", " ")}, ${(r.request || {}).data_level}`), h("span", { class: "m" }, when(r.ts)))))
-    : h("div", { class: "empty" }, "Nothing yet. Open Requests and run the diabetes preset.");
+    : h("div", { class: "empty" }, state.demo
+      ? "Nothing yet. Open Requests and run a demo preset."
+      : "No requests yet. Submit an authorized request from the Requests page.");
   const proof = h("dl", { class: "facts" },
     h("dt", {}, "Differencing attack, no defence"), h("dd", {}, diff ? pct(diff.none.mean, 0) + " recovered" : "run make eval"),
     h("dt", {}, "Same attack with GenomeGuard"), h("dd", {}, diff ? pct(diff.ladder_plus_guard.mean, 0) + " (guessing is " + pct(diff.baseline.mean, 0) + ")" : "n/a"),
-    h("dt", {}, "Donors / variants"), h("dd", {}, `${hl.donors ?? "n/a"} / ${hl.variants ?? "n/a"} (${{ real_1000g: "real 1000 Genomes", custom: "custom cohort file" }[pv.genotypes] || "synthetic"})`),
+    h("dt", {}, "Donors / variants"), h("dd", {}, `${hl.donors ?? "n/a"} / ${hl.variants ?? "n/a"} (${pv.genotypes_label || "provenance unknown"})`),
     h("dt", {}, "Smallest cohort released"), h("dd", {}, String(hl.k_min ?? "n/a")));
   root.append(h("div", { class: "grid g-main" },
     card("Recent activity", rows.length ? h("a", { href: "#/requests" }, "All requests") : null, feed),
-    card("Does it hold up?", h("a", { href: "#/redteam" }, "Red-team results"), proof)));
+    state.demo ? card("Does it hold up?", h("a", { href: "#/redteam" }, "Red-team results"), proof) : null));
 
+  const roster = state.demo ? ROSTER : ROSTER.filter(([name]) => name !== "Consent concierge");
   root.append(card("The agent team", "Agents advise, rules decide",
-    h("div", { class: "grid g2" }, ROSTER.map(([n, t]) => h("div", {}, h("b", {}, n), h("p", { class: "muted", style: "margin:2px 0 0" }, t))))));
+    h("div", { class: "grid g2" }, roster.map(([n, t]) => h("div", {}, h("b", {}, n), h("p", { class: "muted", style: "margin:2px 0 0" }, t))))));
   return root;
 }

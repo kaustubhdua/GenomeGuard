@@ -60,7 +60,7 @@ export function donorApi(path, opts = {}) {
 
 export async function connectKey(kind, key) {
   const result = kind === "steward"
-    ? await call("/audit/head", { headers: { "X-Admin-Key": key } })
+    ? await call("/anomalies", { headers: { "X-Admin-Key": key } })
     : await call("/me", { headers: { "X-API-Key": key } });
   if (!result.ok) return result;
   if (kind === "steward") {
@@ -71,6 +71,11 @@ export async function connectKey(kind, key) {
     setWho(key);
   }
   return result;
+}
+
+export function disconnectKey() {
+  state.adminKey = "";
+  setWho("");
 }
 
 export async function boot() {
