@@ -1,6 +1,6 @@
 # GenomeGuard — judge-readiness research and execution plan
 
-Last researched: 25 October 2026. This is a prioritized engineering plan, not a claim that each item is already implemented or verified.
+Last researched: 25 October 2026. Latest main baseline verified: `dfb618b909337c535a976b87950b0e31b4bcc7a0` with passing CI run [#40156142028](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40156142028). This is a prioritized engineering plan, not a claim that each item is already implemented or verified.
 
 ## Executive recommendation
 
@@ -9,7 +9,7 @@ Make the demo **trustworthy, repeatable, and easy to judge** before adding more 
 ## P0 — Before the judging session
 
 ### 1. Prove the deployed commit and run the demo from a fresh session
-- Record the public URL, Render service ID, deployed commit SHA, deploy timestamp, and the health-check result.
+- Record the public URL, Render service ID, deployed commit SHA, deploy timestamp, and the health-check result. **No public deployment is verified in the current evidence**; do not invent or infer an `onrender.com` URL from the service name.
 - Run `make deploy-smoke URL=<actual-public-url>` against that exact deployment, then manually complete the guided tour on the deployed URL.
 - Verify all nine routes, researcher/steward role switching, the donor view, request creation, held-request review, anomaly freeze, audit verification, and the red-team page.
 - Test a cold start and an unavailable API. The app must show a useful error/retry state rather than a permanent skeleton.
