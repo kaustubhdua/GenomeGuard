@@ -9,7 +9,10 @@ Usage: python scripts/live_ui_smoke.py --base https://actual-service.example
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+from urllib.parse import urlparse
+
 from playwright.sync_api import sync_playwright
 
 PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies",
@@ -42,13 +45,32 @@ def main() -> int:
             page.set_default_timeout(args.timeout)
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append("JavaScript: " + str(e)))
-            page.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}")
-                    if r.status >= 400 and r.status != 403 else None)
+
+            def record_http_error(response):
+                if response.status < 400 or response.status == 403:
+                    return
+                path = urlparse(response.url).path
+                # A fresh demo has no request history yet. The API intentionally returns
+                # JSON 404/not_found for a request ID that does not exist; test that the
+                # UI renders this empty-data state rather than treating it as a broken route.
+                expected_empty_record = (
+                    response.status == 404
+                    and re.fullmatch(r"/requests/\\d+(?:/exposure)?", path)
+                    and "application/json" in response.headers.get("content-type", "")
+                )
+                if not expected_empty_record:
+                    errors.append(f"HTTP {response.status} {response.url}")
+
+            page.on("response", record_http_error)
             for route in PAGES:
                 try:
                     page.goto(base + "/" + route, wait_until="domcontentloaded")
                     page.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
-                    check(f"{theme} {route}", page.locator("#view h1").count() == 1)
+                    content = page.locator("#view").inner_text().lower()
+                    if route in ("#/request/1", "#/family/1") and "no such request" in content:
+                        check(f"{theme} {route} explicit empty-data state", True)
+                    else:
+                        check(f"{theme} {route}", page.locator("#view h1").count() == 1)
                 except Exception as exc:
                     check(f"{theme} {route}", False, f"{type(exc).__name__}: {str(exc)[:160]}")
             check(f"no JavaScript errors ({theme})", not errors, "; ".join(errors)[:240])
