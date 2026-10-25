@@ -146,6 +146,7 @@ def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
             admin_api_key="a-unique-production-admin-secret-long-enough",
             master_key=base64.b64encode(b"x" * 32).decode(),
             real_cohort_file=str(out),
+            dataset_id="test-approved-cohort",
         )
         with pytest.raises(ValueError, match="simulated or missing consent"):
             bootstrap(settings)
