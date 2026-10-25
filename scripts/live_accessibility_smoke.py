@@ -55,7 +55,7 @@ def main() -> int:
                         ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]}});
                       return r.violations.map(v => ({id:v.id, impact:v.impact, help:v.help,
                         nodes:v.nodes.length})); }""")
-                    blocking = [v for v in violations if v["impact"] in ("critical", "serious")]
+                    blocking = [v for v in violations if v["impact"] in ("critical", "serious") or v["id"] == "heading-order"]
                     details = blocking if blocking else [
                         {"id": v["id"], "impact": v["impact"], "help": v["help"]} for v in violations
                     ]
