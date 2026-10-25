@@ -56,8 +56,11 @@ def main() -> int:
                       return r.violations.map(v => ({id:v.id, impact:v.impact, help:v.help,
                         nodes:v.nodes.length})); }""")
                     blocking = [v for v in violations if v["impact"] in ("critical", "serious")]
+                    details = blocking if blocking else [
+                        {"id": v["id"], "impact": v["impact"], "help": v["help"]} for v in violations
+                    ]
                     check(f"axe critical/serious ({theme} {route})", not blocking,
-                          str(blocking)[:320] if blocking else f"{len(violations)} non-blocking finding(s)")
+                          str(details)[:420] if details else "no findings")
                 except Exception as exc:
                     check(f"axe route ({theme} {route})", False,
                           f"{type(exc).__name__}: {str(exc)[:180]}")
