@@ -64,8 +64,10 @@ def validate_settings(s: Settings) -> None:
         problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:
         problems.append("GG_ALLOW_TAMPER_DEMO must be false")
-    if not s.real_cohort_file.strip():
+    if not (s.real_cohort_file or "").strip():
         problems.append("GG_REAL_COHORT_FILE must point to a real cohort with explicit consent records")
+    if s.dataset_id == "synthetic-cohort-1" or not s.dataset_id.strip():
+        problems.append("GG_DATASET_ID must be a unique identifier for the approved real cohort")
     if not s.master_key:
         problems.append("GG_MASTER_KEY must be set to a random base64-encoded 32-byte key")
     else:
