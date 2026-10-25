@@ -1,31 +1,57 @@
 # Verification evidence
 
-Read each result together with its workflow run and tested commit. A passing workflow proves only the checks it actually ran; it does not prove production healthcare readiness.
+Read every result with its exact commit and workflow run. A passing workflow proves only the checks it ran; it does not establish production healthcare readiness.
 
-## Main-branch application checks
-
-- [Latest main CI run #40193504185](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193504185) passed on merged commit `f50f31568e3b664e81f872dea98dc6a81b1bdb43`, including backend tests, lint, evaluation, scripted workflow, JavaScript/Python checks, browser routes, responsive layouts, automated accessibility checks, guided walkthrough, and screenshot capture.
-- [Product/UI cleanup PR #21](https://github.com/kaustubhdua/GenomeGuard/pull/21) passed full CI on PR head `23ea4f7015d306264b44e72663a893683c8d3bdd` in [run #40188338091](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188338091) and was squash-merged as `32e019e0fb79c47573cead15d5dc5a926c6b61a4`.
-- [1000 Genomes Phase 3 ingestion/evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188654628) — 600 samples × 3,000 variants; source hashes and build parameters are recorded.
-- [High-coverage family cohort validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188654612) — 600 samples and 355 observed pedigree relationship pairs; source metadata and simulated-consent status are recorded.
-- [HL7 FHIR R4 Consent validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378296) — a synthetic Consent export was validated with pinned HL7 FHIR Validator CLI 7.0.1 against R4 4.0.1 and the project's extension definitions.
-- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378253) — response envelopes were checked against pinned official schemas; this is not full Beacon certification.
-- [Dependency audit and CycloneDX SBOM](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378259) — the resolved Python dependency set passed the pinned pip-audit checks and an SBOM artifact was generated.
-
-## Public deployment checks
+## Current deployed research instance
 
 - Public URL: https://genomeguard.onrender.com
 - Render service: `srv-dbev1ka9lscs738813t0`
-- Current deployed source commit: `f50f31568e3b664e81f872dea98dc6a81b1bdb43`
-- Latest full live smoke run: [#40193661761](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193661761) — passed health, static assets, synthetic-data and simulated-consent provenance, API docs, permit/deny/held workflows, requester isolation, invalid/absent credential rejection, steward access, audit verification, all nine routes in light and dark themes, responsive widths, keyboard command-palette navigation, mobile-menu behavior, reduced-motion preference, and 640px reflow.
-- Persistence experiment: the synthetic request `3` existed before a manual redeploy of commit `f50f31568e3b664e81f872dea98dc6a81b1bdb43`; after the redeploy, the live API returned 404 for that request. This confirms the current free service did not preserve its SQLite request history. The live run includes the check.
+- Deployed application commit: `154ee80916e1a45080bc4160902516768afaee15`
+- Render deployment: `dep-dbf0ijrrjlhs73951960` (status reported `live`)
+- Current mode: non-demo research mode. The image is built from real public 1000 Genomes/IGSR chromosome 22 genotypes; 600 samples and 3,000 variants are loaded.
+- Live research-mode checks: [run #40199498444](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498444) passed on commit `154ee80916e1a45080bc4160902516768afaee15`.
+- Main CI: [run #40199498577](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498577) passed on the same commit.
+- Real-genotype ingestion/evaluation: [run #40199498450](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498450) passed.
+- FHIR R4 Consent schema validation: [run #40199498532](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498532) passed. This validates an interoperability artifact, not legal consent.
+- GA4GH Beacon v2 response-schema validation: [run #40199498557](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498557) passed. This is core schema validation, not full Beacon certification.
 
-The live axe-core scan found no critical/serious violations or heading-order findings across all nine routes in light and dark themes on deployed commit `f50f3156`. The heading hierarchy was corrected in [PR #22](https://github.com/kaustubhdua/GenomeGuard/pull/22). The live accessibility gate now treats heading-order regressions as failures. Automated checks do not replace human screen-reader testing.
+## What the latest live research-mode run verified
 
-## Limits and non-claims
+The workflow checked the live `/health` response and provenance; confirmed non-demo mode; verified that the genotype source and policy file have SHA-256 hashes; checked that source-policy coverage matches the loaded sample count; and verified that the public-release policy is disclosed as dataset-level rather than participant-specific consent.
 
-All hosted data is synthetic; consent and requester identities are simulated. The current Render free service has no persistent disk, so requests and audit history can reset after restart or deploy. No production persistence, backup/restore, external audit anchoring, multi-instance consistency, or disaster-recovery process has been verified.
+It also verified that `/health/ready` correctly returns HTTP 503 with `ready: false` while durable storage, external audit anchoring, and institutional identity integration remain unverified. Synthetic/demo-only routes were confirmed disabled, unauthenticated request/audit/admin operations were rejected, and the API catalog omitted disabled demo routes.
 
-The public demo is not for real participant information, private genomic data, clinical decisions, or real consent records. The project has not undergone independent security, privacy, clinical, or legal review. The privacy-budget ledger is simplified accounting, not a formal differential-privacy guarantee; the cryptographic/federated components are educational; and core Beacon response checks are not full Beacon certification.
+The same run passed:
+- All nine UI routes in light and dark themes, with no observed JavaScript exceptions.
+- Narrow viewport checks at 320px, 375px, and 414px without horizontal overflow.
+- axe-core checks across all nine routes in both themes, with no critical or serious violations.
+- Keyboard Tab navigation, command-palette navigation and Escape behavior.
+- Mobile menu open/close behavior, reduced-motion preference, and 640px reflow checks.
 
-See [the threat model](threat-model.md), [evaluation results](eval-results.md), [the application walkthrough](walkthrough.md), and [the hosted deployment record](production-deployment.md) for boundaries and reproduction steps.
+Evidence: [live research-mode workflow #40199498444](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498444).
+
+## Data and policy provenance: important distinction
+
+The deployed genotype calls come from the public 1000 Genomes/IGSR release. The service uses a versioned, hashed mapping of the source's published public-release terms to a dataset-level, DUO-inspired policy. It does **not** fabricate individual consent records. This policy mapping is not participant-specific consent, is not independently authenticated or legally reviewed, and does not authorize using other datasets or private clinical records.
+
+The live response reported 600 donors, 3,000 variants, a valid local audit chain, and template-based explanations (no live LLM configured). Relative exposure is a kinship model, not direct measurement of every participant's actual genetic sharing.
+
+## Persistence and security boundaries
+
+The Render service is on the free plan and has no configured persistent disk. Its SQLite database path is `/data/genomeguard.sqlite3`; the filesystem is ephemeral. Requests and audit history therefore must not be assumed to survive a restart, redeploy, or instance replacement. The current live research-mode run did not perform a new destructive persistence experiment.
+
+The live smoke test proves that unauthenticated calls are rejected and that demo-only endpoints are disabled. It does not prove institutional identity: the current service uses provisioned API keys, not OIDC/SSO or verified organizational identities. A local hash chain detects accidental or partial edits but is not immutable against an actor who can rewrite the database and recompute the chain. There is no external audit anchor configured.
+
+The `/health/ready` endpoint deliberately remains not-ready until these underlying capabilities are implemented and independently verified. Do not bypass this gate or submit private participant data.
+
+## Earlier synthetic-demo evidence
+
+The previous demo-mode deployment had a separate passing live workflow, [run #40193661761](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193661761), and a persistence experiment found a pre-redeploy synthetic request missing after redeploy. That result describes the earlier deployment; it is not presented as a new experiment on the current real-public-genotype deployment.
+
+## Research and product limitations
+
+The privacy-budget ledger is simplified accounting, not a formal differential-privacy guarantee. Cryptographic/federated components are educational and not independently audited. The FHIR output is synthetic validation data; core Beacon response checks are not full certification. The public cohort's policy is dataset-level, not individual consent. The application has not undergone independent security, privacy, clinical, legal, or ethics review, and it is not a clinical service.
+
+Human screen-reader testing remains outstanding; automated accessibility checks are not a substitute.
+
+See [the threat model](threat-model.md), [evaluation results](eval-results.md), [real-data evaluation and provenance](real-data.md), [real cohort ingestion and consent requirements](real-cohort-consent.md), and [the hosted deployment record](production-deployment.md) for scope and reproduction details.
