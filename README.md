@@ -149,11 +149,11 @@ generators and real-data loaders | `backend/redteam/` attacks and evaluation | `
 
 ## Current verification evidence
 
-- [Main CI with Playwright and axe-core browser checks](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133832193)
+- [Main CI with Playwright and axe-core browser checks](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035396)
 - [1000 Genomes Phase 3 real-genotype ingestion/evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311)
 - [High-coverage pedigree cohort: 600 samples, 3,000 variants, 355 relationship pairs](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277)
-- [HL7 FHIR R4 validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136212568)
-- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136608336)
+- [HL7 FHIR R4 validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035362)
+- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035388)
 
 These runs prove specific automated gates only. They do not prove that a public Render instance is live, that real consent exists, that Beacon v2 conformance is complete, or that the custom privacy accountant is formally differentially private. The high-coverage run validates pedigree-aware cohort building and simulated attack evaluation, not clinical or consent-management workflows.
 

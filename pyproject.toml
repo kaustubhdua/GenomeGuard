@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "genomeguard"
 version = "0.1.0"
-description = "Consent-aware, relative-aware governance and security layer for genomic data (synthetic data only)."
+description = "Consent-aware, relative-aware governance and security layer for genomic data (synthetic by default; optional real-genotype research evaluation)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

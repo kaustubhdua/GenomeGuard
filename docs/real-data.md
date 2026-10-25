@@ -72,7 +72,7 @@ Selected results from the generated evaluation report (attack/query traffic rema
 - Membership-inference AUC varied with release size and noise; at 500 variants, the simulated attack AUC was 0.721 for raw frequencies and 0.511 for binned frequencies with epsilon 0.5, with very low utility for the latter (correlation 0.020).
 - The query monitor froze all tested attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. This is a measured limitation of the simulated sliding-window monitor, not a claim that slow attacks are stopped.
 
-These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40134445686](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40135423030) for 30 days.
+These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40135423030](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40135423030) for 30 days.
 ## Verified high-coverage family-cohort evaluation (2026-10-24)
 
 The dedicated high-coverage workflow passed on GitHub Actions: [run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277). It downloaded the official IGSR high-coverage chromosome-22 phased variant VCF and the 3,202-sample pedigree/population metadata file, built a pedigree-aware cohort, and completed `eval-real`.
