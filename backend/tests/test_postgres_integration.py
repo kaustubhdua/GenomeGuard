@@ -51,6 +51,7 @@ def test_postgres_persists_request_decision_budget_and_audit(pg_store):
     audit.append("integration-test", "request.created", {"request_id": request_id})
     audit.append("integration-test", "decision.recorded", {"request_id": request_id})
 
+    pg_store.set_request_status(request_id, "released")
     decision = pg_store.decision(request_id)
     assert decision is not None
     assert decision["requester_id"] == requester_id
