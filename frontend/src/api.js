@@ -88,7 +88,10 @@ export async function boot() {
   }
   if (!state.donor && state.donors.length) state.donor = state.donors[0];
   const reqs = state.demo.requesters || [];
-  if (!state.who || (state.who !== "steward" && !reqs.some((r) => r.api_key === state.who))) {
+  const remembered = readStorage("gg_who");
+  if (remembered === "steward" || reqs.some((r) => r.api_key === remembered)) {
+    setWho(remembered);
+  } else {
     setWho(reqs.length ? reqs[0].api_key : "");
   }
 }
