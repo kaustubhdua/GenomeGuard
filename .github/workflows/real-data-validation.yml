@@ -53,6 +53,7 @@ jobs:
           assert m.get("samples", 0) >= 30 and m.get("variants", 0) > 0, m
           assert m.get("relative_pairs", 0) == 0, "Phase 3 panel should not imply pedigree relationships"
           assert m.get("pedigree_relationships_present") is False, m
+          assert m.get("source") == "1000 Genomes (IGSR) Phase 3", m
           assert m.get("source_sample_metadata_file") == "integrated_call_samples_v3.20130502.ALL.panel", m
           assert m.get("family_enriched") is False, "unrelated Phase 3 panel must not be labelled family-enriched"
           report = Path("docs/eval-results-real.md")
