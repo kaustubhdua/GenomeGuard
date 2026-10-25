@@ -38,4 +38,13 @@ jobs:
       - name: Test all pages, responsive layouts, accessibility basics and guided tour
         env:
           AXE_CORE_PATH: /tmp/gg-axe/node_modules/axe-core/axe.min.js
+          UI_SCREENSHOT_DIR: /tmp/genomeguard-ui-screenshots
         run: make ui-smoke
+      - name: Preserve judge-facing UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: genomeguard-ui-review-${{ github.sha }}
+          path: /tmp/genomeguard-ui-screenshots/
+          if-no-files-found: warn
+          retention-days: 14

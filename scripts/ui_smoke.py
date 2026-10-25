@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -85,6 +86,28 @@ def main() -> None:
 
     with sync_playwright() as p:
         browser = p.chromium.launch(**launch)
+        screenshot_dir = os.environ.get("UI_SCREENSHOT_DIR")
+        if screenshot_dir:
+            Path(screenshot_dir).mkdir(parents=True, exist_ok=True)
+
+        print("\\n0. Keyboard navigation and command palette")
+        keyboard_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        keyboard_pg = keyboard_ctx.new_page()
+        keyboard_pg.goto(base + "/#/overview")
+        keyboard_pg.wait_for_selector("#view h1", timeout=15000)
+        keyboard_pg.keyboard.press("Control+k")
+        palette_open = keyboard_pg.locator("#cmdk.open").count() == 1
+        keyboard_pg.locator("#cmdk-input").fill("Audit log")
+        keyboard_pg.keyboard.press("ArrowDown")
+        keyboard_pg.keyboard.press("Enter")
+        keyboard_pg.wait_for_url("**/#/audit", timeout=15000)
+        keyboard_pg.keyboard.press("Control+k")
+        keyboard_pg.keyboard.press("Escape")
+        palette_closes = keyboard_pg.locator("#cmdk.open").count() == 0
+        check("Ctrl+K opens command palette", palette_open)
+        check("keyboard search can navigate to Audit log", "#/audit" in keyboard_pg.url)
+        check("Escape closes command palette", palette_closes)
+        keyboard_ctx.close()
 
         print("\\n0. Startup resilience when browser storage is blocked")
         blocked_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -194,6 +217,10 @@ def main() -> None:
                 bad = {k: v for k, v in r.items() if isinstance(v, list) and v}
                 check(f"{hsh}", r["h1"] == 1 and not bad,
                       str(bad)[:140] if bad else ("h1 count " + str(r["h1"]) if r["h1"] != 1 else ""))
+                if screenshot_dir:
+                    shot_name = theme + "-" + hsh.strip("#/").replace("/", "-") + ".png"
+                    pg.screenshot(path=str(Path(screenshot_dir) / shot_name), full_page=True,
+                                  animations="disabled")
             check(f"no JavaScript errors ({theme})", not errs, "; ".join(errs)[:120])
 
         print("\n3. No horizontal scroll on phones")
@@ -210,6 +237,14 @@ def main() -> None:
                     over.append(f"{hsh}: {layout['viewport']}px viewport / {layout['documentWidth']}px document; "
                                 + str(layout["offenders"][:5]))
             check(f"{width}px wide", not over, "; ".join(over)[:900])
+            if screenshot_dir and width == 375:
+                ctx = browser.new_context(viewport={"width": width, "height": 812})
+                shot = ctx.new_page()
+                shot.goto(base + "/#/overview")
+                shot.wait_for_selector("#view h1", timeout=15000)
+                shot.screenshot(path=str(Path(screenshot_dir) / "mobile-375-overview.png"),
+                                full_page=True, animations="disabled")
+                ctx.close()
         browser.close()
 
     print("\n" + ("ALL UI CHECKS PASSED" if not failures else f"{len(failures)} UI CHECK(S) FAILED"))
