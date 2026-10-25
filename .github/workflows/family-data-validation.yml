@@ -47,6 +47,7 @@ jobs:
           PYTHONPATH=backend .venv/bin/python -m app.data.real build \
             --vcf data_real/high_coverage_chr22.vcf.gz \
             --source-vcf-name 1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz \
+            --source "1000 Genomes (IGSR) high-coverage 30x (GRCh38)" \
             --ped data_real/20130606_g1k_3202_samples_ped_population.txt \
             --samples 600 --variants 3000 --keep-prob 0.004 --seed 1337 \
             --out data_real/1000g_high_coverage_chr22.npz
