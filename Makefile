@@ -70,7 +70,7 @@ deploy-smoke:
 ui-smoke:
 	rm -f /tmp/gg-ui-smoke.sqlite3
 	GG_DB_PATH=/tmp/gg-ui-smoke.sqlite3 GG_ALLOW_TAMPER_DEMO=true PYTHONPATH=backend \
-		$(PY) -m uvicorn app.main:app --port 8767 > /tmp/gg-ui-smoke.log 2>&1 & echo $! > /tmp/gg-ui-smoke.pid
+		$(PY) -m uvicorn app.main:app --port 8767 > /tmp/gg-ui-smoke.log 2>&1 & echo $$! > /tmp/gg-ui-smoke.pid
 	sleep 8
 	@set -e; trap 'kill `cat /tmp/gg-ui-smoke.pid`' EXIT; \
 		$(PY) scripts/deploy_smoke.py --base http://127.0.0.1:8767; \
