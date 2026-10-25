@@ -31,12 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ga4gh-beacon/beacon-v2
           ref: c6558bf2e6494df3905f7b2df66e903dfe509500
