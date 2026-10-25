@@ -8,6 +8,7 @@ on:
       - "scripts/deploy_smoke.py"
       - "scripts/live_ui_smoke.py"
       - "scripts/live_accessibility_smoke.py"
+      - "scripts/live_persistence_check.py"
   workflow_dispatch:
     inputs:
       base_url:
@@ -39,6 +40,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify public health, assets, provenance and API docs
         run: python scripts/deploy_smoke.py --base "$BASE_URL"
+      - name: Verify request history reset after the intentional redeploy
+        run: python scripts/live_persistence_check.py --base "$BASE_URL" --request-id 3
       - name: Verify permitted, denied, held, and authorization API workflows
         run: python scripts/live_api_smoke.py --base "$BASE_URL"
       - name: Verify nine routes in light/dark themes and narrow mobile layouts
