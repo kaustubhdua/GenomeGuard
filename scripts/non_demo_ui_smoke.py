@@ -56,6 +56,8 @@ def main() -> int:
         req = route.request
         parsed = urlparse(req.url)
         path = parsed.path
+        if path == "/" or path.startswith("/static/"):
+            return route.continue_()
         headers = {k.lower(): v for k, v in req.headers.items()}
         if path == "/health":
             return fulfill(route, 200, health)
