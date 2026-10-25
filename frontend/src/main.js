@@ -116,7 +116,6 @@ function drawWho() {
       ? "Steward credentials are active in memory for this tab."
       : state.who ? "Researcher credentials are active in memory for this tab."
         : "Connect using a steward or researcher API key issued by your administrator.";
-    $("auth-status").textContent = "";
     return;
   }
   sel.hidden = false;
@@ -197,14 +196,15 @@ $("connect-key").addEventListener("click", async () => {
       return;
     }
     $("api-key-input").value = "";
-    status.textContent = "Connected. This key stays in memory for this tab and is not saved.";
     drawWho();
+    status.textContent = "Connected. This key stays in memory for this tab and is not saved.";
     drawNav("");
     render();
   } finally {
     $("connect-key").disabled = false;
   }
 });
+$("auth-kind").addEventListener("change", () => { $("auth-status").textContent = ""; });
 $("api-key-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); $("connect-key").click(); }
 });
