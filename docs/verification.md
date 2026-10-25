@@ -4,8 +4,9 @@ Verification results must be read with their commit SHA and workflow run. A pass
 
 ## Recent automated checks
 
-- [Current main CI run #40186978293](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186978293) passed on main commit `0f23dc5000a75125ce199fdad16a24d83ed7577e`. This is the current main-branch CI result.
-- [Full backend and browser suite #40186140229](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186140229) passed on commit `ce5d85b5c5f3e1ebcf60f5f91bc084d3b05fc841`, including backend tests, lint, evaluation, scripted demo, JavaScript/Python checks, browser routes, responsive layouts, accessibility checks, and screenshot capture. This run is on a different commit from the current main CI result.
+- [Product/UI cleanup PR #21](https://github.com/kaustubhdua/GenomeGuard/pull/21) passed full CI on PR head `23ea4f7015d306264b44e72663a893683c8d3bdd` in [run #40188338091](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188338091), including backend tests, lint, evaluation, scripted workflow, JavaScript/Python checks, browser routes, responsive layouts, accessibility checks, guided walkthrough, and screenshot capture. The PR was squash-merged as `32e019e0fb79c47573cead15d5dc5a926c6b61a4`; the merge commit contains the tested tree.
+- [Previous main CI run #40186978293](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186978293) passed on main commit `0f23dc5000a75125ce199fdad16a24d83ed7577e` before the cleanup merge.
+- [Earlier full backend and browser suite #40186140229](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186140229) passed on commit `ce5d85b5c5f3e1ebcf60f5f91bc084d3b05fc841`.
 - [1000 Genomes Phase 3 ingestion/evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665) — 600 samples × 3,000 variants; source hashes and build parameters are recorded.
 - [High-coverage family cohort](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759) — 600 samples and 355 observed pedigree relationship pairs; source metadata and simulated-consent status are recorded.
 - [HL7 FHIR R4 Consent validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378296) — a synthetic Consent export was validated with pinned HL7 FHIR Validator CLI 7.0.1 against R4 4.0.1 and the project's extension definitions.
