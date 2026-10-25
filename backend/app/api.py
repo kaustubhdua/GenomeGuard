@@ -134,8 +134,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         checks = {
             "demo_mode_disabled": not settings.demo_mode,
             "real_genotype_provenance": provenance.get("genotypes") == "real_vcf",
-            "source_matched_consent": (
-                provenance.get("consent") == "source_records"
+            "source_authority_covers_all_samples": (
+                provenance.get("consent") in {"source_records", "source_policy"}
                 and int(provenance.get("consent_records_matched") or 0) == int(svc.ds.n_donors)
             ),
             "destructive_tamper_demo_disabled": not settings.allow_tamper_demo,
