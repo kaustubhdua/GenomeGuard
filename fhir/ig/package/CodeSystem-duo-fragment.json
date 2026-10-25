@@ -1,0 +1,23 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "duo-fragment",
+  "url": "http://purl.obolibrary.org/obo/duo.owl",
+  "name": "DUOFragmentUsedByGenomeGuard",
+  "title": "DUO terms used by the GenomeGuard demo",
+  "status": "active",
+  "experimental": true,
+  "publisher": "GenomeGuard demo project",
+  "description": "A terminology fragment containing only the two externally verified DUO modifier codes used by the synthetic demo. This is not the complete DUO ontology.",
+  "content": "fragment",
+  "caseSensitive": true,
+  "concept": [
+    {
+      "code": "DUO:0000046",
+      "display": "No commercial use"
+    },
+    {
+      "code": "DUO:0000015",
+      "display": "No methods development research"
+    }
+  ]
+}

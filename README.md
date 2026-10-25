@@ -57,10 +57,10 @@ only). Use the "Acting as" selector in the app to switch roles.
 | Secure aggregation across sites | Real protocol, runs in one process here |
 | Attack evaluation (`make eval`) | Real attacks, run on the cohort loaded |
 | Agents | Real; deterministic templates by default, an LLM when `ANTHROPIC_API_KEY` is set |
-| Genotypes | Synthetic by default; real 1000 Genomes with `make fetch-real` (run on your machine) |
+| Genotypes | Synthetic by default; the hosted CI has downloaded real 1000 Genomes Phase 3 data and run `eval-real` (600 samples × 3,000 variants); real consent remains simulated |
 | Donor consent and requesters | Simulated. No real people consented to this system, so inventing "real" consent would be false |
 | Relatives | Simulated kinship model unless you load real trios |
-| FHIR R4 Consent export | Real JSON, built from simulated consent, tagged as such; not run through a FHIR validator |
+| FHIR R4 Consent export | Generated from simulated consent, tagged as simulated, and validated by the HL7 FHIR Validator against R4 plus the project extension package; this is structural validation, not legal consent |
 | Steward copilot | Real tool loop over read-only functions; sees only whitelisted summaries; template planner when no API key |
 
 ## What it does
@@ -114,9 +114,7 @@ For real families (family-first sampling, 602 trios in the high-coverage release
 make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt
 make eval-real COHORT=data_real/1000g_trios.npz     # writes docs/eval-results-real.md
 ```
-A dataset is only labelled real if the cohort file's own metadata says so. **The end-to-end run
-on real files has not been done in the environment this was developed in** (no access to the
-servers); only the loaders are tested, against fixtures. See [`docs/real-data.md`](docs/real-data.md).
+A dataset is only labelled real if the cohort file's own metadata says so. **End-to-end real-genotype ingestion/evaluation is verified on a hosted GitHub Actions runner** ([run #40135423030](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40135423030)); the source file hashes and build settings are documented in [`docs/real-data.md`](docs/real-data.md). This run has zero relative pairs because Phase 3 is unrelated by design. The high-coverage family workflow passed and verified 355 relationship pairs in a 600-sample cohort; see [run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277). Consent and query traffic remain simulated.
 Real: genotypes, frequencies, population labels, parent/child links in the pedigree file.
 Simulated: consent. The Phase 3 release is built from deliberately unrelated people, so family
 exposure is sparse; for real families use the high-coverage release with 602 trios (pass `--vcf`
@@ -149,9 +147,19 @@ generators and real-data loaders | `backend/redteam/` attacks and evaluation | `
 - GA4GH Beacon v2; GA4GH Data Use Ontology (DUO), https://github.com/EBISPOT/DUO (CC BY 4.0).
 - 1000 Genomes Project / IGSR; Byrska-Bishop et al., high-coverage 1000 Genomes cohort including 602 trios, *Cell* 2022.
 
+## Current verification evidence
+
+- [Main CI with Playwright and axe-core browser checks](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133832193)
+- [1000 Genomes Phase 3 real-genotype ingestion/evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311)
+- [High-coverage pedigree cohort: 600 samples, 3,000 variants, 355 relationship pairs](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277)
+- [HL7 FHIR R4 validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136212568)
+- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136608336)
+
+These runs prove specific automated gates only. They do not prove that a public Render instance is live, that real consent exists, that Beacon v2 conformance is complete, or that the custom privacy accountant is formally differentially private. The high-coverage run validates pedigree-aware cohort building and simulated attack evaluation, not clinical or consent-management workflows.
+
 ## Hackathon release verification
 
-Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) as the final evidence checklist against every Tech Eximius judging criterion. It separates source-level implementation from proof that still requires a clean-clone test run, browser QA, and a deployed walkthrough. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
+Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) as the final evidence checklist against every Tech Eximius judging criterion. It separates source-level implementation from evidence: main CI and axe-core browser QA have passed, real-genotype ingestion/evaluation has passed in CI, FHIR R4 validation has passed, and a deployed walkthrough still requires an authorized public hosting workspace. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
 
 ## Audit anchor
 

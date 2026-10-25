@@ -1,0 +1,49 @@
+name: GA4GH Beacon v2 schema validation
+
+on:
+  push:
+    branches: [main, release/real-data-validation]
+    paths:
+      - "backend/app/api.py"
+      - "backend/tests/test_beacon.py"
+      - "scripts/beacon_schema_smoke.py"
+      - "pyproject.toml"
+      - ".github/workflows/beacon-validation.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/app/api.py"
+      - "backend/tests/test_beacon.py"
+      - "scripts/beacon_schema_smoke.py"
+      - "pyproject.toml"
+      - ".github/workflows/beacon-validation.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: beacon-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  beacon-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/checkout@v4
+        with:
+          repository: ga4gh-beacon/beacon-v2
+          ref: c6558bf2e6494df3905f7b2df66e903dfe509500
+          path: vendor/beacon-v2
+          sparse-checkout: framework/json
+          sparse-checkout-cone-mode: true
+      - name: Install GenomeGuard and development dependencies
+        run: make setup
+      - name: Validate endpoint responses against official GA4GH schemas
+        run: PYTHONPATH=backend .venv/bin/python scripts/beacon_schema_smoke.py vendor/beacon-v2/framework/json

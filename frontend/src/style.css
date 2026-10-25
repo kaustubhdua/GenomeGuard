@@ -335,3 +335,5 @@ button:active:not(:disabled),.btn:active:not(:disabled),.iconbtn:active,.chipbtn
 .card{transition:border-color .18s ease,box-shadow .18s ease}
 .card:hover{border-color:color-mix(in srgb,var(--ink-3) 35%,var(--line))}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+.tl li.warn .who2,.tl li.warn .says{color:var(--ink)}

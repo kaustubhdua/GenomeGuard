@@ -22,11 +22,11 @@ Make the demo **trustworthy, repeatable, and easy to judge** before adding more 
 - If using 1000 Genomes genotypes, show the source, genome build, sample/variant counts, file SHA-256, build settings, and whether the cohort was family-enriched.
 - Consent/requester identities remain simulated even with real genotypes. Never call those real consents.
 - Do not commit downloaded VCFs, sample-level genotype files, keys, or participant identifiers.
-- Run the optional real-data loader on an internet-enabled machine, save the metadata and command output, and execute `make eval-real COHORT=data_real/1000g_chr22.npz` before presenting any results as a real-data evaluation. The Phase 3 collection has sample/panel files and chromosome-split VCFs, but its unrelated cohort is not sufficient to demonstrate relative exposure; use a documented pedigree/trio source for that specific scenario. [IGSR Phase 3 collection](https://www.internationalgenome.org/data-portal/data-collection/phase3).
+- The Phase 3 ingestion/evaluation path has now passed on GitHub Actions with 600 samples and 3,000 variants; see [real-data run #40135423030](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40135423030) and [the source hashes/build parameters](real-data.md). The result is real-genotype evaluation, not real-consent evaluation. A dedicated workflow now downloads the official [IGSR high-coverage 3,202-sample collection with 602 trios](https://www.internationalgenome.org/data-portal/data-collection/1000genomes_30x) and builds a pedigree-aware cohort. The successful [high-coverage run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277) verified 355 relationship pairs and `family_enriched: true`; consent remains simulated.
 
 ### 3. Make the UI judge-ready without motion overload
 - Preserve route-level JavaScript code splitting and intent-based prefetching; keep native lazy loading for below-the-fold media, but do not lazy-load critical above-the-fold assets.
-- Run the Playwright UI suite on the exact commit. Add an axe-core/Playwright accessibility scan for all routes and interactive states; automated checks are only one part of accessibility review.
+- The Playwright UI suite now runs a pinned axe-core WCAG A/AA scan on all routes in light and dark themes and fails on critical/serious violations. The scan initially found contrast, chart naming, and keyboard-scroll issues; the fixes passed [run #40133499648](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40133499648). Automated checks are only one part of accessibility review.
 - Manually check keyboard-only navigation, visible focus, dialog focus/escape behavior, mobile navigation, 200% zoom/reflow, contrast, reduced motion, and form error announcements.
 - Prefer short, purposeful motion that explains state changes. Honour `prefers-reduced-motion`; avoid decorative animation that delays task completion.
 - Capture consistent screenshots of overview, request result, steward review, audit proof, and red-team results at desktop and mobile sizes.
@@ -38,8 +38,8 @@ Make the demo **trustworthy, repeatable, and easy to judge** before adding more 
 The endpoint is currently described as Beacon-v2-style, not certified. Use the current [GA4GH Beacon v2 repository](https://github.com/ga4gh-beacon/beacon-v2) and its OpenAPI/JSON schemas to test successful, no-hit, denied, held, malformed, and count/boolean responses. Validate required fields, version metadata, error behavior, coordinate/reference semantics, and whether returned counts are consistent with privacy transformations. Only call it Beacon v2 conformant after schema-based tests pass; otherwise retain the "Beacon-style" wording.
 
 ### 5. Validate FHIR R4 Consent exports externally
-- Run every generated Consent resource through the official [HL7 FHIR Validator](https://www.hl7.org/fhir/validator/) with the R4 definitions.
-- Keep a golden valid fixture and negative fixtures for missing required fields, invalid status/scope, and invalid provision structure.
+- A generated synthetic Consent resource has passed the official [HL7 FHIR Validator](https://www.hl7.org/fhir/validator/) CLI 7.0.1 against FHIR R4 4.0.1 and the project's extension package with 0 errors and 0 warnings; see [run #40136244124](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136244124). The validation workflow is configured to run on relevant pull requests and main changes.
+- Keep the validator run in CI and add negative fixtures for missing required fields, invalid status/scope, and invalid provision structure.
 - Label exports as simulated/demo-derived and avoid implying that an export is itself a legally binding consent directive. HL7 explicitly distinguishes encoded consent content from the policy and workflow needed to make it legally enforceable. See [FHIR R4 Consent](https://hl7.org/fhir/R4/consent.html).
 
 ### 6. Tighten privacy claims and the evaluation evidence

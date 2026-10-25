@@ -167,7 +167,16 @@ def main() -> None:
                     pg.wait_for_selector("#view h1", timeout=15000)
                 except Exception:
                     pass  # the audit below reports "h1 count 0" if it truly never appears
-                pg.wait_for_timeout(600)
+                pg.wait_for_timeout(150)
+                # Wait for finite route/timeline entrance animations before measuring contrast;
+                # otherwise axe can report a transient low-opacity frame as a contrast failure.
+                pg.evaluate("""async () => {
+                  const finite = document.getAnimations({subtree: true}).filter((animation) => {
+                    const timing = animation.effect?.getComputedTiming();
+                    return timing && Number.isFinite(timing.endTime);
+                  });
+                  await Promise.all(finite.map((animation) => animation.finished.catch(() => {})));
+                }""")
                 axe_path = os.environ.get("AXE_CORE_PATH")
                 if axe_path:
                     pg.add_script_tag(path=axe_path)

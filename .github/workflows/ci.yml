@@ -33,9 +33,5 @@ jobs:
         run: |
           .venv/bin/pip install playwright
           .venv/bin/python -m playwright install --with-deps chromium
-      - name: Install pinned axe-core accessibility rules
-        run: npm install --prefix /tmp/gg-axe --no-save --package-lock=false axe-core@4.10.3
       - name: Test all pages, responsive layouts, accessibility basics and guided tour
-        env:
-          AXE_CORE_PATH: /tmp/gg-axe/node_modules/axe-core/axe.min.js
         run: make ui-smoke

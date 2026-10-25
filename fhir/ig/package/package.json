@@ -1,0 +1,12 @@
+{
+  "name": "org.genomeguard.fhir",
+  "version": "0.1.0",
+  "type": "Conformance",
+  "canonical": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package",
+  "url": "https://github.com/kaustubhdua/GenomeGuard",
+  "title": "GenomeGuard FHIR R4 demo extensions",
+  "description": "FHIR R4 extension definitions and simulated-consent tag system used by GenomeGuard demo exports.",
+  "dependencies": {
+    "hl7.fhir.r4.core": "4.0.1"
+  }
+}

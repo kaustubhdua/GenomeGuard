@@ -1,0 +1,41 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "consent-use-codes",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/CodeSystem-consent-use-codes.json",
+  "version": "0.1.0",
+  "name": "GenomeGuardConsentUseCodes",
+  "title": "GenomeGuard demo consent-use codes",
+  "status": "active",
+  "experimental": true,
+  "date": "2026-10-25",
+  "publisher": "GenomeGuard demo project",
+  "description": "Local demo labels for consent-use values whose official DUO identifiers have not been confirmed. These are not official DUO codes.",
+  "content": "complete",
+  "caseSensitive": true,
+  "concept": [
+    {
+      "code": "GRU",
+      "display": "General research use"
+    },
+    {
+      "code": "HMB",
+      "display": "Health / medical / biomedical research only"
+    },
+    {
+      "code": "DS",
+      "display": "Disease-specific research (named disease only)"
+    },
+    {
+      "code": "NPU",
+      "display": "Not-for-profit use only"
+    },
+    {
+      "code": "NAGR",
+      "display": "No aggregate-level general research (project-specific rule)"
+    },
+    {
+      "code": "NCTRL",
+      "display": "No use as a control set"
+    }
+  ]
+}

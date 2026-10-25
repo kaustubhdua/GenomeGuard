@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.26"]
+dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.26", "jsonschema>=4.22,<5"]
 llm = ["anthropic>=0.30"]
 synth = ["msprime>=1.3"]
 

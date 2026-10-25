@@ -595,41 +595,46 @@ class GenomeGuardService:
                                                                        len(new["modifiers"])]})
         return self.donor_profile(donor_id)
 
-    FHIR_EXT = "https://github.com/kaustubhdua/GenomeGuard/fhir/StructureDefinition"
+    FHIR_BASE = "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package"
+    FHIR_EXT = FHIR_BASE + "/StructureDefinition-"
 
     def donor_consent_fhir(self, donor_id: int) -> dict:
         """The donor's consent as a FHIR R4 `Consent` resource, so it can travel to other systems.
         The patient is a pseudonymous reference (never the donor number). DUO terms and limits
         are carried in namespaced extensions rather than mapped onto FHIR purpose codes we cannot
         verify. The record is tagged as simulated: no real person consented to this system.
-        Structure follows the FHIR R4 Consent resource but has NOT been run through a FHIR
-        validator."""
+        Structure follows FHIR R4 and is checked in CI with the HL7 FHIR Validator against the
+        project extension package. Structural conformance does not make simulated consent legally valid."""
         d = self._donor(donor_id)
         c = d.consent
         ref = self._donor_ref(donor_id)
 
         def duo(code: str) -> dict:
             info = DUO_REFERENCE.get(code, {})
-            coding = {"system": "http://purl.obolibrary.org/obo/duo.owl",
-                      "code": info.get("id") or code, "display": info.get("meaning") or code}
-            if not info.get("id"):
-                coding["userSelected"] = False  # short name only: the official id is not confirmed
-            return coding
+            if info.get("id"):
+                return {"system": "http://purl.obolibrary.org/obo/duo.owl",
+                        "code": info["id"], "display": info.get("meaning") or code}
+            # Never label an unconfirmed short code as an official DUO term.
+            return {"system": f"{self.FHIR_BASE}/CodeSystem-consent-use-codes.json",
+                    "code": code, "display": info.get("meaning") or code}
 
-        ext = [{"url": f"{self.FHIR_EXT}/duo-use", "valueCoding": duo(str(c.get("use")))}]
-        ext += [{"url": f"{self.FHIR_EXT}/duo-modifier", "valueCoding": duo(m)}
+        ext = [{"url": f"{self.FHIR_EXT}duo-use.json", "valueCoding": duo(str(c.get("use")))}]
+        ext += [{"url": f"{self.FHIR_EXT}duo-modifier.json", "valueCoding": duo(m)}
                 for m in (c.get("modifiers") or [])]
         if c.get("disease"):
-            ext.append({"url": f"{self.FHIR_EXT}/disease", "valueString": c["disease"]})
+            ext.append({"url": f"{self.FHIR_EXT}disease.json", "valueString": c["disease"]})
         if c.get("population"):
-            ext.append({"url": f"{self.FHIR_EXT}/population", "valueString": c["population"]})
+            ext.append({"url": f"{self.FHIR_EXT}population.json", "valueString": c["population"]})
         res = {
             "resourceType": "Consent", "id": ref,
-            "meta": {"tag": [{"system": f"{self.FHIR_EXT}/tags", "code": "simulated-consent",
+            "meta": {"tag": [{"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json", "code": "simulated-consent",
                               "display": "Simulated consent record (demo data, not a real person)"}]},
+            "text": {"status": "generated", "div": '<div xmlns="http://www.w3.org/1999/xhtml"><p>Simulated consent record; this is not actual consent.</p></div>'},
             "status": "inactive" if d.withdrawn else "active",
             "scope": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/consentscope",
                                   "code": "research", "display": "Research"}]},
+            "policy": [{"authority": "https://github.com/kaustubhdua/GenomeGuard",
+                        "uri": "https://github.com/kaustubhdua/GenomeGuard/blob/main/docs/consent-policy.md"}],
             "category": [{"coding": [{"system": "http://loinc.org", "code": "59284-0",
                                       "display": "Consent Document"}]}],
             "patient": {"reference": f"Patient/{ref}", "display": "Pseudonymous donor"},

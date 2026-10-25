@@ -17,6 +17,21 @@ PED = "\n".join([
 
 SAMPLES = ["dad", "mum", "kid1", "kid2"] + [f"s{i}" for i in range(40)]
 
+def test_high_coverage_population_pedigree_panel_format():
+    text = "\n".join([
+        "FamilyID SampleID FatherID MotherID Sex Population Superpopulation",
+        "F1 father 0 0 1 YRI AFR",
+        "F1 mother 0 0 2 YRI AFR",
+        "F1 child father mother 1 YRI AFR",
+        "U2 unrelated 0 0 2 GBR EUR",
+    ]) + "\n"
+    info = real.parse_ped(text)
+    assert info["child"]["father"] == "father"
+    assert info["child"]["mother"] == "mother"
+    assert info["child"]["family"] == "F1"
+    assert info["child"]["pop"] == "YRI"
+    assert info["unrelated"]["pop"] == "GBR"
+
 
 def make_vcf(path: Path, n_sites=300, seed=0):
     rng = np.random.default_rng(seed)
@@ -97,7 +112,9 @@ def test_build_save_load_roundtrip():
         assert meta["genotypes_real"] and meta["consent_simulated"]
         assert meta["source_vcf_file"] == "t.vcf.gz"
         assert len(meta["source_vcf_sha256"]) == 64
-        assert len(meta["source_pedigree_sha256"]) == 64
+        assert len(meta["source_sample_metadata_sha256"]) == 64
+        assert meta["source_sample_metadata_file"] == "provided-sample-metadata"
+        assert meta["pedigree_relationships_present"] is True
         assert meta["build_parameters"] == {
             "requested_samples": 44, "max_variants": 50, "keep_prob": 1.0,
             "rare_maf": 0.01, "withdrawn_rate": 0.03,
@@ -220,3 +237,17 @@ def test_parse_official_phase3_panel_without_private_working_pedigree():
     }
     assert info["NA12340"]["pop"] == "YRI"
     assert real.relationships_from_pedigree(info, ["HG00096", "HG00097", "NA12340"]) == []
+
+
+def test_unrelated_phase3_style_panel_does_not_claim_family_enrichment():
+    """Family-first sampling must not imply enrichment when the source has no pedigrees."""
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "unrelated.vcf.gz"
+        make_vcf(v)
+        panel = "sample pop super_pop gender\n" + "\n".join(
+            f"{sample} GBR EUR male" for sample in SAMPLES
+        ) + "\n"
+        _, meta = real.build_cohort(v, panel, n_samples=44, max_variants=50, keep_prob=1.0,
+                                    seed=7, family_first=True)
+        assert meta["relative_pairs"] == 0
+        assert meta["family_enriched"] is False

@@ -1,0 +1,21 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "genomeguard-tags",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/CodeSystem-genomeguard-tags.json",
+  "version": "0.1.0",
+  "name": "GenomeGuardConsentTags",
+  "title": "GenomeGuard consent provenance tags",
+  "status": "active",
+  "experimental": true,
+  "date": "2026-10-25",
+  "publisher": "GenomeGuard demo project",
+  "description": "Tag codes used to mark simulated consent exports. Not a real consent authority.",
+  "content": "complete",
+  "caseSensitive": true,
+  "concept": [
+    {
+      "code": "simulated-consent",
+      "display": "Simulated consent record (demo data, not a real person)"
+    }
+  ]
+}

@@ -147,44 +147,84 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/beacon/g_variants", "GA4GH Beacon v2 style allele lookup, governed by the "
            "same consent, risk and audit pipeline", "requester")
     async def beacon_g_variants(request):
-        r = requester(request)
         q = request.query_params
+        schema_url = ("https://raw.githubusercontent.com/ga4gh-beacon/beacon-v2/"
+                      "c6558bf2e6494df3905f7b2df66e903dfe509500/models/json/"
+                      "beacon-v2-default-model/genomicVariations/defaultSchema.json")
+        schemas = [{"entityType": "genomicVariation", "schema": schema_url}]
+
+        def response_meta(chrom=None, start=None, alt=None, gran="boolean"):
+            parameters = {}
+            if chrom is not None:
+                parameters["referenceName"] = chrom
+            if start is not None:
+                parameters["start"] = [start]
+            if alt is not None:
+                parameters["alternateBases"] = alt
+            received = {"apiVersion": "v2.0.0", "requestedSchemas": schemas,
+                        "pagination": {"skip": 0, "limit": 10},
+                        "requestedGranularity": gran}
+            if parameters:
+                received["requestParameters"] = {"g_variant": parameters}
+            return {"beaconId": "org.genomeguard.demo", "apiVersion": "v2.0.0",
+                    "returnedGranularity": gran, "returnedSchemas": schemas,
+                    "receivedRequestSummary": received}
+
+        raw_gran = q.get("requestedGranularity", "boolean")
+        gran = raw_gran if raw_gran in ("boolean", "count") else "boolean"
         try:
             chrom, start = str(q["referenceName"]), int(q["start"])
         except (KeyError, ValueError):
-            raise ServiceError(422, "invalid_request",
-                               "referenceName and integer start are required") from None
+            meta = response_meta(q.get("referenceName"), None, q.get("alternateBases"), gran)
+            return _j({"meta": meta, "error": {"errorCode": 422,
+                       "errorMessage": "referenceName and integer start are required"}}, 422)
         alt = q.get("alternateBases")
-        gran = q.get("requestedGranularity", "boolean")
-        if gran not in ("boolean", "count"):
-            raise ServiceError(422, "invalid_request", "requestedGranularity: boolean or count")
+        meta = response_meta(chrom, start, alt, gran)
+        if raw_gran not in ("boolean", "count"):
+            return _j({"meta": meta, "error": {"errorCode": 422,
+                       "errorMessage": "requestedGranularity must be boolean or count"},
+                       "info": {"requestedGranularity": raw_gran}}, 422)
+        try:
+            r = requester(request)
+        except ServiceError as exc:
+            return _j({"meta": meta, "error": {"errorCode": exc.status,
+                       "errorMessage": "Authentication required"}}, exc.status)
+
         hits = [i for i, (c, p, _ref, a) in enumerate(S().ds.coords)
                 if c == chrom and p == start and (alt is None or a == alt)]
-        meta = {"beaconId": "genomeguard", "apiVersion": "v2.0",
-                "returnedGranularity": gran, "receivedRequestSummary": {
-                    "referenceName": chrom, "start": start, "alternateBases": alt}}
         if not hits:
-            return _j({"meta": meta, "responseSummary": {"exists": False, "numTotalResults": 0},
+            summary = {"exists": False}
+            if gran == "count":
+                summary["numTotalResults"] = 0
+            return _j({"meta": meta, "responseSummary": summary,
                        "info": {"note": "no such variant is registered in this beacon"}})
         body = {"purpose": q.get("purpose", "general_research"), "disease": q.get("disease") or None,
                 "data_level": gran, "is_commercial": q.get("commercial") == "true",
                 "variant_filter": {"variant_ids": [hits[0] + 1]}}
-        d = await run_in_threadpool(S().submit, r, body)
+        try:
+            d = await run_in_threadpool(S().submit, r, body)
+        except ServiceError as exc:
+            message = ("Request not permitted by governance policy" if exc.status == 403
+                       else "Request parameters failed governance validation")
+            return _j({"meta": meta, "error": {"errorCode": exc.status,
+                       "errorMessage": message}}, exc.status)
         rel = d.get("release") or {}
         vals = rel.get("values") or []
         if d["outcome"] in ("deny", "escalate") or not vals:
-            return _j({"meta": meta, "responseSummary": {"exists": None},
-                       "info": {"decision": d["outcome"], "request_id": d["id"],
-                                "explanation": d["explanation"]}}, 200)
+            code = 403 if d["outcome"] in ("deny", "escalate") else 503
+            message = ("Request not permitted by governance policy" if code == 403
+                       else "No aggregate result could be released under current controls")
+            return _j({"meta": meta, "error": {"errorCode": code, "errorMessage": message},
+                       "info": {"decision": d["outcome"], "request_id": d["id"]}}, code)
         v = vals[0]
         exists = bool(v) if isinstance(v, bool) else v > 0
-        summ = {"exists": exists}
+        summary = {"exists": exists}
         if gran == "count":
-            summ["numTotalResults"] = max(0, round(float(v)))
-        return _j({"meta": meta, "responseSummary": summ,
+            # Beacon numTotalResults counts matching records, not carriers/allele copies.
+            summary["numTotalResults"] = 1 if exists else 0
+        return _j({"meta": meta, "responseSummary": summary,
                    "info": {"decision": d["outcome"], "request_id": d["id"],
                             "note": "aggregate answer after consent, risk and noise checks"}})
-
     @route("GET", "/requests", "List requests (own; all with admin key)", "requester|admin")
     async def list_requests(request):
         if S().is_admin(request.headers.get("x-admin-key")):

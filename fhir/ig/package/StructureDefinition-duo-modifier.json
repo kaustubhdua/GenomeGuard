@@ -1,0 +1,48 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "duo-modifier",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-duo-modifier.json",
+  "version": "0.1.0",
+  "name": "GenomeGuardDuoModifier",
+  "title": "GenomeGuard duo-modifier extension",
+  "status": "active",
+  "experimental": true,
+  "date": "2026-10-25",
+  "publisher": "GenomeGuard demo project",
+  "description": "Demo-only duo-modifier extension used in GenomeGuard FHIR R4 Consent exports. This extension describes simulated data, not real participant consent.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "context": [
+    {
+      "type": "element",
+      "expression": "Consent.provision"
+    }
+  ],
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-duo-modifier.json"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ]
+      }
+    ]
+  }
+}

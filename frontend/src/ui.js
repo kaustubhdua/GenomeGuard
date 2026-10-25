@@ -88,8 +88,7 @@ export function lineChart({ series, xLabel, yLabel, xMin, xMax, yMin = 0, yMax =
   const xs = series.flatMap((s) => s.points.map((p) => p[0]));
   const x0 = xMin ?? Math.min(...xs), x1 = xMax ?? Math.max(...xs, x0 + 1);
   const X = (v) => m.l + ((v - x0) / (x1 - x0 || 1)) * w, Y = (v) => m.t + hh - ((v - yMin) / (yMax - yMin || 1)) * hh;
-  const root = svg("svg", { class: "chart", viewBox: `0 0 ${width} ${height}`, role: "img",
-    "aria-label": [yLabel, xLabel ? "by " + xLabel : ""].filter(Boolean).join(" ") || "Data chart" });
+  const root = svg("svg", { class: "chart", viewBox: `0 0 ${width} ${height}`, role: "img" });
   for (let i = 0; i <= 4; i++) {
     const v = yMin + ((yMax - yMin) * i) / 4;
     root.append(svg("line", { x1: m.l, x2: m.l + w, y1: Y(v), y2: Y(v), stroke: "var(--rule-2)" }),

@@ -17,6 +17,8 @@ def test_resource_has_the_required_fhir_consent_fields():
     assert r["scope"]["coding"][0]["code"] == "research"
     assert r["category"][0]["coding"][0]["system"] == "http://loinc.org"
     assert r["provision"]["type"] == "permit"
+    assert r["policy"][0]["uri"].endswith("/docs/consent-policy.md")
+    assert "not actual consent" in r["text"]["div"]
     assert r["patient"]["reference"] == f"Patient/{r['id']}"
     assert json.loads(json.dumps(r)) == r  # plain JSON, round-trips
 
@@ -27,6 +29,7 @@ def test_it_is_tagged_simulated_and_does_not_leak_the_donor_number():
     r = svc.donor_consent_fhir(d.id)
     tags = [t["code"] for t in r["meta"]["tag"]]
     assert "simulated-consent" in tags
+    assert r["meta"]["tag"][0]["system"].endswith("/CodeSystem-genomeguard-tags.json")
     flat = json.dumps(r)
     assert f"Patient/{d.id}" not in flat and f'"id": "{d.id}"' not in flat
     assert r["id"] == svc._donor_ref(d.id) and len(r["id"]) == 12
@@ -38,9 +41,9 @@ def test_use_disease_and_modifiers_are_carried_as_duo_extensions():
     svc.donor_set_consent(d.id, {"use": "DS", "disease": "diabetes",
                                  "modifiers": ["NCU", "NMDS"]})
     r = svc.donor_consent_fhir(d.id)
-    ext = {e["url"].rsplit("/", 1)[1]: [] for e in r["provision"]["extension"]}
+    ext = {e["url"].rsplit("/", 1)[1].removeprefix("StructureDefinition-").removesuffix(".json"): [] for e in r["provision"]["extension"]}
     for e in r["provision"]["extension"]:
-        ext[e["url"].rsplit("/", 1)[1]].append(e)
+        ext[e["url"].rsplit("/", 1)[1].removeprefix("StructureDefinition-").removesuffix(".json")].append(e)
     assert ext["duo-use"][0]["valueCoding"]["code"] == "DS"
     codes = {e["valueCoding"]["code"] for e in ext["duo-modifier"]}
     assert codes == {"DUO:0000046", "DUO:0000015"}  # the two ids confirmed from the official DUO
@@ -52,6 +55,7 @@ def test_unconfirmed_duo_ids_are_not_invented():
     d = _donor_with(svc, lambda c: c["use"] == "GRU")
     use = svc.donor_consent_fhir(d.id)["provision"]["extension"][0]["valueCoding"]
     assert use["code"] == "GRU" and not use["code"].startswith("DUO:")
+    assert use["system"].endswith("/CodeSystem-consent-use-codes.json")
 
 
 def test_withdrawal_makes_the_resource_inactive():

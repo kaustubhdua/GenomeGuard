@@ -23,7 +23,7 @@ export async function render() {
     const bad = v.first_broken_index;
     let win = chrono.slice(-12);
     if (bad != null) { const i = chrono.findIndex((e) => e.idx === bad); win = chrono.slice(Math.max(0, i - 5), i + 7); }
-    const strip = h("div", { class: "chain", role: "img", tabindex: "0", "aria-label": bad != null ? `Chain broken at entry ${bad}` : "Chain intact" });
+    const strip = h("div", { class: "chain", role: "img", "aria-label": bad != null ? `Chain broken at entry ${bad}` : "Chain intact" });
     win.forEach((e, i) => {
       const isBad = e.idx === bad;
       if (i) strip.append(h("div", { class: "link-glyph" + (isBad ? " bad" : "") }));

@@ -1,0 +1,82 @@
+name: High-coverage family cohort validation
+
+on:
+  push:
+    branches: [release/real-data-validation]
+    paths:
+      - "backend/app/data/real.py"
+      - "backend/tests/test_real.py"
+      - ".github/workflows/family-data-validation.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: family-data-validation
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  family-cohort:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install and run baseline checks
+        run: |
+          make setup
+          make lint
+          make test
+      - name: Download official high-coverage chr22 VCF and pedigree/population metadata
+        run: |
+          mkdir -p data_real
+          curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+            "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz" \
+            --output data_real/high_coverage_chr22.vcf.gz
+          curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+            "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/20130606_g1k_3202_samples_ped_population.txt" \
+            --output data_real/20130606_g1k_3202_samples_ped_population.txt
+      - name: Build a pedigree-aware real-genotype cohort
+        run: |
+          PYTHONPATH=backend .venv/bin/python -m app.data.real build \
+            --vcf data_real/high_coverage_chr22.vcf.gz \
+            --source-vcf-name 1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz \
+            --ped data_real/20130606_g1k_3202_samples_ped_population.txt \
+            --samples 600 --variants 3000 --keep-prob 0.004 --seed 1337 \
+            --out data_real/1000g_high_coverage_chr22.npz
+      - name: Verify real family provenance and evaluate
+        run: |
+          PYTHONPATH=backend .venv/bin/python - <<'PY'
+          import json
+          from app.data.real import read_meta
+          from pathlib import Path
+          p = Path("data_real/1000g_high_coverage_chr22.npz")
+          m = read_meta(p)
+          assert m.get("genotypes_real") is True, m
+          assert m.get("consent_simulated") is True, m
+          assert m.get("relative_pairs", 0) > 0, m
+          assert m.get("pedigree_relationships_present") is True, m
+          assert m.get("family_enriched") is True, m
+          assert m.get("source_sample_metadata_file") == "20130606_g1k_3202_samples_ped_population.txt", m
+          assert len(m.get("source_vcf_sha256", "")) == 64, m
+          assert len(m.get("source_sample_metadata_sha256", "")) == 64, m
+          print(json.dumps({k: m[k] for k in ("source", "source_vcf_file", "source_vcf_sha256",
+              "source_sample_metadata_file", "source_sample_metadata_sha256", "samples", "variants",
+              "relative_pairs", "pedigree_relationships_present", "family_enriched",
+              "genotypes_real", "consent_simulated", "build_parameters")}, indent=2))
+          PY
+          make eval-real COHORT=data_real/1000g_high_coverage_chr22.npz
+      - name: Preserve aggregate family evaluation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: genomeguard-high-coverage-family-evaluation
+          path: |
+            docs/eval-results-real.md
+            docs/eval-results-real.json
+          if-no-files-found: warn
+          retention-days: 30

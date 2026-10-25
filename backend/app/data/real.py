@@ -1,7 +1,7 @@
 """Load a REAL open dataset (1000 Genomes) into the same cohort format the synthetic generator
 produces, so every other module (consent, risk, transform, anomaly, audit, UI) runs unchanged.
 
-Run on YOUR machine (the build sandbox cannot reach the internet):
+Run on a machine with internet access; the hosted CI workflow verifies the official download path:
 
     python -m app.data.real build --out data_real/1000g_chr22.npz            # downloads, ~200 MB
     python -m app.data.real build --vcf my.vcf.gz --ped my.ped --out ...      # use local files
@@ -276,8 +276,9 @@ def sha256_file(path: Path) -> str:
 
 def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: int = 3000,
                  keep_prob: float = 0.004, seed: int = 1337, rare_maf: float = 0.01,
-                 withdrawn_rate: float = 0.03,
-                 family_first: bool = False) -> tuple[SyntheticCohort, dict]:
+                 withdrawn_rate: float = 0.03, family_first: bool = False,
+                 source_metadata_file: str = "provided-sample-metadata",
+                 source_vcf_file: str | None = None) -> tuple[SyntheticCohort, dict]:
     rng = np.random.default_rng(seed)
     info = parse_ped(ped_text)
     in_vcf = [s for s in vcf_samples(vcf) if s in info]
@@ -302,12 +303,14 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                 "planted": np.zeros(len(maf), dtype=bool)}
     meta = {"source": "1000 Genomes (IGSR)", "samples": n, "variants": int(G.shape[1]),
             "relative_pairs": len(rels), "consent_simulated": True, "genotypes_real": True,
-            "family_enriched": family_first, "seed": seed,
+            "family_enriched": bool(family_first and rels), "seed": seed,
             "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
                                  "keep_prob": keep_prob, "rare_maf": rare_maf,
                                  "withdrawn_rate": withdrawn_rate},
-            "source_vcf_file": vcf.name, "source_vcf_sha256": sha256_file(vcf),
-            "source_pedigree_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest()}
+            "source_vcf_file": source_vcf_file or vcf.name, "source_vcf_sha256": sha256_file(vcf),
+            "source_sample_metadata_file": source_metadata_file,
+            "source_sample_metadata_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest(),
+            "pedigree_relationships_present": bool(rels)}
     return SyntheticCohort(donors, G, variants, rels, [], seed), meta
 
 
@@ -338,6 +341,7 @@ def main(argv: list[str] | None = None) -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--vcf", help="local VCF(.gz); default: download 1000G chr22")
+    b.add_argument("--source-vcf-name", help="original source filename when --vcf is a renamed local cache")
     b.add_argument("--ped", help="local pedigree file or URL; default: official Phase 3 sample/population panel (unrelated samples)")
     b.add_argument("--chrom", default="22")
     b.add_argument("--out", default="data_real/1000g_chr22.npz")
@@ -349,14 +353,24 @@ def main(argv: list[str] | None = None) -> None:
                    help="sample at random instead of taking whole families first")
     a = ap.parse_args(argv)
     cache = Path("data_real")
-    vcf = Path(a.vcf) if a.vcf else download(resolve_vcf_url(a.chrom),
-                                              cache / f"chr{a.chrom}.vcf.gz")
-    if a.ped and Path(a.ped).exists():
-        ped_text = Path(a.ped).read_text()
+    if a.vcf:
+        vcf = Path(a.vcf)
+        source_vcf_name = a.source_vcf_name or vcf.name
     else:
-        ped_text = download(a.ped or PED_URL, cache / "samples.ped").read_text()
+        vcf_url = resolve_vcf_url(a.chrom)
+        source_vcf_name = a.source_vcf_name or vcf_url.rsplit("/", 1)[-1]
+        vcf = download(vcf_url, cache / f"chr{a.chrom}.vcf.gz")
+    if a.ped and Path(a.ped).exists():
+        ped_path = Path(a.ped)
+        ped_text = ped_path.read_text()
+        metadata_file = ped_path.name
+    else:
+        metadata_url = a.ped or PED_URL
+        ped_text = download(metadata_url, cache / "samples.ped").read_text()
+        metadata_file = metadata_url.rsplit("/", 1)[-1]
     c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed,
-                           family_first=not a.no_family_first)
+                           family_first=not a.no_family_first, source_metadata_file=metadata_file,
+                           source_vcf_file=source_vcf_name)
     save_cohort(c, meta, Path(a.out))
     print(json.dumps(meta, indent=2))
     print(f"wrote {a.out}\nrun with: GG_REAL_COHORT_FILE={a.out} make run")
