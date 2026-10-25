@@ -31,6 +31,25 @@ The initial migration is applied once and recorded in `schema_migrations`. Back 
 schema changes. Schema migrations should be additive where practical and must be reviewed against
 the current database before deployment.
 
+
+## Migrating existing SQLite records
+
+Use this only for an offline migration to a dedicated empty PostgreSQL database. Stop the app first,
+make a consistent copy of the SQLite file, and preserve the exact existing `GG_MASTER_KEY`. The
+migration copies cohort metadata, encrypted genotype blobs, requesters, requests, decisions,
+privacy-budget ledger, audit events, donor-access ledger, alerts, and relationship/variant records.
+It refuses a source with an invalid audit chain and a target with any application rows.
+
+```bash
+PYTHONPATH=backend python scripts/migrate_sqlite_to_postgres.py \
+  --sqlite /path/to/stopped-service-snapshot.sqlite3
+```
+
+The script reads `GG_DATABASE_URL` from the environment unless `--database-url` is passed. Do not
+perform the cutover until the row counts, audit verification, restored service behavior, and a
+backup/restore drill have been independently reviewed. This is a one-time copy, not ongoing
+replication or a zero-downtime migration.
+
 ## Backup and restore policy
 
 Recommended starting policy for a dedicated production deployment:
