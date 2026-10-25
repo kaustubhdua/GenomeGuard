@@ -14,7 +14,7 @@ export async function render([id]) {
     h("p", { class: "lede" }, `${d.requester} asked for ${q.data_level} data for ${(q.purpose || "").replaceAll("_", " ")}${q.disease ? " (" + q.disease + ")" : ""}${q.is_commercial ? ", commercial use" : ""}. ${when(d.ts)}`));
 
   const flow = workflow(d);
-  root.append(h("section", { class: "card", style: "margin-bottom:14px" }, h("div", { class: "card-h" }, h("h3", { style: "margin:0" }, "How the agents handled it"), h("span", {}, "Agents advise, rules decide")), pipeline(flow), h("div", { style: "margin-top:18px" }, timeline(flow))));
+  root.append(h("section", { class: "card", style: "margin-bottom:14px" }, h("div", { class: "card-h" }, h("h2", { class: "card-title", style: "margin:0" }, "How the agents handled it"), h("span", {}, "Agents advise, rules decide")), pipeline(flow), h("div", { style: "margin-top:18px" }, timeline(flow))));
   const ledger = h("div", { class: "ledger" });
   ledger.append(row("Decision", "Made by rules, explained by an agent",
     h("p", { class: "verdict o-" + d.outcome }, OUTCOME_LABEL[d.outcome] || d.outcome),
