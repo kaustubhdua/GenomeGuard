@@ -1,0 +1,39 @@
+name: live-deployment-smoke
+on:
+  push:
+    branches: [docs/deployment-verification]
+    paths:
+      - ".github/workflows/live-deployment-smoke.yml"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Public synthetic-demo URL to verify"
+        required: true
+        default: "https://genomeguard.onrender.com"
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: genomeguard-live-smoke
+  cancel-in-progress: false
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_URL: ${{ inputs.base_url || 'https://genomeguard.onrender.com' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install application and browser test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" playwright
+          python -m playwright install --with-deps chromium
+      - name: Verify public health, assets, provenance and API docs
+        run: python scripts/deploy_smoke.py --base "$BASE_URL"
+      - name: Verify nine routes in light/dark themes and narrow mobile layouts
+        run: python scripts/live_ui_smoke.py --base "$BASE_URL"
