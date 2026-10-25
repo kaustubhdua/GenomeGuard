@@ -4,6 +4,9 @@ on:
     branches: [docs/deployment-verification]
     paths:
       - ".github/workflows/live-deployment-smoke.yml"
+      - "scripts/live_api_smoke.py"
+      - "scripts/deploy_smoke.py"
+      - "scripts/live_ui_smoke.py"
   workflow_dispatch:
     inputs:
       base_url:
@@ -35,5 +38,7 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify public health, assets, provenance and API docs
         run: python scripts/deploy_smoke.py --base "$BASE_URL"
+      - name: Verify permitted, denied, held, and authorization API workflows
+        run: python scripts/live_api_smoke.py --base "$BASE_URL"
       - name: Verify nine routes in light/dark themes and narrow mobile layouts
         run: python scripts/live_ui_smoke.py --base "$BASE_URL"
