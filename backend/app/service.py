@@ -908,7 +908,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:
-        kind = "real_1000g"
+        kind = "real_vcf"
     elif stored_meta.get("genotypes_real") is False:
         kind = "synthetic"
     else:
@@ -916,10 +916,13 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     consent_simulated = stored_meta.get("consent_simulated") is not False
     svc.provenance = {
         "genotypes": kind,
-        "genotypes_label": {"real_1000g": "Real genotypes (1000 Genomes)",
-                            "synthetic": "Synthetic genotypes",
-                            "custom": "Custom cohort (real-data provenance not established)",
-                            "unknown": "Genotype provenance unknown"}[kind],
+        "genotypes_label": (
+            f"Real VCF genotypes (operator-declared source: {stored_meta.get('source', 'unspecified')}; "
+            "source not independently authenticated)" if kind == "real_vcf" else
+            {"synthetic": "Synthetic genotypes",
+             "custom": "Custom cohort (real-data provenance not established)",
+             "unknown": "Genotype provenance unknown"}[kind]
+        ),
         "consent": "simulated" if consent_simulated else "source_records",
         "consent_label": ("Simulated consent records" if consent_simulated
                           else "Operator-supplied source-matched consent records"),
