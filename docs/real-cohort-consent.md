@@ -72,6 +72,20 @@ python -m app.main
 
 Use your deployment platform's secret manager rather than putting secrets in shell history or deployment files. The paths above are examples; the container must actually have access to the files and durable storage must be configured and tested. A cohort database is bound cryptographically to its dataset ID and master key. Keep backups and key material under separate, documented access controls.
 
+## Provisioning researcher API credentials
+
+In non-demo mode, a steward can provision a machine-to-machine researcher credential through the protected API endpoint:
+
+```http
+POST /admin/requesters
+X-Admin-Key: <steward-secret>
+Content-Type: application/json
+
+{"name":"Researcher Name","institution":"Verified Institution","credential_level":"registered"}
+```
+
+The response includes a randomly generated API key **once**. Deliver it through an approved secret-delivery channel; do not paste it into tickets, logs, or source control. Only `registered` and `controlled` tiers are accepted. The endpoint is disabled in demo mode. A steward must independently verify the researcher's identity, institutional affiliation, approvals and permitted use before provisioning; this API endpoint does not verify identity or replace institutional single sign-on, MFA, account recovery, revocation workflows or access reviews.
+
 ## What the importer does not establish
 
 - It does not authenticate the provenance or signature of a consent document; it validates a structured operator-supplied record.
