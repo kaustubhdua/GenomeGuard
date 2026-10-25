@@ -213,8 +213,24 @@ def main() -> None:
                     blocking = [v for v in axe_violations if v["impact"] in ("critical", "serious")]
                     check(f"{hsh} axe critical/serious", not blocking,
                           str(blocking)[:260] if blocking else f"{len(axe_violations)} non-blocking finding(s)")
+                if hsh == "#/family/1":
+                    model_label = pg.evaluate('() => document.querySelector("#view .notice.warn")?.innerText || ""')
+                    check("family page labels the estimate as modelled exposure",
+                          model_label.startswith("Modelled exposure.") and "synthetic pedigree" in model_label.lower(),
+                          model_label[:220])
+
                 r = pg.evaluate(AUDIT_JS)
                 if hsh == "#/overview":
+                    source_label = pg.evaluate("""() => {
+                      const facts = [...document.querySelectorAll(".facts")].find(dl =>
+                        [...dl.querySelectorAll("dt")].some(dt => dt.textContent.trim() === "Source"));
+                      if (!facts) return null;
+                      const terms = [...facts.querySelectorAll("dt")];
+                      const index = terms.findIndex(dt => dt.textContent.trim() === "Source");
+                      return facts.querySelectorAll("dd")[index]?.textContent.trim() || null;
+                    }""")
+                    check("overview shows explicit cohort source provenance",
+                          source_label == "Built-in synthetic cohort generator", str(source_label))
                     proof_layout = pg.evaluate("""() => {
                       const card = document.querySelector(".g-main > .card:last-child");
                       const facts = card?.querySelector("dl.facts");
