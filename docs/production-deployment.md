@@ -23,6 +23,18 @@ The Docker image builds the cohort from the official public source and records s
 - The latest [live research-mode workflow #40199498444](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498444) verified real public-source genotype provenance, the dataset-level policy boundary, disabled demo endpoints, unauthorized-call rejection, all nine UI routes, responsive layouts, keyboard behavior, reduced motion, reflow, and automated accessibility checks.
 - [Main CI run #40199498577](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498577) passed on deployed source commit `154ee80916e1a45080bc4160902516768afaee15`.
 
+
+## PostgreSQL implementation status (feature branch)
+
+An opt-in PostgreSQL adapter and migration/recovery tooling are proposed in
+[PR #33](https://github.com/kaustubhdua/GenomeGuard/pull/33). This is **not yet deployed** and does
+not change the active Render service. It includes a schema migration, a one-time offline SQLite
+migration tool, PostgreSQL audit-sequence locking, and backup/restore instructions. It does not
+prove a provider backup policy, perform a real restore drill, or provide atomic transactions spanning
+the complete request/decision/privacy-budget/audit lifecycle. Do not describe the hosted service as
+durably persisted until a dedicated database is configured and persistence plus recovery are tested
+against the deployed commit.
+
 ## Why the service is not production-ready
 
 The following are explicit, unmet requirements, not implied future promises:
