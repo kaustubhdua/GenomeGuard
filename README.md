@@ -14,6 +14,8 @@ it, and a person signs off on anything risky.
 > simulated. It has had no independent security review and makes no claim of legal compliance
 > (it is designed around the ideas of DPDP, GDPR and HIPAA). Do not use it with real participant data.
 
+**Latest automated release check:** [main CI run #40186140229](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186140229) passed the backend suite, evaluation, scripted demo, browser smoke, responsive checks and axe-core scan on commit `ce5d85b5c5f3e1ebcf60f5f91bc084d3b05fc841`. This is CI evidence, not live-deployment evidence; the public URL and deployed SHA remain unverified.
+
 ## Why
 
 Genomes are shared by families. A rare variant released about one person can point at a sibling or
@@ -41,7 +43,7 @@ flowchart LR
   warn, throttle, freeze, with a human unfreeze.
 - **Steward copilot:** a read-only, tool-using agent that gathers evidence and recommends. A rules
   baseline caps it, so it can never be more permissive than the rules.
-- **Audit log:** SHA-256 hash chain with verification and an external anchor.
+- **Audit log:** SHA-256 hash chain with verification. To detect a full-history rewrite, copy the head hash to an independent location; GenomeGuard does not automatically publish an external anchor.
 - **Patient portal:** donors see who used statistics that included them, change or withdraw
   consent, and download it as a FHIR R4 Consent resource.
 - **Interop and crypto demos:** a GA4GH Beacon v2 style endpoint under the same checks, Paillier
