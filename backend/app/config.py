@@ -1,6 +1,4 @@
-"""Infrastructure settings, read from environment variables prefixed GG_ (e.g. GG_DB_PATH).
-Privacy / anomaly thresholds live in app/core/params.py (also overridable via GG_<NAME>)."""
-
+"""Infrastructure settings, read from environment variables prefixed GG_."""
 from __future__ import annotations
 
 import os
@@ -21,6 +19,8 @@ def _env(name: str, default, cast=str):
 
 @dataclass
 class Settings:
+    # PostgreSQL is selected when GG_DATABASE_URL is set; SQLite remains for local demo/testing.
+    database_url: str = field(default_factory=lambda: _env("database_url", ""))
     db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
@@ -36,9 +36,7 @@ class Settings:
     n_populations: int = field(default_factory=lambda: _env("n_populations", 3, int))
     n_families: int = field(default_factory=lambda: _env("n_families", 120, int))
     n_planted_rare: int = field(default_factory=lambda: _env("n_planted_rare", 5, int))
-    # Path to a cohort built by `python -m app.data.real build`. Production mode requires real
-    # genotype provenance plus explicit source-matched consent records; synthetic consent is
-    # accepted only in demo mode.
+    # Non-demo mode requires real genotypes and source-matched authorization records.
     real_cohort_file: str = field(default_factory=lambda: _env("real_cohort_file", ""))
 
 
@@ -50,12 +48,7 @@ settings = Settings()
 
 
 def validate_settings(s: Settings) -> None:
-    """Fail closed for non-demo deployments with unsafe security settings.
-
-    Demo mode intentionally publishes synthetic demo credentials and may enable the
-    audit-tamper exercise. Those settings must never silently carry into a deployment
-    intended to handle anything beyond the bundled synthetic cohort.
-    """
+    """Fail closed for non-demo deployments with unsafe security settings."""
     if s.demo_mode:
         return
 

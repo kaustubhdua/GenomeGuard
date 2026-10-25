@@ -129,6 +129,9 @@ class AuditChain:
         self.allow_tamper = allow_tamper
 
     def append(self, actor: str, action: str, payload: Any, ts: str | None = None) -> dict:
+        atomic_append = getattr(self.store, "append_atomic", None)
+        if atomic_append is not None:
+            return atomic_append(actor, action, payload, ts)
         last = self.store.last()
         prev = last["hash"] if last else GENESIS
         idx = (last["idx"] + 1) if last else 1

@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 
 from app.core import crypto
-from app.core.audit_chain import jsonable
+from app.core.audit_chain import GENESIS, entry_hash, jsonable
 from app.core.consent import DonorView
 from app.core.dataset import Dataset
 
@@ -104,7 +104,7 @@ class Store:
         planted = set(cohort.planted)
         with self.lock:
             d = self.db
-            for t in ("donors", "genotypes", "variants", "relationships"):
+            for t in ("genotypes", "donor_access", "donors", "variants", "relationships"):
                 d.execute(f"DELETE FROM {t}")
             d.execute("DELETE FROM cohort_metadata")
             d.execute("INSERT INTO cohort_metadata(id,dataset_id,metadata_json) VALUES(1,?,?)",
@@ -305,6 +305,23 @@ class AuditStore:
         return {"idx": r["idx"], "ts": r["ts"], "actor": r["actor"], "action": r["action"],
                 "payload": json.loads(r["payload_json"]), "prev_hash": r["prev_hash"],
                 "hash": r["hash"]}
+
+
+    def append_atomic(self, actor: str, action: str, payload: Any, ts: str | None = None) -> dict:
+        """Append under the store lock; PostgreSQL overrides this with a cross-process lock."""
+        if hasattr(self.s, "append_audit_entry"):
+            return self.s.append_audit_entry(actor, action, payload, ts)
+        with self.s.lock:
+            last = self.last()
+            idx = int(last["idx"]) + 1 if last else 1
+            previous = last["hash"] if last else GENESIS
+            stamp = ts or now_iso()
+            safe_payload = jsonable(payload)
+            entry = {"idx": idx, "ts": stamp, "actor": actor, "action": action,
+                     "payload": safe_payload, "prev_hash": previous,
+                     "hash": entry_hash(idx, stamp, actor, action, safe_payload, previous)}
+            self.add(entry)
+            return entry
 
     def add(self, e: dict) -> None:
         self.s.x("INSERT INTO audit_log VALUES(?,?,?,?,?,?,?)",

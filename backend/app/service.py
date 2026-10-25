@@ -28,6 +28,7 @@ import time
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
+from functools import wraps
 
 import numpy as np
 
@@ -47,6 +48,18 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9_\-]{1,32}$")
 DISEASE = re.compile(r"^[a-z_]{1,32}$")
 CHECKED_KEYS = ("cohort_id", "population")
 INVERSE = {"parent": "child", "grandparent": "grandchild", "aunt/uncle": "niece/nephew"}
+
+
+def transactional(method):
+    """Wrap a complete service mutation in one store transaction when supported."""
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        transaction = getattr(self.store, "transaction", None)
+        if transaction is None:
+            return method(self, *args, **kwargs)
+        with transaction():
+            return method(self, *args, **kwargs)
+    return wrapped
 
 
 class ServiceError(Exception):
@@ -94,6 +107,7 @@ class GenomeGuardService:
     def is_admin(self, key: str | None) -> bool:
         return bool(key) and hash_key(key) == self.admin_hash
 
+    @transactional
     def create_requester(self, name: str, role: str, level: str, institution: str, key: str) -> int:
         rid = self.store.add_requester(name, role, level, institution, hash_key(key))
         self.audit.append("admin", "requester.created", {"requester_id": rid, "tier": level})
@@ -222,6 +236,7 @@ class GenomeGuardService:
         return "permit" if outcome.startswith("permit") else outcome
 
     # ================================================================== submit
+    @transactional
     def submit(self, requester: dict, req: dict, now: float | None = None) -> dict:
         now = self.clock() if now is None else now
         rid = requester["id"]
@@ -380,6 +395,7 @@ class GenomeGuardService:
             "score": round(a.score, 3), "action": a.action})
 
     # ================================================================== human actions
+    @transactional
     def review(self, req_id: int, reviewer: str, approve: bool) -> dict:
         d = self.store.decision(req_id)
         if not d:
@@ -553,6 +569,7 @@ class GenomeGuardService:
             "accesses": acc[:50], "access_total": len(acc),
             "note": "Aggregate statistics only. No researcher ever received your genome."}
 
+    @transactional
     def donor_set_withdrawn(self, donor_id: int, withdrawn: bool) -> dict:
         d = self._donor(donor_id)
         if d.withdrawn == withdrawn:
@@ -567,6 +584,7 @@ class GenomeGuardService:
     CONSENT_USES = ("GRU", "HMB", "DS")
     CONSENT_MODS = ("NCU", "NPU", "NMDS", "NAGR", "NCTRL")
 
+    @transactional
     def donor_set_consent(self, donor_id: int, change: dict) -> dict:
         """The donor edits what they agree to. Only whitelisted DUO-style fields are accepted;
         the change applies to future requests and is audited without the donor's identity."""
@@ -668,6 +686,7 @@ class GenomeGuardService:
         text = self._agent("concierge", facts, actor="agent:donor")
         return {"intent": intent, "answer": text}
 
+    @transactional
     def freeze(self, rid: int, by: str = "admin") -> dict:
         if not self.store.requester(rid):
             raise ServiceError(404, "not_found", "no such requester")
@@ -676,6 +695,7 @@ class GenomeGuardService:
         self.audit.append(f"human:{by}", "requester.frozen", {"requester_id": rid, "manual": True})
         return self.store.requester(rid)
 
+    @transactional
     def unfreeze(self, rid: int, by: str = "admin") -> dict:
         if not self.store.requester(rid):
             raise ServiceError(404, "not_found", "no such requester")
@@ -864,7 +884,13 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         if not source_meta.get("consent_source_file") or not source_meta.get("consent_records_sha256"):
             raise ValueError("non-demo mode requires consent-source provenance from --consent-json")
 
-    store = store or Store(s.db_path)
+    if store is None:
+        if s.database_url:
+            from app.postgres_store import PostgresStore
+
+            store = PostgresStore(s.database_url)
+        else:
+            store = Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
     if not store.has_dataset():
         if s.real_cohort_file:

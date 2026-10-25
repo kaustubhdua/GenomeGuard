@@ -17,6 +17,8 @@ services:
         value: /app/data_real/1000g_phase3_chr22.npz
       - key: GG_DATASET_ID
         value: igsr-1000g-phase3-public-release
+      - key: GG_DATABASE_URL
+        sync: false   # Dedicated PostgreSQL URL; never reuse another project's database
       - key: GG_MASTER_KEY
         sync: false   # set by hand: python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
       - key: GG_ADMIN_API_KEY
