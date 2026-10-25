@@ -55,7 +55,7 @@ def main() -> int:
                 # UI renders this empty-data state rather than treating it as a broken route.
                 expected_empty_record = (
                     response.status == 404
-                    and re.fullmatch(r"/requests/\\d+(?:/exposure)?", path)
+                    and re.fullmatch(r"/requests/\d+(?:/exposure)?", path)
                     and "application/json" in response.headers.get("content-type", "")
                 )
                 if not expected_empty_record:
