@@ -40,7 +40,9 @@ export async function render() {
 function listSection(res) {
   if (!res.ok) return notice("err", errorText(res));
   const rows = res.data.requests || [];
-  if (!rows.length) return h("div", { class: "empty" }, "No requests yet. Run the diabetes preset above to see a decision.");
+  if (!rows.length) return h("div", { class: "empty" }, state.demo
+    ? "No requests yet. Run a demo preset above to see a decision."
+    : "No requests yet. Submit an authorized request above to evaluate the current cohort policy.");
   const t = h("div", { class: "tablewrap" }, h("table", {},
     h("thead", {}, h("tr", {}, h("th", {}, "#"), h("th", {}, "When"), isSteward() ? h("th", {}, "Account") : null, h("th", {}, "Request"), h("th", {}, "Outcome"))),
     h("tbody", {}, rows.map((r) => {
@@ -60,7 +62,10 @@ function listSection(res) {
 }
 
 function formSection(out) {
-  const st = { ...PRESETS[0].body };
+  const st = state.demo ? { ...PRESETS[0].body } : {
+    purpose: "general_research", disease: null, data_level: "frequency", is_commercial: false,
+    cohort_filter: {}, variant_filter: { min_maf: 0.01, limit: 20 },
+  };
   const f = {};
   const sel = (id, label, opts, val) => {
     f[id] = h("select", { id, onchange: sync }, opts.map((o) => h("option", { value: o }, o === "" ? "any / none" : o.replaceAll("_", " "))));
@@ -71,10 +76,12 @@ function formSection(out) {
   const preview = h("div", { "aria-live": "polite" });
   const msg = h("div", {});
   const form = h("div", { class: "form" },
-    sel("purpose", "Purpose", PURPOSES, st.purpose), sel("disease", "Disease area", DISEASES, st.disease || ""),
+    sel("purpose", "Purpose", PURPOSES, st.purpose),
+    state.demo ? sel("disease", "Disease area", DISEASES, st.disease || "")
+      : inp("disease", "Disease identifier (required only for disease-specific consent)", st.disease || ""),
     sel("level", "Data level", LEVELS, st.data_level), inp("pop", "Population filter", ""), inp("coh", "Cohort filter", ""),
     inp("maf", "Minimum allele frequency", st.variant_filter.min_maf, "number"), inp("lim", "Number of variants", st.variant_filter.limit, "number"),
-    inp("pl", "Rare demo variants to include", st.variant_filter.include_planted || 0, "number"),
+    state.demo ? inp("pl", "Rare demo variants to include", st.variant_filter.include_planted || 0, "number") : null,
     h("label", { class: "f chk" }, (f.com = h("input", { type: "checkbox", id: "com", onchange: sync })), "Commercial use"));
 
   function body() {
@@ -82,12 +89,14 @@ function formSection(out) {
     if (f.pop.value.trim()) cf.population = f.pop.value.trim();
     if (f.coh.value.trim()) cf.cohort_id = f.coh.value.trim();
     return { purpose: f.purpose.value, disease: f.disease.value || null, data_level: f.level.value, is_commercial: f.com.checked, cohort_filter: cf,
-      variant_filter: { min_maf: Number(f.maf.value), limit: Number(f.lim.value), include_planted: Number(f.pl.value) } };
+      variant_filter: { min_maf: Number(f.maf.value), limit: Number(f.lim.value), ...(state.demo ? { include_planted: Number(f.pl.value) } : {}) } };
   }
   function load(b) {
     f.purpose.value = b.purpose; f.disease.value = b.disease || ""; f.level.value = b.data_level; f.com.checked = !!b.is_commercial;
     f.pop.value = b.cohort_filter.population || ""; f.coh.value = b.cohort_filter.cohort_id || "";
-    f.maf.value = b.variant_filter.min_maf; f.lim.value = b.variant_filter.limit; f.pl.value = b.variant_filter.include_planted || 0; sync();
+    f.maf.value = b.variant_filter.min_maf; f.lim.value = b.variant_filter.limit;
+    if (f.pl) f.pl.value = b.variant_filter.include_planted || 0;
+    sync();
   }
   let timer;
   function sync() { clearTimeout(timer); timer = setTimeout(refreshPreview, 200); }
@@ -129,15 +138,15 @@ function formSection(out) {
   }
 
   const submitBtn = h("button", { onclick: (e) => submit(body(), e.target) }, "Send request");
-  const probeBtn = h("button", { class: "ghost", onclick: (e) => probe(e.target), title: "Demo: what a probing account looks like to the monitor" }, "Run probe sequence");
+  const probeBtn = state.demo ? h("button", { class: "ghost", onclick: (e) => probe(e.target), title: "Demo: what a probing account looks like to the monitor" }, "Run probe sequence") : null;
   const reqs = state.demo ? state.demo.requesters : [];
   const att = reqs.find((r) => r.name === "Probe Account");
   const wrap = h("div", { class: "ledger" },
-    row("New request", "Fill in or pick a preset",
-      h("div", { class: "presets" }, PRESETS.map((p) => h("button", { class: "ghost", title: p.why, onclick: () => load(p.body) }, p.name))), form,
+    row("New request", state.demo ? "Fill in or pick a preset" : "Submit a query against the imported cohort and current consent rules",
+      state.demo ? h("div", { class: "presets" }, PRESETS.map((p) => h("button", { class: "ghost", title: p.why, onclick: () => load(p.body) }, p.name))) : null, form,
       h("div", { style: "margin-top:12px;display:flex;gap:10px;flex-wrap:wrap" }, submitBtn, probeBtn,
         att && state.who !== att.api_key ? h("button", { class: "ghost", onclick: () => { setWho(att.api_key); location.reload(); } }, "Switch to the probe account") : null), msg),
     row("Consent check", "Updates as you type", preview));
-  load(PRESETS[0].body);
+  load(state.demo ? PRESETS[0].body : st);
   return wrap;
 }
