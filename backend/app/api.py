@@ -121,7 +121,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                    "donors": S().ds.n_donors, "variants": S().ds.n_variants,
                    "k_min": S().p.k_min, "audit_chain_ok": v["ok"], "provenance": prov,
                    "agents_use_llm": S().team.agents["explainer"].llm.available,
-                   "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo})
+                   "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo,\n                   "storage_backend": getattr(S().store, "backend", "sqlite")})
 
     @route("GET", "/health/ready", "Production readiness gate; distinguishes liveness from safe real-data operation", "public")
     async def readiness(request):
@@ -141,7 +141,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "destructive_tamper_demo_disabled": not settings.allow_tamper_demo,
             # The current Store is SQLite. A path alone cannot prove that the hosting
             # volume is durable, backed up, or shared safely across instances.
-            "durable_storage_verified": False,
+            "postgres_storage_configured": getattr(svc.store, "backend", "sqlite") == "postgresql",\n            # Provider backups, retention, restart persistence, and a clean restore drill must be\n            # evidenced by the operator; selecting PostgreSQL alone is not enough.\n            "durable_storage_verified": False,
             # A local hash chain is tamper-evident, not immutable without an independently
             # controlled anchor. No external anchor integration is configured in this build.
             "external_audit_anchor_verified": False,
