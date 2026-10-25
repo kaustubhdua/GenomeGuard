@@ -97,10 +97,12 @@ next sequence number and inserts the hash-linked entry in the same transaction. 
 `audit_log.idx` is a second guard against duplicate sequence numbers. A failed audit insert must
 surface as a failed operation; it must not be swallowed and reported as a successful decision.
 
-The current domain service still performs several business writes in separate store calls; this
-adapter does not claim a single atomic transaction spanning request, decision, budget charge, and
-all audit events. Before controlled/private cohort use, implement and test a unit-of-work boundary
-covering the entire decision lifecycle and prove rollback behavior under injected failures.
+The service now wraps request submission, review, requester provisioning, consent changes, withdrawal,
+and account freeze/unfreeze in a PostgreSQL unit of work. The adapter uses a transaction-scoped
+advisory lock to serialize these mutation units across instances; this is deliberately conservative
+and may limit write throughput. Integration tests exercise transaction rollback. The exact deployed
+release must pass the full PostgreSQL integration suite before this can be treated as verified.
+External audit anchoring and production restore drills remain separate release gates.
 
 ## Still required before private/controlled genomic data
 
