@@ -104,7 +104,7 @@ class Store:
         planted = set(cohort.planted)
         with self.lock:
             d = self.db
-            for t in ("donors", "genotypes", "variants", "relationships"):
+            for t in ("genotypes", "donor_access", "donors", "variants", "relationships"):
                 d.execute(f"DELETE FROM {t}")
             d.execute("DELETE FROM cohort_metadata")
             d.execute("INSERT INTO cohort_metadata(id,dataset_id,metadata_json) VALUES(1,?,?)",
