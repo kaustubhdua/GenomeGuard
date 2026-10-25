@@ -81,6 +81,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Real-data evaluation and provenance](docs/real-data.md)
 - [Real cohort ingestion and consent requirements](docs/real-cohort-consent.md)
 - [Hosted deployment and operational limitations](docs/production-deployment.md)
+- [PostgreSQL operations, backups, and recovery](docs/postgresql-operations.md)
 
 ## Security and privacy
 
