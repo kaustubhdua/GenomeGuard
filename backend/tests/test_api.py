@@ -170,3 +170,23 @@ def test_he_endpoint_public_and_correct():
     r = c.get("/federated/he")
     assert r.status_code == 200 and r.json()["matches_plaintext"] is True
     assert r.json()["aggregator_saw"]["plaintexts"] == "none"
+
+
+def test_untamper_repeats_the_demo_but_cannot_repair_real_edits():
+    svc, c = make_client(allow_tamper_demo=True)
+    c.post("/requests", json=DEMO_REQ, headers=H(RESEARCHER))
+    assert c.post("/admin/untamper").status_code == 401
+    c.post("/admin/tamper/2", headers=ADMIN)
+    assert c.get("/audit/verify").json()["ok"] is False
+    fixed = c.post("/admin/untamper", headers=ADMIN).json()
+    assert fixed["ok"] is True and fixed["markers_removed"] == 1
+    # a genuine edit (not our marker) must stay detected
+    rows = svc.audit.store.all()
+    svc.audit.store.replace_payload(3, {**rows[2]["payload"], "changed": 1})
+    assert c.post("/admin/untamper", headers=ADMIN).json()["ok"] is False
+    assert c.get("/audit/verify").json()["first_broken_index"] == 3
+
+
+def test_untamper_403_when_disabled():
+    svc, c = make_client()
+    assert c.post("/admin/untamper", headers=ADMIN).status_code == 403

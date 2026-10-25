@@ -163,3 +163,17 @@ class AuditChain:
         new = dict(payload) if isinstance(payload, dict) else {"value": payload}
         new["_tampered"] = True
         self.store.replace_payload(idx, new)
+
+    def untamper(self) -> int:
+        """DEMO ONLY: remove the `_tampered` marker that tamper() added, so the demo can be
+        repeated. It restores nothing else: if an entry was altered any other way the chain stays
+        broken, which is the point of the chain. Returns how many markers were removed."""
+        if not self.allow_tamper:
+            raise PermissionError("tamper demo is disabled")
+        n = 0
+        for i, row in enumerate(self.store.all(), start=1):
+            pl = row["payload"]
+            if isinstance(pl, dict) and pl.get("_tampered") is True:
+                self.store.replace_payload(i, {k: v for k, v in pl.items() if k != "_tampered"})
+                n += 1
+        return n

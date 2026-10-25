@@ -1,6 +1,6 @@
 # Three-minute demo script
 
-Run it on a **fresh database** (the probe account freezes and the audit chain gets tampered, and
+Run it on a **fresh database** (the probe account freezes and the audit chain gets tampered (Undo demo tamper reverses that), and
 those are permanent). `make demo` runs the same steps automatically and checks each one.
 
 **Shortcut:** on the Overview, **Take the 3-minute tour** walks the same story and performs the
@@ -27,6 +27,6 @@ Open the app, say once: **"All data here is synthetic."**
 
 ## If something goes wrong
 
-- Chain already tampered or probe already frozen: restart with a new `GG_DB_PATH`.
+- Chain already tampered: press **Undo demo tamper** on the Audit page (it removes only the demo marker; any other edit stays detected). Probe already frozen: unfreeze on Anomalies, or restart with a new `GG_DB_PATH`.
 - No API key: nothing to do. Explanations come from templates, which is the default.
 - Browser cached an old state: hard reload, or clear site data for the page.

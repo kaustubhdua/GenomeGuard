@@ -783,10 +783,15 @@ class GenomeGuardService:
             raise ServiceError(404, "not_found", "no such audit entry") from None
         return self.audit.verify()
 
-    def restore_demo(self) -> None:
-        """Demo helper: rebuild the audit chain from scratch is NOT offered (that would defeat the
-        point); instead the UI tells the presenter to restart with a fresh database."""
-        raise ServiceError(405, "not_supported", "a tampered chain stays tampered; reset the DB")
+    def untamper(self) -> dict:
+        """Demo helper: remove the marker the tamper demo added so the demo can be repeated.
+        It cannot repair any other change, so a genuinely altered chain stays broken."""
+        try:
+            removed = self.audit.untamper()
+        except PermissionError:
+            raise ServiceError(403, "tamper_disabled",
+                               "set GG_ALLOW_TAMPER_DEMO=true to enable the demo") from None
+        return {**self.audit.verify(), "markers_removed": removed}
 
     def compliance_report(self, start: str | None = None, end: str | None = None) -> dict:
         rows = self.store.decisions(None, 5000)
