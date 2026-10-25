@@ -185,9 +185,15 @@ Use the workflow pages for the newest results and confirm the run SHA before pre
 
 Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) for the evidence matrix and [`docs/FINAL_JUDGE_RUNBOOK.md`](docs/FINAL_JUDGE_RUNBOOK.md) for the release go/no-go checklist and reproducible walkthrough. Main CI and axe-core browser QA have passed; real-genotype and pedigree-aware evaluation, FHIR R4 structural validation, Beacon core-schema checks, and dependency audit have also passed. A deployed walkthrough still requires an authorized Render workspace and verified public URL. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
 
-## Audit anchor
+## Audit integrity
 
-Copy the current head hash from the Audit page into this section after a final run, so a rewritten
-history no longer matches: `head hash: (not yet published)`.
+The SHA-256 chain makes edits to individual audit records detectable when checked against the
+expected chain head. It does **not** prevent an administrator with full database access from
+rewriting the database and recomputing every hash. GenomeGuard does not automatically publish the
+chain head to an independent trusted service. For an evaluation, export the head hash from the Audit
+page and store it separately; compare that external copy during later verification. Do not describe
+a local hash-chain check as immutable or independently anchored evidence.
 
-MIT licence.
+## Licence
+
+MIT. See [LICENSE](LICENSE).
