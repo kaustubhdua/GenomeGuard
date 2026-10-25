@@ -66,7 +66,7 @@ def main() -> int:
             check(f"{width}px overview has no horizontal overflow", not layout["overflow"], str(layout))
             ctx.close()
         browser.close()
-    print("\\n" + ("LIVE UI SMOKE PASSED" if not FAILURES else f"LIVE UI SMOKE FAILED ({len(FAILURES)} checks)"))
+    print("\n" + ("LIVE UI SMOKE PASSED" if not FAILURES else f"LIVE UI SMOKE FAILED ({len(FAILURES)} checks)"))
     return 1 if FAILURES else 0
 
 
