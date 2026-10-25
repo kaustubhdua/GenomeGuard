@@ -67,7 +67,7 @@ def main() -> int:
                     page.goto(base + "/" + route, wait_until="domcontentloaded")
                     page.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
                     content = page.locator("#view").inner_text().lower()
-                    if route in ("#/request/1", "#/family/1") and "no such request" in content:
+                    if route in ("#/request/1", "#/family/1") and ("no such request" in content or "no request #" in content):
                         check(f"{theme} {route} explicit empty-data state", True)
                     else:
                         check(f"{theme} {route}", page.locator("#view h1").count() == 1)
