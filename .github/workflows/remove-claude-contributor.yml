@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   rewrite-main:
-    if: github.event.head_commit.message == 'Maintenance: remove Claude attribution from main history'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -75,7 +74,7 @@ jobs:
         if: success()
         run: |
           echo "## History attribution cleanup" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Previous main: \`\${{ steps.rewrite.outputs.old_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Rewritten main: \`\${{ steps.rewrite.outputs.new_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Previous main: \`${{ steps.rewrite.outputs.old_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rewritten main: \`${{ steps.rewrite.outputs.new_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- A backup branch named \`backup/main-before-claude-attribution-20261025\` preserves the original main history." >> "$GITHUB_STEP_SUMMARY"
           echo "- Code trees and merge topology are preserved; only Claude/Anthropic author/committer identities and Claude co-author/session message lines are changed." >> "$GITHUB_STEP_SUMMARY"
