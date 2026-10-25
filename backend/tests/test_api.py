@@ -36,7 +36,9 @@ def test_submit_and_read_back_own_request_only():
     assert r.status_code == 201 and r.json()["outcome"] == "permit_with_transform"
     rid = r.json()["id"]
     assert c.get(f"/requests/{rid}", headers=H(RESEARCHER)).json()["id"] == rid
-    assert c.get(f"/requests/{rid}", headers=H(ATTACKER)).status_code == 403
+    assert c.get(f"/requests/{rid}", headers=H(ATTACKER)).status_code == 404
+    assert c.get("/requests/999999", headers=H(ATTACKER)).status_code == 404
+    assert c.get("/requests/999999").status_code == 401
     assert c.get(f"/requests/{rid}", headers=ADMIN).status_code == 200
     mine = c.get("/requests", headers=H(RESEARCHER)).json()["requests"]
     assert len(mine) == 1 and "release" not in mine[0]
@@ -82,6 +84,9 @@ def test_review_endpoint_requires_admin_and_works():
     d = c.post("/requests", json=req, headers=H("demo-controlled")).json()
     assert d["needs_human"]
     assert c.post(f"/requests/{d['id']}/review", json={"approve": True}).status_code == 401
+    # Strings such as "false" must never be coerced to truthy approval.
+    invalid = c.post(f"/requests/{d['id']}/review", json={"approve": "false"}, headers=ADMIN)
+    assert invalid.status_code == 422 and invalid.json()["error"] == "invalid_review"
     out = c.post(f"/requests/{d['id']}/review", json={"approve": True, "reviewer": "carol"},
                  headers=ADMIN).json()
     assert out["status"] == "released" and out["reviewed_by"] == "carol"
