@@ -1,13 +1,18 @@
 # Verification evidence
 
-- [CI workflow page](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml) — representative full run after request-authorization hardening: [run #40176502384](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40176502384) on commit `de5287521161a3ee4b662a6f51f7a43823b14802`, including backend tests, request authorization/review regressions, evaluation, demo, JavaScript/Python checks, Playwright, responsive checks, axe-core, and a desktop/mobile screenshot artifact. Check the workflow page for the newest run.
-- [1000 Genomes Phase 3 ingestion/evaluation workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/real-data-validation.yml) — [successful run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665), 600 samples × 3,000 variants.
-- [High-coverage family cohort workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/family-data-validation.yml) — [successful run #40174766759](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759), 600 samples and 355 observed pedigree relationship pairs.
-- [HL7 FHIR R4 Consent validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173012914) — synthetic Consent export passed the pinned validator.
-- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173357263) — schema-level checks only, not full certification.
-- [Dependency audit and CycloneDX SBOM](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173357246).
+Latest reviewed main SHA: [`24dc4cd61a2f864a4dea281e586ec214236ac2df`](https://github.com/kaustubhdua/GenomeGuard/commit/24dc4cd61a2f864a4dea281e586ec214236ac2df).
 
-Use the workflow pages for the newest results and confirm the run SHA before presenting. These runs prove specific automated gates only. They do not prove that a public Render instance is live, that real consent exists, that Beacon v2 conformance is complete, or that the custom privacy accountant is formally differentially private. The high-coverage run validates pedigree-aware cohort building and simulated attack evaluation, not clinical or consent-management workflows.
+- [Full CI workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml) — [run #40183378269](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378269) passed backend tests, lint, seeded demo, evaluation, scripted end-to-end demo, JavaScript/Python checks, Playwright routes, responsive layouts, reduced-motion and axe-core WCAG A/AA scans. It preserves desktop/mobile screenshots as a 14-day artifact.
+- [1000 Genomes Phase 3 ingestion/evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665) — 600 samples × 3,000 variants; source hashes/build parameters recorded.
+- [High-coverage family cohort](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759) — 600 samples and 355 observed pedigree relationship pairs; source metadata and simulated-consent status recorded.
+- [HL7 FHIR R4 Consent validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378296) — synthetic Consent export validated with pinned HL7 FHIR Validator CLI 7.0.1 against R4 4.0.1 and project extension definitions.
+- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378253) — response envelopes checked against pinned official schemas; this is not full Beacon certification.
+- [Dependency audit and CycloneDX SBOM](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378259) — resolved Python dependency set passed pinned pip-audit checks and generated an SBOM artifact.
 
+## What these checks prove—and do not prove
 
-For the per-criterion evidence matrix used for the hackathon submission, see [`hackathon/HACKATHON_RELEASE_GATE.md`](hackathon/HACKATHON_RELEASE_GATE.md). A public deployment has not been verified from this repository; list a live URL only after testing it with `make deploy-smoke`.
+These are automated checks on the cited commits. They do not prove that a public Render instance is live, that real consent exists, that Beacon v2 conformance is complete, or that the custom privacy accountant provides a formal differential-privacy guarantee. The high-coverage workflow validates real genotype/pedigree ingestion and a simulated evaluation; it does not validate clinical outcomes or a real consent-management process.
+
+A public deployment has **not** been verified in this audit. Do not list a live URL or claim a deployed SHA until the actual hosting service is inspected and the URL passes `make deploy-smoke URL=<actual-url>` and `make live-ui-smoke URL=<actual-url>`. The repository's Render Blueprint is not proof that a service exists.
+
+For the per-criterion evidence matrix and the remaining release blockers, see [`hackathon/HACKATHON_RELEASE_GATE.md`](hackathon/HACKATHON_RELEASE_GATE.md), [`hackathon/JUDGE_READINESS_PLAN.md`](hackathon/JUDGE_READINESS_PLAN.md), and [`hackathon/FINAL_JUDGE_RUNBOOK.md`](hackathon/FINAL_JUDGE_RUNBOOK.md).
