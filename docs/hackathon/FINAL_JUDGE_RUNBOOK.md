@@ -2,6 +2,13 @@
 
 **Purpose:** deliver a reproducible, truthful 3-minute demo of the current synthetic-data prototype. This is a demo checklist, not a claim of production healthcare readiness.
 
+
+## Latest repository evidence (2026-10-25)
+
+The reviewed main commit is [`24dc4cd61a2f864a4dea281e586ec214236ac2df`](https://github.com/kaustubhdua/GenomeGuard/commit/24dc4cd61a2f864a4dea281e586ec214236ac2df). The latest full CI, including the browser suite and axe-core scan, passed in [run #40183378269](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378269). Separate checks passed on that same SHA: [GA4GH Beacon v2 response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378253), [Python dependency vulnerability audit and SBOM](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378259), and [HL7 FHIR R4 Consent validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40183378296). Real-genotype ingestion and pedigree-aware family cohort evaluation passed in [Phase 3 run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665) and [family-cohort run #40174766759](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759).
+
+**Still a release blocker:** no public Render URL/deployed commit has been verified in this audit. Complete the deployment checklist below only after the Render workspace/service is explicitly selected and the actual URL is known. Do not claim production readiness based on CI alone.
+
 ## Go/no-go checklist (complete before the judging slot)
 
 ### Release and hosting
