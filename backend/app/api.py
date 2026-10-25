@@ -234,22 +234,24 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/requests/{id:int}", "One decision in detail", "requester|admin")
     async def get_request(request):
         rid = request.path_params["id"]
+        is_admin = S().is_admin(request.headers.get("x-admin-key"))
+        current = None if is_admin else requester(request)
         d = S().store.decision(rid)
-        if not d:
+        # Use the same response for missing and non-owned requests to prevent ID enumeration.
+        if not d or (current is not None and d["requester_id"] != current["id"]):
             raise ServiceError(404, "not_found", "no such request")
-        if S().is_admin(request.headers.get("x-admin-key")):
+        if is_admin:
             return _j(d)
-        if d["requester_id"] != requester(request)["id"]:
-            raise ServiceError(403, "forbidden", "not your request")
         return _j(requester_view(d))
 
     @route("POST", "/requests/{id:int}/review", "Human approve/deny of an escalation", "admin")
     async def review(request):
         admin(request)
         b = await _body(request)
+        if not isinstance(b.get("approve"), bool):
+            raise ServiceError(422, "invalid_review", "approve must be a JSON boolean")
         who = str(b.get("reviewer", "reviewer"))[:32]
-        d = await run_in_threadpool(S().review, request.path_params["id"], who,
-                                    bool(b.get("approve")))
+        d = await run_in_threadpool(S().review, request.path_params["id"], who, b["approve"])
         return _j(d)
 
     @route("POST", "/requests/{id:int}/copilot", "Steward copilot: a read-only, tool-using agent "
