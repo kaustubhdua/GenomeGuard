@@ -1,5 +1,6 @@
 import copy
 import random
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -12,6 +13,7 @@ from app.core.audit_chain import (
     jsonable,
     verify,
 )
+from app.store import AuditStore, Store
 
 
 def make_chain(n=12, allow_tamper=False):
@@ -162,3 +164,19 @@ def test_nan_rejected_so_hashes_stay_portable():
         raise AssertionError("NaN must be rejected")
     except ValueError:
         pass
+
+
+
+def test_store_backed_concurrent_appends_keep_a_contiguous_chain():
+    store = Store(":memory:")
+    chain = AuditChain(AuditStore(store))
+    try:
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            list(pool.map(lambda i: chain.append("worker", "test.concurrent", {"i": i}),
+                          range(100)))
+        result = chain.verify()
+        assert result["ok"] is True
+        assert result["length"] == 100
+        assert [entry["idx"] for entry in chain.entries()] == list(range(1, 101))
+    finally:
+        store.db.close()
