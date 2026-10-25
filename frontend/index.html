@@ -16,10 +16,21 @@
     <a class="brand" href="#/overview"><span class="mark" aria-hidden="true"></span>GenomeGuard</a>
     <div class="nav" id="nav"></div>
     <div class="who">
-      <label for="who">Acting as</label>
+      <label for="who" id="who-label">Acting as</label>
       <select id="who"></select>
+      <div id="auth-panel" hidden>
+        <label for="auth-kind">Connect as</label>
+        <select id="auth-kind">
+          <option value="researcher">Researcher</option>
+          <option value="steward">Data steward</option>
+        </select>
+        <label for="api-key-input" style="margin-top:8px">Issued API key</label>
+        <input id="api-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="Paste issued key">
+        <button id="connect-key" type="button" style="width:100%;margin-top:8px">Connect</button>
+        <p class="fine" id="auth-status" role="status" aria-live="polite"></p>
+      </div>
       <p class="fine" id="who-note"></p>
-      <p class="fine">Data sources are labelled in the top bar and on the Overview. No real patient data is used.</p>
+      <p class="fine">Data and consent provenance are labelled in the interface. Use only datasets you are authorized to process.</p>
     </div>
   </nav>
   <div class="scrim" id="scrim"></div>
