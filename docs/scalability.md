@@ -3,7 +3,7 @@
 Everything in the first two sections comes from `make bench` (`scripts/bench.py`). It runs the
 full decision pipeline in one process against SQLite on disk, with no network. The machine was a
 shared cloud sandbox with **2 vCPUs, Python 3.13**; the raw output is in `bench-results.json`.
-Run `make bench` on your own hardware and quote that, with its hardware line, on any slide.
+Run `make bench` on the target hardware and record the result together with the hardware and runtime details whenever publishing performance figures.
 
 ## 1. Decision latency and cohort size (measured)
 
