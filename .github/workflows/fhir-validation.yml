@@ -54,3 +54,19 @@ jobs:
         run: |
           tar -czf /tmp/genomeguard-fhir-ig.tgz -C fhir/ig package
           java -jar /tmp/validator_cli.jar /tmp/genomeguard-consent-r4.json -version 4.0.1 -ig /tmp/genomeguard-fhir-ig.tgz
+      - name: Prove the validator rejects a malformed Consent resource
+        run: |
+          PYTHONPATH=backend .venv/bin/python scripts/export_fhir_fixture.py \
+            --invalid-status --out /tmp/genomeguard-consent-invalid.json
+          set +e
+          java -jar /tmp/validator_cli.jar /tmp/genomeguard-consent-invalid.json \
+            -version 4.0.1 -ig /tmp/genomeguard-fhir-ig.tgz > /tmp/fhir-negative.log 2>&1
+          validator_status=$?
+          set -e
+          if ! grep -qi "error" /tmp/fhir-negative.log; then
+            cat /tmp/fhir-negative.log
+            echo "Validator did not report an error for the deliberately invalid status (exit=$validator_status)"
+            exit 1
+          fi
+          echo "PASS: HL7 validator rejected the intentionally malformed Consent fixture"
+          grep -i "error" /tmp/fhir-negative.log | head -n 5
