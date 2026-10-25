@@ -64,6 +64,7 @@ jobs:
           assert m.get("relative_pairs", 0) > 0, m
           assert m.get("pedigree_relationships_present") is True, m
           assert m.get("family_enriched") is True, m
+          assert m.get("source") == "1000 Genomes (IGSR) high-coverage 30x (GRCh38)", m
           assert m.get("source_sample_metadata_file") == "20130606_g1k_3202_samples_ped_population.txt", m
           assert len(m.get("source_vcf_sha256", "")) == 64, m
           assert len(m.get("source_sample_metadata_sha256", "")) == 64, m
