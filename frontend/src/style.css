@@ -89,6 +89,7 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:18px 20px}
 .card.flush{padding:0;overflow:hidden}
 .card-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px}
+.card-title{font:600 14.5px/1.3 var(--sans);margin:0}
 .card-h span{color:var(--ink-3);font-size:13px}
 .grid{display:grid;gap:14px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))}

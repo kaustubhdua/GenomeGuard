@@ -3,6 +3,8 @@
 [![CI](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**Live synthetic demo:** https://genomeguard.onrender.com — uses simulated consent and synthetic data; research use only.
+
 GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Advisory AI components explain evidence for reviewers; deterministic application code remains responsible for access decisions.
 
 > **Research software — not for clinical or production use.** The default environment uses synthetic data, and requester identities and consent records are simulated. The project has not undergone independent security, privacy, clinical, or legal review. It must not be used to make decisions about real people or to store identifiable participant data.
@@ -77,6 +79,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Scalability notes](docs/scalability.md)
 - [Application walkthrough](docs/walkthrough.md)
 - [Real-data evaluation and provenance](docs/real-data.md)
+- [Hosted deployment and operational limitations](docs/production-deployment.md)
 
 ## Security and privacy
 

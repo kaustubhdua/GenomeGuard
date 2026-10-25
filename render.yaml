@@ -12,7 +12,7 @@ services:
       - key: GG_DEMO_MODE
         value: "true"
       - key: GG_ALLOW_TAMPER_DEMO
-        value: "true"
+        value: "false"  # Keep destructive audit-tampering demo disabled on hosted service
       - key: GG_MASTER_KEY
         sync: false   # set by hand: python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
       - key: GG_ADMIN_API_KEY
