@@ -14,7 +14,7 @@ export async function render([id]) {
   const res = await api(`/requests/${id}/exposure`);
   if (!res.ok) { root.append(notice("err", res.status === 404 ? "No request #" + id + " yet. Send one from the Requests page first." : errorText(res))); return root; }
   const g = res.data, t = g.totals;
-  root.append(notice("warn", h("b", {}, "Simulated model. "), g.model.replace(/^SIMULATED:\s*/, "")));
+  root.append(notice("warn", h("b", {}, "Modelled exposure. "), g.model.replace(/^SIMULATED:\s*/, "")));
   const ledger = h("div", { class: "ledger" });
   ledger.append(row("Summary", `Request #${g.request_id}`,
     h("p", { style: "margin:0" }, h("b", {}, t.subjects), " people in the request carry a very rare variant. ", h("b", {}, t.exposed_relatives), " of their relatives are not in the request, yet would be exposed by it."),
