@@ -1,0 +1,56 @@
+name: Dependency security audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - ".github/workflows/security-audit.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - ".github/workflows/security-audit.yml"
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install and resolve the application dependency set
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e '.[dev]'
+          # Audit every resolved third-party package; exclude only this local project, which is not published on PyPI.
+          .venv/bin/python -m pip freeze | grep -vi "genomeguard" > /tmp/genomeguard-audit-requirements.txt
+          test -s /tmp/genomeguard-audit-requirements.txt
+      - name: Install pinned pip-audit in an isolated tool environment
+        run: |
+          python -m venv /tmp/audit-venv
+          /tmp/audit-venv/bin/python -m pip install --upgrade pip
+          /tmp/audit-venv/bin/python -m pip install pip-audit==2.10.1
+      - name: Fail on known vulnerabilities in resolved runtime and development dependencies
+        run: /tmp/audit-venv/bin/pip-audit --strict --requirement /tmp/genomeguard-audit-requirements.txt
+      - name: Generate CycloneDX SBOM
+        if: always()
+        run: /tmp/audit-venv/bin/pip-audit --format cyclonedx-json --requirement /tmp/genomeguard-audit-requirements.txt --output /tmp/genomeguard-sbom.json || true
+      - name: Preserve dependency inventory
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: genomeguard-python-sbom
+          path: /tmp/genomeguard-sbom.json
+          if-no-files-found: warn
+          retention-days: 14
