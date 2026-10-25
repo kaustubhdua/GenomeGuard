@@ -12,10 +12,12 @@ const ROSTER = [
 ];
 
 export async function render() {
+  const hasIdentity = !!(state.demo || state.who || state.adminKey);
   const [reqs, verify, ev, me] = await Promise.all([
-    api("/requests"), api("/audit/verify"),
+    hasIdentity ? api("/requests") : Promise.resolve({ ok: false, status: 401, data: null }),
+    api("/audit/verify"),
     state.demo ? api("/eval/results") : Promise.resolve({ ok: false }),
-    isSteward() ? Promise.resolve({ ok: false }) : api("/me"),
+    isSteward() || !hasIdentity ? Promise.resolve({ ok: false }) : api("/me"),
   ]);
   const rows = reqs.ok ? reqs.data.requests || [] : [];
   const hl = state.health || {};
