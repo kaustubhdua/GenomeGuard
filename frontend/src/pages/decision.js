@@ -2,6 +2,11 @@ import { api, isSteward, state } from "../api.js";
 import { h, row, badge, lane, when, notice, errorText, reasonText, stepText, OUTCOME_LABEL, pct, workflow, timeline, pipeline } from "../ui.js";
 
 export async function render([id]) {
+  if (!state.demo && !state.who && !state.adminKey) {
+    return h("div", {}, h("h1", {}, "Request #" + id),
+      notice("warn", "Connect with an issued researcher API key or steward key in the sign-in panel before viewing request details."),
+      h("a", { href: "#/requests" }, "Back to requests"));
+  }
   const res = await api("/requests/" + id);
   if (!res.ok) { const r = h("div", {}, h("h1", {}, "Request #" + id), notice("err", errorText(res)), h("a", { href: "#/requests" }, "Back to requests")); return r; }
   const d = res.data, q = d.request || {}, risk = d.risk || {}, tr = d.transform || {};
