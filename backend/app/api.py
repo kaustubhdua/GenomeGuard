@@ -123,6 +123,39 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                    "agents_use_llm": S().team.agents["explainer"].llm.available,
                    "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo})
 
+    @route("GET", "/health/ready", "Production readiness gate; distinguishes liveness from safe real-data operation", "public")
+    async def readiness(request):
+        # A running process is not automatically safe for real genomic data. Keep this
+        # endpoint fail-closed until the loaded cohort and consent provenance are real,
+        # demo credentials are disabled, and durable storage plus independent audit
+        # anchoring have been explicitly verified by the operator.
+        svc = S()
+        provenance = getattr(svc, "provenance", {})
+        checks = {
+            "demo_mode_disabled": not settings.demo_mode,
+            "real_genotype_provenance": provenance.get("genotypes") == "real_vcf",
+            "source_matched_consent": (
+                provenance.get("consent") == "source_records"
+                and int(provenance.get("consent_records_matched") or 0) == int(svc.ds.n_donors)
+            ),
+            "destructive_tamper_demo_disabled": not settings.allow_tamper_demo,
+            # The current Store is SQLite. A path alone cannot prove that the hosting
+            # volume is durable, backed up, or shared safely across instances.
+            "durable_storage_verified": False,
+            # A local hash chain is tamper-evident, not immutable without an independently
+            # controlled anchor. No external anchor integration is configured in this build.
+            "external_audit_anchor_verified": False,
+            # Requester API keys are machine credentials, not verified human/institutional
+            # identities. This code has no institutional OIDC/SSO integration.
+            "institutional_identity_provider_verified": False,
+        }
+        ready = all(checks.values())
+        return _j({"status": "ready" if ready else "not_ready", "ready": ready,
+                   "checks": checks, "note": (
+                       "Readiness is not clinical or legal approval; independent security, "
+                       "privacy, and governance review remains required."
+                   )}, 200 if ready else 503)
+
     @route("GET", "/demo/requesters", "Demo accounts and keys (demo mode only)", "public")
     async def demo_requesters(request):
         if not settings.demo_mode:
