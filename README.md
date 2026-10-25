@@ -77,6 +77,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Scalability notes](docs/scalability.md)
 - [Application walkthrough](docs/walkthrough.md)
 - [Real-data evaluation and provenance](docs/real-data.md)
+- [Hosted deployment and operational limitations](docs/production-deployment.md)
 
 ## Security and privacy
 
