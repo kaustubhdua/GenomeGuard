@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from app.core.audit_chain import AuditChain
-from app.store import AuditStore
 from app.postgres_store import PostgresStore
+from app.store import AuditStore
 
 
 @pytest.fixture
