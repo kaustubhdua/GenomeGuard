@@ -2,22 +2,31 @@
 set -euo pipefail
 : "${GG_DATABASE_URL:?Set GG_DATABASE_URL to the source PostgreSQL URL}"
 : "${GG_RESTORE_TEST_URL:?Set GG_RESTORE_TEST_URL to a dedicated EMPTY restore-test database}"
+: "${GG_BACKUP_AGE_RECIPIENT:?Set an age public recipient for encrypting the temporary backup}"
+: "${GG_BACKUP_AGE_IDENTITY_FILE:?Set a path to the age identity file used to decrypt the backup}"
 command -v pg_dump >/dev/null || { echo "pg_dump is required" >&2; exit 2; }
 command -v pg_restore >/dev/null || { echo "pg_restore is required" >&2; exit 2; }
 command -v psql >/dev/null || { echo "psql is required" >&2; exit 2; }
+command -v age >/dev/null || { echo "age is required for backup encryption" >&2; exit 2; }
 if [[ "$GG_DATABASE_URL" == "$GG_RESTORE_TEST_URL" ]]; then
   echo "Refusing to restore over the source database." >&2
+  exit 2
+fi
+if [[ ! -r "$GG_BACKUP_AGE_IDENTITY_FILE" ]]; then
+  echo "The age identity file is not readable." >&2
   exit 2
 fi
 umask 077
 backup_dir="${TMPDIR:-/tmp}/genomeguard-pg-backup-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 mkdir -p "$backup_dir"
 trap 'rm -rf "$backup_dir"' EXIT
-backup_file="$backup_dir/genomeguard.dump"
-echo "Creating logical backup (temporary file is permission-restricted)..."
-pg_dump --dbname="$GG_DATABASE_URL" --format=custom --no-owner --no-privileges --file="$backup_file"
-echo "Restoring into the separately provisioned empty verification database..."
-pg_restore --dbname="$GG_RESTORE_TEST_URL" --no-owner --no-privileges --exit-on-error "$backup_file"
+encrypted_file="$backup_dir/genomeguard.dump.age"
+echo "Creating encrypted logical backup; plaintext is streamed directly to age..."
+pg_dump --dbname="$GG_DATABASE_URL" --format=custom --no-owner --no-privileges \
+  | age --encrypt --recipient "$GG_BACKUP_AGE_RECIPIENT" --output "$encrypted_file"
+echo "Restoring encrypted backup into the separately provisioned empty verification database..."
+age --decrypt --identity "$GG_BACKUP_AGE_IDENTITY_FILE" "$encrypted_file" \
+  | pg_restore --dbname="$GG_RESTORE_TEST_URL" --no-owner --no-privileges --exit-on-error -
 echo "Checking restored schema and audit sequence..."
 psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$GG_RESTORE_TEST_URL" <<'SQL'
 DO $$
