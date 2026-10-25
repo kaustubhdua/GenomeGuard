@@ -1,3 +1,4 @@
+import base64
 import json
 
 from tests.helpers import (
@@ -129,6 +130,40 @@ def test_exposure_and_report_endpoints():
     rep = c.get("/reports/compliance", headers=ADMIN).json()
     assert rep["facts"]["requests"] == 1 and rep["report"]
     assert c.get("/reports/compliance").status_code == 401
+
+
+def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
+    from starlette.testclient import TestClient
+
+    from app.api import create_app
+    from tests.helpers import make_service
+
+    admin_key = "production-admin-secret-that-is-long-enough-123456"
+    master_key = base64.b64encode(b"m" * 32).decode()
+    svc = make_service(admin_api_key=admin_key)
+    monkeypatch.setenv("GG_DEMO_MODE", "false")
+    monkeypatch.setenv("GG_ALLOW_TAMPER_DEMO", "false")
+    monkeypatch.setenv("GG_ADMIN_API_KEY", admin_key)
+    monkeypatch.setenv("GG_MASTER_KEY", master_key)
+    monkeypatch.setenv("GG_REAL_COHORT_FILE", "/secure/authorized-cohort.npz")
+    monkeypatch.setenv("GG_DATASET_ID", "approved-cohort-2026-01")
+    client = TestClient(create_app(svc))
+
+    assert client.get("/demo/requesters").status_code == 404
+    assert client.post("/admin/requesters", json={"name": "Researcher One",
+                                                   "institution": "Research Institute"}).status_code == 401
+    response = client.post("/admin/requesters", headers={"X-Admin-Key": admin_key},
+                           json={"name": "Researcher One", "institution": "Research Institute",
+                                 "credential_level": "registered"})
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["shown_once"] is True and len(payload["api_key"]) >= 40
+    assert svc.authenticate(payload["api_key"])["id"] == payload["id"]
+    assert payload["api_key"] not in str(svc.audit.entries())
+    bad = client.post("/admin/requesters", headers={"X-Admin-Key": admin_key},
+                      json={"name": "Bad Level", "institution": "Research Institute",
+                            "credential_level": "anonymous"})
+    assert bad.status_code == 422
 
 
 def test_demo_accounts_endpoint_only_in_demo_mode():

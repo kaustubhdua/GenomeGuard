@@ -1,4 +1,4 @@
-import { boot, state, setWho, isSteward } from "./api.js";
+import { boot, connectKey, state, setWho, isSteward } from "./api.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
 
@@ -43,7 +43,12 @@ async function render() {
   view.replaceChildren(h("div", { class: "skeleton", style: "height:120px", role: "status", "aria-label": "Loading page" }));
   let page;
   try {
-    if (hit) {
+    if (hit && !state.demo && ["donor", "redteam", "federated"].includes(hit[0].nav)) {
+      page = h("section", { class: "card empty-state" },
+        h("h1", {}, "This workflow is not enabled for this deployment"),
+        h("p", { class: "muted" }, "This page uses demo personas or simulated federated data. It is disabled outside demo mode rather than presenting simulated results as real participant workflows."),
+        h("a", { class: "btn ghost", href: "#/overview" }, "Return to overview"));
+    } else if (hit) {
       const mod = await hit[0].load(); // route code is fetched only when the route is first visited
       if (mine !== token) return;
       page = await mod.render(hit[1].slice(1));
@@ -73,8 +78,17 @@ async function render() {
   window.scrollTo(0, 0);
 }
 
+function visibleNav() {
+  if (state.demo) return NAV;
+  return NAV.map(([label, items]) => [label, items.filter(([id]) => {
+    if (["donor", "redteam", "federated"].includes(id)) return false;
+    if (["family", "anomalies", "audit"].includes(id)) return isSteward();
+    return true;
+  })]).filter(([, items]) => items.length);
+}
+
 function drawNav(active) {
-  $("nav").replaceChildren(...NAV.map(([label, items]) =>
+  $("nav").replaceChildren(...visibleNav().map(([label, items]) =>
     h("div", { class: "nav-group" }, label ? h("div", { class: "nav-label" }, label) : null,
       items.map(([id, text, href, steward]) =>
         h("a", { href, "aria-current": id === active ? "page" : false }, text, steward ? h("span", { class: "tag" }, "steward") : null)))));
@@ -86,14 +100,30 @@ function drawProv() {
   if (!p.genotypes) { el.hidden = true; return; }
   el.textContent = p.genotypes_label + ", " + p.consent_label.toLowerCase();
   el.title = [p.genotypes_label, p.consent_label, p.relatives_label, p.agents_label, p.encryption].join(". ");
-  el.classList.toggle("real", p.genotypes === "real_1000g");
+  el.classList.toggle("real", p.genotypes === "real_vcf");
 }
 
 function drawWho() {
   const sel = $("who");
-  const reqs = state.demo ? state.demo.requesters : [];
+  const label = $("who-label");
+  const panel = $("auth-panel");
+  if (!state.demo) {
+    sel.hidden = true;
+    label.hidden = true;
+    panel.hidden = false;
+    $("auth-kind").value = isSteward() ? "steward" : "researcher";
+    $("who-note").textContent = isSteward()
+      ? "Steward credentials are active in memory for this tab."
+      : state.who ? "Researcher credentials are active in memory for this tab."
+        : "Connect using a steward or researcher API key issued by your administrator.";
+    return;
+  }
+  sel.hidden = false;
+  label.hidden = false;
+  panel.hidden = true;
+  const reqs = state.demo.requesters || [];
   sel.replaceChildren(...reqs.map((r) => h("option", { value: r.api_key }, `${r.name} (${r.tier})${r.frozen ? " · frozen" : ""}`)),
-    state.demo ? h("option", { value: "steward" }, "Steward (reviewer)") : null);
+    h("option", { value: "steward" }, "Steward (reviewer)"));
   sel.value = state.who;
   $("who-note").textContent = isSteward()
     ? "Sees audit, anomalies, family exposure and can review held requests."
@@ -113,9 +143,11 @@ function toggleTheme() {
 
 // ---- command palette ----
 const ACTIONS = () => [
-  ...NAV.flatMap(([label, items]) => items.map(([, text, href]) => ({ text, hint: label || "Page", run: () => (location.hash = href) }))),
-  { text: "Switch to the steward view", hint: "Acting as", run: () => { setWho("steward"); drawWho(); render(); } },
-  { text: "Switch to the researcher view", hint: "Acting as", run: () => { const r = (state.demo || { requesters: [] }).requesters[0]; if (r) { setWho(r.api_key); drawWho(); render(); } } },
+  ...visibleNav().flatMap(([label, items]) => items.map(([, text, href]) => ({ text, hint: label || "Page", run: () => (location.hash = href) }))),
+  ...(state.demo ? [
+    { text: "Switch to the steward view", hint: "Acting as", run: () => { setWho("steward"); drawWho(); drawNav(""); render(); } },
+    { text: "Switch to the researcher view", hint: "Acting as", run: () => { const r = (state.demo || { requesters: [] }).requesters[0]; if (r) { setWho(r.api_key); drawWho(); drawNav(""); render(); } } },
+  ] : []),
   { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
   ...(tourAvailable() ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
 ];
@@ -148,7 +180,34 @@ $("open-cmdk").addEventListener("click", openPalette);
 $("theme").addEventListener("click", toggleTheme);
 $("menu").addEventListener("click", () => $("shell").classList.toggle("open"));
 $("scrim").addEventListener("click", () => $("shell").classList.remove("open"));
-$("who").addEventListener("change", (e) => { setWho(e.target.value); drawWho(); render(); });
+$("who").addEventListener("change", (e) => { setWho(e.target.value); drawWho(); drawNav(""); render(); });
+$("connect-key").addEventListener("click", async () => {
+  const key = $("api-key-input").value.trim();
+  const kind = $("auth-kind").value;
+  const status = $("auth-status");
+  if (!key) { status.textContent = "Enter the API key issued to you."; return; }
+  status.textContent = "Checking credentials…";
+  $("connect-key").disabled = true;
+  try {
+    const result = await connectKey(kind, key);
+    if (!result.ok) {
+      status.textContent = result.status === 401 ? "The key was rejected. Check it with your administrator."
+        : result.data?.message || "Could not verify this key.";
+      return;
+    }
+    $("api-key-input").value = "";
+    drawWho();
+    status.textContent = "Connected. This key stays in memory for this tab and is not saved.";
+    drawNav("");
+    render();
+  } finally {
+    $("connect-key").disabled = false;
+  }
+});
+$("auth-kind").addEventListener("change", () => { $("auth-status").textContent = ""; });
+$("api-key-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("connect-key").click(); }
+});
 // Warm the route chunk when a visitor signals intent, without loading every page at startup.
 for (const container of [ $("nav"), $("view") ]) {
   container.addEventListener("pointerover", (e) => {

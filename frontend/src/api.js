@@ -6,13 +6,18 @@ function readStorage(key) {
   catch { return ""; } // storage can be blocked by browser privacy settings
 }
 
-export const state = { who: readStorage("gg_who"), demo: null, health: null, me: null, donors: [], donor: null };
+// Defer any remembered identity until the server confirms demo mode.
+export const state = { who: "", adminKey: "", demo: null, health: null, me: null, donors: [], donor: null };
 
 export const isSteward = () => state.who === "steward";
 
 export function setWho(v) {
   state.who = v;
-  try { localStorage.setItem("gg_who", v); } catch { /* storage can be blocked */ }
+  // Demo personas are convenient for the public demo. Real credentials must stay in memory only.
+  try {
+    if (state.demo) localStorage.setItem("gg_who", v);
+    else localStorage.removeItem("gg_who");
+  } catch { /* storage can be blocked */ }
 }
 
 async function call(path, { method = "GET", body, headers = {} } = {}) {
@@ -34,6 +39,7 @@ export function api(path, opts = {}) {
   const headers = {};
   if (opts.key) headers["X-API-Key"] = opts.key;
   else if (isSteward() && state.demo) headers["X-Admin-Key"] = state.demo.admin_key;
+  else if (isSteward() && state.adminKey) headers["X-Admin-Key"] = state.adminKey;
   else if (state.who) headers["X-API-Key"] = state.who;
   const { key, ...rest } = opts; // eslint-disable-line no-unused-vars
   return call(path, { ...rest, headers });
@@ -41,7 +47,8 @@ export function api(path, opts = {}) {
 
 // steward-level call regardless of who the app is acting as (admin key from the demo accounts)
 export function stewardApi(path, opts = {}) {
-  const headers = state.demo ? { "X-Admin-Key": state.demo.admin_key } : {};
+  const headers = state.demo ? { "X-Admin-Key": state.demo.admin_key } :
+    state.adminKey ? { "X-Admin-Key": state.adminKey } : {};
   return call(path, { ...opts, headers });
 }
 
@@ -51,14 +58,40 @@ export function donorApi(path, opts = {}) {
   return call(path, { ...opts, headers: d ? { "X-Donor-Key": d.key } : {} });
 }
 
+export async function connectKey(kind, key) {
+  const result = kind === "steward"
+    ? await call("/audit/head", { headers: { "X-Admin-Key": key } })
+    : await call("/me", { headers: { "X-API-Key": key } });
+  if (!result.ok) return result;
+  if (kind === "steward") {
+    state.adminKey = key;
+    setWho("steward");
+  } else {
+    state.adminKey = "";
+    setWho(key);
+  }
+  return result;
+}
+
 export async function boot() {
   const [h, d, dn] = await Promise.all([call("/health"), call("/demo/requesters"), call("/demo/donors")]);
   state.health = h.data;
   state.demo = d.ok ? d.data : null;
   state.donors = dn.ok ? dn.data.donors : [];
+  if (!state.demo) {
+    // Never reuse a previously selected public-demo key on a non-demo deployment.
+    state.who = "";
+    state.adminKey = "";
+    try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
+    state.donor = null;
+    return;
+  }
   if (!state.donor && state.donors.length) state.donor = state.donors[0];
-  const reqs = state.demo ? state.demo.requesters : [];
-  if (!state.who || (state.who !== "steward" && !reqs.some((r) => r.api_key === state.who))) {
+  const reqs = state.demo.requesters || [];
+  const remembered = readStorage("gg_who");
+  if (remembered === "steward" || reqs.some((r) => r.api_key === remembered)) {
+    setWho(remembered);
+  } else {
     setWho(reqs.length ? reqs[0].api_key : "");
   }
 }

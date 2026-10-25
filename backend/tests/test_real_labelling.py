@@ -74,8 +74,9 @@ def _boot(cohort_file):
 def test_app_provenance_follows_the_files_metadata_not_its_existence():
     with tempfile.TemporaryDirectory() as d:
         real_svc = _boot(_cohort_file(d, REAL_META))
-        assert real_svc.provenance["genotypes"] == "real_1000g"
-        assert "Real genotypes" in real_svc.provenance["genotypes_label"]
+        assert real_svc.provenance["genotypes"] == "real_vcf"
+        assert "Real VCF genotypes" in real_svc.provenance["genotypes_label"]
+        assert "source not independently authenticated" in real_svc.provenance["genotypes_label"]
         assert real_svc.provenance["consent"] == "simulated"  # consent is never real
         fake_svc = _boot(_cohort_file(d, {"source": "unknown"}))
         assert fake_svc.provenance["genotypes"] == "custom"

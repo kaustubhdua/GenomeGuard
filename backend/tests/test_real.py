@@ -1,3 +1,4 @@
+import base64
 import gzip
 import tempfile
 from pathlib import Path
@@ -5,7 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from app.config import Settings
 from app.data import real
+from app.service import bootstrap
 
 PED = "\n".join([
     "Family ID\tIndividual ID\tPaternal ID\tMaternal ID\tGender\tPhenotype\tPopulation",
@@ -127,6 +130,59 @@ def test_build_save_load_roundtrip():
         assert np.array_equal(c.genotypes, c2.genotypes)
         assert c.relationships == c2.relationships
         assert np.allclose(c.variants["maf"], c2.variants["maf"])
+
+
+def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
+    with tempfile.TemporaryDirectory() as d:
+        v, out = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz"
+        make_vcf(v)
+        cohort, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50,
+                                         keep_prob=1.0, seed=7)
+        real.save_cohort(cohort, meta, out)
+        settings = Settings(
+            db_path=":memory:",
+            demo_mode=False,
+            allow_tamper_demo=False,
+            admin_api_key="a-unique-production-admin-secret-long-enough",
+            master_key=base64.b64encode(b"x" * 32).decode(),
+            real_cohort_file=str(out),
+            dataset_id="test-approved-cohort",
+        )
+        with pytest.raises(ValueError, match="simulated or missing consent"):
+            bootstrap(settings)
+
+
+def test_build_cohort_uses_explicit_source_matched_consent_records():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {"use": "GRU", "disease": None, "modifiers": [],
+                     "population": None, "consent_date": "2024-01-15", "withdrawn": False}
+            for sample in SAMPLES
+        }
+        c, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                                    seed=3, consent_records=records)
+        assert meta["genotypes_real"] is True
+        assert meta["consent_simulated"] is False
+        assert meta["consent_records_matched"] == 44
+        assert all(d["consent"]["use"] == "GRU" and not d["withdrawn"] for d in c.donors)
+        assert all(d["consent"]["consent_date"] == "2024-01-15" for d in c.donors)
+
+
+def test_build_cohort_refuses_missing_or_malformed_consent_records():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        with pytest.raises(ValueError, match="no explicit record"):
+            real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                              consent_records={"dad": {"use": "GRU"}})
+        bad = {sample: {"use": "GRU", "disease": None, "modifiers": [],
+                        "population": None, "consent_date": "not-a-date", "withdrawn": False}
+               for sample in SAMPLES}
+        with pytest.raises(ValueError, match="invalid consent_date"):
+            real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                              consent_records=bad)
 
 
 def test_loaded_cohort_works_with_dataset_and_consent_engine():

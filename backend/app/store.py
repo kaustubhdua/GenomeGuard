@@ -23,6 +23,7 @@ from app.core.consent import DonorView
 from app.core.dataset import Dataset
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS cohort_metadata(id INTEGER PRIMARY KEY CHECK(id=1), dataset_id TEXT NOT NULL, metadata_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS donors(id INTEGER PRIMARY KEY, cohort_id TEXT, population TEXT,
   consent_json TEXT, family_id INTEGER, withdrawn_at TEXT);
 CREATE TABLE IF NOT EXISTS genotypes(donor_id INTEGER PRIMARY KEY, genotype_blob BLOB);
@@ -91,14 +92,26 @@ class Store:
     def has_dataset(self) -> bool:
         return bool(self.one("SELECT 1 AS x FROM donors LIMIT 1"))
 
-    def save_cohort(self, cohort, master: bytes, dataset_id: str) -> None:
-        """Write a SyntheticCohort. Genotypes are encrypted before they touch the database."""
+    def cohort_metadata(self) -> dict | None:
+        row = self.one("SELECT dataset_id, metadata_json FROM cohort_metadata WHERE id=1")
+        if not row:
+            return None
+        return {"dataset_id": row["dataset_id"], **json.loads(row["metadata_json"])}
+
+    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None) -> None:
+        """Write a cohort and its provenance. Genotypes are encrypted before database storage."""
         v = cohort.variants
         planted = set(cohort.planted)
         with self.lock:
             d = self.db
             for t in ("donors", "genotypes", "variants", "relationships"):
                 d.execute(f"DELETE FROM {t}")
+            d.execute("DELETE FROM cohort_metadata")
+            d.execute("INSERT INTO cohort_metadata(id,dataset_id,metadata_json) VALUES(1,?,?)",
+                      (dataset_id, json.dumps(jsonable(metadata or {
+                          "genotypes_real": False, "consent_simulated": True,
+                          "source": "legacy-unspecified"
+                      }))))
             d.executemany(
                 "INSERT INTO variants VALUES(?,?,?,?,?,?,?,?)",
                 [(i + 1, str(v["chrom"][i]), int(v["pos"][i]), str(v["ref"][i]), str(v["alt"][i]),

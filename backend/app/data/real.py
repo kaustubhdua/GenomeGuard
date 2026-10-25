@@ -10,8 +10,9 @@ Run on a machine with internet access; the hosted CI workflow verifies the offic
 What is real and what is not (state this on any slide that mentions it):
   * REAL: genotypes, allele frequencies, population labels, and any parent/child links present in
     the pedigree file. 1000 Genomes participants consented to open public release.
-  * SIMULATED: consent records. 1000 Genomes has no per-donor DUO consent, so each real genome is
-    given a synthetic consent record (flagged `consent_simulated` in the file's metadata).
+  * CONSENT: by default, records are simulated because 1000 Genomes does not provide the
+    per-donor DUO fields this engine evaluates. Production mode requires an operator-authorized
+    `--consent-json` mapping for every selected source sample; missing records fail the build.
   * The Phase 3 release was built from deliberately UNRELATED people, so with the default files
     there are almost no relative pairs and the family-exposure demo will be sparse. For real
     families use the IGSR high-coverage release that includes 602 trios, by passing --vcf and
@@ -30,6 +31,7 @@ import json
 import re
 import sys
 import urllib.request
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -274,11 +276,49 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _validated_consent(record: dict, sample: str) -> tuple[dict, bool]:
+    """Validate an operator-supplied, source-authorized consent record for one source sample."""
+    if not isinstance(record, dict):
+        raise ValueError(f"consent record for {sample} must be a JSON object")
+    use = record.get("use")
+    if not isinstance(use, str) or use not in {"GRU", "HMB", "DS"}:
+        raise ValueError(f"consent record for {sample} needs use GRU, HMB, or DS")
+    disease = record.get("disease")
+    if disease is not None and not isinstance(disease, str):
+        raise ValueError(f"consent disease for {sample} must be a string or null")
+    if use == "DS" and (not isinstance(disease, str) or not disease.strip()):
+        raise ValueError(f"disease-specific consent for {sample} requires disease")
+    modifiers = record.get("modifiers")
+    allowed_modifiers = {"NCU", "NPU", "NMDS", "NAGR", "NCTRL"}
+    if not isinstance(modifiers, list) or any(
+            not isinstance(m, str) or m not in allowed_modifiers for m in modifiers):
+        raise ValueError(f"consent record for {sample} needs a list of recognized modifiers")
+    population = record.get("population")
+    if population is not None and not isinstance(population, str):
+        raise ValueError(f"consent population for {sample} must be a string or null")
+    consent_date = record.get("consent_date")
+    if not isinstance(consent_date, str):
+        raise ValueError(f"consent record for {sample} requires consent_date YYYY-MM-DD")
+    try:
+        date.fromisoformat(consent_date)
+    except ValueError:
+        raise ValueError(f"consent record for {sample} has invalid consent_date") from None
+    withdrawn = record.get("withdrawn")
+    if not isinstance(withdrawn, bool):
+        raise ValueError(f"consent record for {sample} requires boolean withdrawn")
+    return {"use": use, "disease": disease, "modifiers": sorted(set(modifiers)),
+            "population": population, "consent_date": consent_date}, withdrawn
+
+
 def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: int = 3000,
                  keep_prob: float = 0.004, seed: int = 1337, rare_maf: float = 0.01,
                  withdrawn_rate: float = 0.03, family_first: bool = False,
                  source_metadata_file: str = "provided-sample-metadata",
-                 source_vcf_file: str | None = None) -> tuple[SyntheticCohort, dict]:
+                 source_vcf_file: str | None = None,
+                 consent_records: dict[str, dict] | None = None,
+                 consent_source_file: str | None = None,
+                 source_name: str = "Operator-supplied VCF (source not independently authenticated)"
+                 ) -> tuple[SyntheticCohort, dict]:
     rng = np.random.default_rng(seed)
     info = parse_ped(ped_text)
     in_vcf = [s for s in vcf_samples(vcf) if s in info]
@@ -289,24 +329,39 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
     cols, G = read_vcf(vcf, chosen, keep_prob, max_variants, rng)
     freq = G.sum(axis=0) / (2.0 * n)
     maf = np.minimum(freq, 1 - freq)
+    if consent_records is not None:
+        missing_consent = [sample for sample in chosen if sample not in consent_records]
+        if missing_consent:
+            raise ValueError(
+                f"consent file has no explicit record for {len(missing_consent)} selected samples; "
+                f"examples: {missing_consent[:5]}"
+            )
     donors = []
-    for i, s in enumerate(chosen, start=1):
-        pop = info[s]["pop"] or "UNK"
+    for i, sample in enumerate(chosen, start=1):
+        pop = info[sample]["pop"] or "UNK"
+        if consent_records is None:
+            consent, withdrawn = _consent(rng, pop), bool(rng.random() < withdrawn_rate)
+        else:
+            consent, withdrawn = _validated_consent(consent_records[sample], sample)
         donors.append({"id": i, "cohort_id": "1000G-" + pop, "population": pop,
-                       "consent": _consent(rng, pop),  # SIMULATED consent
-                       "family_id": i, "withdrawn": bool(rng.random() < withdrawn_rate)})
+                       "consent": consent, "family_id": i, "withdrawn": withdrawn})
     fam_of = {}
     for d, s in zip(donors, chosen, strict=True):
         d["family_id"] = fam_of.setdefault(info[s]["family"], len(fam_of) + 1)
     rels = relationships_from_pedigree(info, chosen)
     variants = {**cols, "maf": maf, "is_rare": maf < rare_maf,
                 "planted": np.zeros(len(maf), dtype=bool)}
-    meta = {"source": "1000 Genomes (IGSR)", "samples": n, "variants": int(G.shape[1]),
-            "relative_pairs": len(rels), "consent_simulated": True, "genotypes_real": True,
+    meta = {"source": source_name, "samples": n, "variants": int(G.shape[1]),
+            "relative_pairs": len(rels), "consent_simulated": consent_records is None,
+            "consent_source_file": Path(consent_source_file).name if consent_source_file else None,
+            "consent_records_sha256": (sha256_file(Path(consent_source_file))
+                                       if consent_source_file else None),
+            "consent_records_matched": 0 if consent_records is None else len(chosen),
+            "genotypes_real": True,
             "family_enriched": bool(family_first and rels), "seed": seed,
             "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
                                  "keep_prob": keep_prob, "rare_maf": rare_maf,
-                                 "withdrawn_rate": withdrawn_rate},
+                                 "withdrawn_rate": None if consent_records is not None else withdrawn_rate},
             "source_vcf_file": source_vcf_file or vcf.name, "source_vcf_sha256": sha256_file(vcf),
             "source_sample_metadata_file": source_metadata_file,
             "source_sample_metadata_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest(),
@@ -351,6 +406,12 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--seed", type=int, default=1337)
     b.add_argument("--no-family-first", action="store_true",
                    help="sample at random instead of taking whole families first")
+    b.add_argument("--source-name",
+                   help="operator-declared genotype source label; not independently authenticated")
+    b.add_argument("--consent-json",
+                   help="operator-authorized JSON mapping source sample IDs to explicit consent "
+                        "records (use, disease, modifiers, population, consent_date, withdrawn); "
+                        "without this file consent is simulated and must not be used in production")
     a = ap.parse_args(argv)
     cache = Path("data_real")
     if a.vcf:
@@ -368,12 +429,25 @@ def main(argv: list[str] | None = None) -> None:
         metadata_url = a.ped or PED_URL
         ped_text = download(metadata_url, cache / "samples.ped").read_text()
         metadata_file = metadata_url.rsplit("/", 1)[-1]
+    consent_records = None
+    if a.consent_json:
+        consent_path = Path(a.consent_json)
+        consent_records = json.loads(consent_path.read_text(encoding="utf-8"))
+        if not isinstance(consent_records, dict):
+            raise ValueError("--consent-json must contain an object keyed by source sample ID")
     c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed,
                            family_first=not a.no_family_first, source_metadata_file=metadata_file,
-                           source_vcf_file=source_vcf_name)
+                           source_vcf_file=source_vcf_name, consent_records=consent_records,
+                           consent_source_file=a.consent_json,
+                           source_name=(a.source_name or
+                               ("1000 Genomes (IGSR)" if not a.vcf else
+                                "Operator-supplied VCF (source not independently authenticated)")))
     save_cohort(c, meta, Path(a.out))
     print(json.dumps(meta, indent=2))
     print(f"wrote {a.out}\nrun with: GG_REAL_COHORT_FILE={a.out} make run")
+    if meta["consent_simulated"]:
+        print("WARNING: consent records are simulated. Do not use this cohort in non-demo mode "
+              "or for real participant data.")
     if meta["relative_pairs"] == 0:
         print("note: no relative pairs found (expected for the unrelated Phase 3 samples); the "
               "family-exposure demo will be empty. See the module docstring for trio data.")

@@ -755,7 +755,7 @@ class GenomeGuardService:
                            "by_degree": by_degree},
                 "model": ("SIMULATED: expected-average kinship from the pedigree file (real "
                           "parent/child links where it has them); " if getattr(
-                              self, "provenance", {}).get("genotypes") == "real_1000g" else
+                              self, "provenance", {}).get("genotypes") == "real_vcf" else
                           "SIMULATED: expected-average kinship from a synthetic pedigree; ")
                          + "real sharing varies and this is not a forecast about any real database.",
                 "note": "Nodes are pseudonyms for this view only."}
@@ -840,11 +840,30 @@ DEMO_REQUESTERS = [
 
 def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
               llm: LLM | None = None, **kwargs) -> GenomeGuardService:
-    """Open (or create and seed) the database and return a ready service."""
-    from app.config import get_settings
+    """Open or seed a cohort, preserving its provenance and failing closed for real-data mode."""
+    from app.config import get_settings, validate_settings
     from app.data.synth import generate
 
     s = settings or get_settings()
+    validate_settings(s)
+    source_meta = None
+    if s.real_cohort_file:
+        from app.data.real import read_meta
+
+        source_meta = read_meta(s.real_cohort_file)
+    if not s.demo_mode:
+        if not s.real_cohort_file:
+            raise ValueError("non-demo mode requires GG_REAL_COHORT_FILE with real source data")
+        if not source_meta or source_meta.get("genotypes_real") is not True:
+            raise ValueError("non-demo mode refuses cohorts without verified real-genotype provenance")
+        if source_meta.get("consent_simulated") is not False:
+            raise ValueError("non-demo mode refuses simulated or missing consent records; rebuild the "
+                             "cohort with an authorized --consent-json file")
+        if not source_meta.get("consent_records_matched"):
+            raise ValueError("non-demo mode requires explicit consent records for every selected sample")
+        if not source_meta.get("consent_source_file") or not source_meta.get("consent_records_sha256"):
+            raise ValueError("non-demo mode requires consent-source provenance from --consent-json")
+
     store = store or Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
     if not store.has_dataset():
@@ -852,33 +871,71 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
             from app.data.real import load_cohort
 
             cohort = load_cohort(s.real_cohort_file)
+            cohort_meta = source_meta
         else:
+            if not s.demo_mode:
+                raise ValueError("refusing to generate a synthetic cohort outside demo mode")
             cohort = generate(n_donors=s.n_donors, n_variants=s.n_variants,
                               n_populations=s.n_populations, n_families=s.n_families,
                               seed=s.seed, n_planted=s.n_planted_rare, rare_maf=p.rare_maf)
-        store.save_cohort(cohort, master, s.dataset_id)
+            cohort_meta = {"source": "GenomeGuard synthetic generator", "genotypes_real": False,
+                           "consent_simulated": True, "consent_records_matched": 0}
+        store.save_cohort(cohort, master, s.dataset_id, metadata=cohort_meta)
+    stored_meta = store.cohort_metadata()
+    if not stored_meta:
+        if not s.demo_mode:
+            raise ValueError("existing database has no cohort provenance; use a fresh database path "
+                             "and import an explicitly consented cohort")
+        stored_meta = {"source": "legacy database; provenance unknown", "genotypes_real": False,
+                       "consent_simulated": True, "consent_records_matched": 0,
+                       "provenance_unknown": True}
+    if stored_meta.get("dataset_id") != s.dataset_id:
+        raise ValueError("database dataset ID does not match GG_DATASET_ID; use a separate database "
+                         "or the matching dataset ID")
+    if s.real_cohort_file and not stored_meta.get("provenance_unknown"):
+        for key in ("source_vcf_sha256", "source_sample_metadata_sha256",
+                    "consent_records_sha256", "source_vcf_file", "consent_source_file",
+                    "genotypes_real", "consent_simulated", "consent_records_matched"):
+            if stored_meta.get(key) != source_meta.get(key):
+                raise ValueError("configured real cohort does not match the cohort already stored in "
+                                 "the database; use a fresh database path or restore its matching source")
+    if not s.demo_mode and (stored_meta.get("consent_simulated") is not False
+                            or stored_meta.get("genotypes_real") is not True):
+        raise ValueError("stored cohort is not verified real-genotype data with source-matched consent")
     ds = store.load_dataset(master, s.dataset_id)
     llm = llm or LLM(s.anthropic_api_key, s.llm_model)
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
                              admin_key=s.admin_api_key, **kwargs)
-    kind = "synthetic"
-    if s.real_cohort_file:  # a cohort file is real only if ITS metadata says so
-        from app.data.real import read_meta
-
-        kind = "real_1000g" if read_meta(s.real_cohort_file).get("genotypes_real") else "custom"
+    if stored_meta.get("provenance_unknown"):
+        kind = "unknown"
+    elif stored_meta.get("genotypes_real") is True:
+        kind = "real_vcf"
+    elif stored_meta.get("genotypes_real") is False:
+        kind = "synthetic"
+    else:
+        kind = "custom"
+    consent_simulated = stored_meta.get("consent_simulated") is not False
     svc.provenance = {
         "genotypes": kind,
-        "genotypes_label": {"real_1000g": "Real genotypes (1000 Genomes)",
-                            "custom": "Custom cohort file (provenance not stated)",
-                            "synthetic": "Synthetic genotypes"}[kind],
-        "consent": "simulated", "consent_label": "Simulated consent records",
+        "genotypes_label": (
+            f"Real VCF genotypes (operator-declared source: {stored_meta.get('source', 'unspecified')}; "
+            "source not independently authenticated)" if kind == "real_vcf" else
+            {"synthetic": "Synthetic genotypes",
+             "custom": "Custom cohort (real-data provenance not established)",
+             "unknown": "Genotype provenance unknown"}[kind]
+        ),
+        "consent": "simulated" if consent_simulated else "source_records",
+        "consent_label": ("Simulated consent records" if consent_simulated
+                          else "Operator-supplied source-matched consent records"),
+        "consent_records_matched": stored_meta.get("consent_records_matched", 0),
+        "consent_source": stored_meta.get("consent_source_file"),
+        "genotype_source": stored_meta.get("source"),
         "relatives": "kinship_model", "relatives_label": "Relative exposure is a model",
         "agents": "llm" if llm.available else "templates",
         "agents_label": "Agents: live LLM" if llm.available else "Agents: built-in templates",
         "encryption": "AES-256-GCM at rest",
     }
-    if not store.requesters():
-        if s.demo_mode:
-            for name, role, level, inst, key in DEMO_REQUESTERS:
-                svc.create_requester(name, role, level, inst, key)
+    if not store.requesters() and s.demo_mode:
+        for name, role, level, inst, key in DEMO_REQUESTERS:
+            svc.create_requester(name, role, level, inst, key)
     return svc
