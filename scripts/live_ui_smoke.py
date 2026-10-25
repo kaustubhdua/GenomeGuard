@@ -41,8 +41,9 @@ def main() -> int:
             page = ctx.new_page()
             page.set_default_timeout(args.timeout)
             errors: list[str] = []
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "403" not in m.text else None)
+            page.on("pageerror", lambda e: errors.append("JavaScript: " + str(e)))
+            page.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}")
+                    if r.status >= 400 and r.status != 403 else None)
             for route in PAGES:
                 try:
                     page.goto(base + "/" + route, wait_until="domcontentloaded")
