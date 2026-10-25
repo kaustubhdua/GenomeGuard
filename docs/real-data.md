@@ -10,7 +10,7 @@ That run verifies the real-genotype ingestion/evaluation path only. It does **no
 |---|---|
 | Genotypes, allele frequencies, population labels | Real. 1000 Genomes participants consented to open public release of their genetic data. |
 | Parent/child and sibling links | Real, from the pedigree file. Other relationships are derived with the same expected-average kinship model as the synthetic data. |
-| Donor consent records | **Still simulated.** No real person consented to *this* system, and 1000 Genomes has no per-person DUO consent. The app labels this on every page, and the README and slides must too. |
+| Donor consent records | **Still simulated.** No real person consented to *this* system, and 1000 Genomes has no per-person DUO consent. The interface and documentation must label this clearly in every relevant view and report. |
 | Requesters and query traffic | Demo accounts and scripted attacks. |
 
 ## Which release
