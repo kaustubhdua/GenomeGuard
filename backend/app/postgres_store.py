@@ -95,7 +95,13 @@ class PostgresStore(Store):
             if applied:
                 return
             # Migration files contain only DDL statements without procedural blocks.
-            for statement in migration.read_text(encoding="utf-8").split(";"):
+            # Remove full-line SQL comments before splitting statements. Splitting raw SQL
+            # on semicolons otherwise leaves the trailing comment text attached to the first DDL.
+            sql = "\n".join(
+                line for line in migration.read_text(encoding="utf-8").splitlines()
+                if not line.lstrip().startswith("--")
+            )
+            for statement in sql.split(";"):
                 if statement.strip():
                     self.connection.execute(statement)
             self.connection.execute("INSERT INTO schema_migrations(version) VALUES (1)")
