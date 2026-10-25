@@ -42,7 +42,7 @@ fetch-real:
 
 # Real FAMILIES: build from the high-coverage 1000 Genomes release (602 trios). Download one
 # chromosome's phased VCF and the 3,202-sample pedigree yourself (see docs/real-data.md), then:
-#   make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt
+#   make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt SOURCE="1000 Genomes (IGSR) high-coverage 30x (GRCh38)"
 real-trios:
 	@test -n "$(VCF)" -a -n "$(PED)" || (echo "usage: make real-trios VCF=<vcf.gz> PED=<pedigree>"; exit 2)
 	PYTHONPATH=backend $(PY) -m app.data.real build --vcf $(VCF) --ped $(PED) --source "$(SOURCE)" --out data_real/1000g_trios.npz
