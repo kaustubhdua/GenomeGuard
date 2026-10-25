@@ -59,7 +59,7 @@ only). Use the "Acting as" selector in the app to switch roles.
 | Agents | Real; deterministic templates by default, an LLM when `ANTHROPIC_API_KEY` is set |
 | Genotypes | Synthetic by default; the hosted CI has downloaded real 1000 Genomes Phase 3 data and run `eval-real` (600 samples × 3,000 variants); real consent remains simulated |
 | Donor consent and requesters | Simulated. No real people consented to this system, so inventing "real" consent would be false |
-| Relatives | Simulated kinship model unless you load real trios |
+| Relatives | Simulated kinship model by default; the optional high-coverage 1000 Genomes family cohort has been built and evaluated in CI with 355 observed pedigree relationship pairs; consent and request traffic remain simulated |
 | FHIR R4 Consent export | Generated from simulated consent, tagged as simulated, and validated by the HL7 FHIR Validator against R4 plus the project extension package; this is structural validation, not legal consent |
 | Steward copilot | Real tool loop over read-only functions; sees only whitelisted summaries; template planner when no API key |
 
@@ -114,7 +114,7 @@ For real families (family-first sampling, 602 trios in the high-coverage release
 make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt
 make eval-real COHORT=data_real/1000g_trios.npz     # writes docs/eval-results-real.md
 ```
-A dataset is only labelled real if the cohort file's own metadata says so. **End-to-end real-genotype ingestion/evaluation is verified on a hosted GitHub Actions runner** ([run #40136240311](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311)); the source file hashes and build settings are documented in [`docs/real-data.md`](docs/real-data.md). This run has zero relative pairs because Phase 3 is unrelated by design. The high-coverage family workflow passed and verified 355 relationship pairs in a 600-sample cohort; see [run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277). Consent and query traffic remain simulated.
+A dataset is only labelled real if the cohort file's own metadata says so. **End-to-end real-genotype ingestion/evaluation is verified on a hosted GitHub Actions runner** ([run #40136240311](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311)); the source file hashes and build settings are documented in [`docs/real-data.md`](docs/real-data.md). This run has zero relative pairs because Phase 3 is unrelated by design. The high-coverage family workflow passed and verified 355 relationship pairs in a 600-sample cohort; see [run #40145624174](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145624174). Consent and query traffic remain simulated.
 Real: genotypes, frequencies, population labels, parent/child links in the pedigree file.
 Simulated: consent. The Phase 3 release is built from deliberately unrelated people, so family
 exposure is sparse; for real families use the high-coverage release with 602 trios (pass `--vcf`
