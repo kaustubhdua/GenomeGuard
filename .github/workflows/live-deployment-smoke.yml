@@ -16,6 +16,11 @@ on:
         required: true
         default: "https://genomeguard.onrender.com"
         type: string
+      check_persistence:
+        description: "Enable only immediately after a redeploy, when a known pre-deploy request should be absent"
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -41,6 +46,7 @@ jobs:
       - name: Verify public health, assets, provenance and API docs
         run: python scripts/deploy_smoke.py --base "$BASE_URL"
       - name: Verify request history reset after the intentional redeploy
+        if: ${{ inputs.check_persistence == true }}
         run: python scripts/live_persistence_check.py --base "$BASE_URL" --request-id 3
       - name: Verify permitted, denied, held, and authorization API workflows
         run: python scripts/live_api_smoke.py --base "$BASE_URL"
