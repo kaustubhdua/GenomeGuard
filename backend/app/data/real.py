@@ -412,6 +412,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                 "source_url": consent_policy["source_url"],
                 "scope": consent_policy["scope"],
                 "review_status": consent_policy["review_status"],
+                "terms_summary": consent_policy.get("terms_summary"),
                 "withdrawal_supported": consent_policy["withdrawal_supported"],
                 "not_individual_consent": True,
             } if consent_policy is not None else None),
