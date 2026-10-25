@@ -171,7 +171,7 @@ export function timeline(stages, { play = true } = {}) {
 }
 
 export function card(title, aside, ...kids) {
-  return h("section", { class: "card" }, title ? h("div", { class: "card-h" }, h("h3", { style: "margin:0" }, title), aside ? h("span", {}, aside) : null) : null, kids);
+  return h("section", { class: "card" }, title ? h("div", { class: "card-h" }, h("h2", { class: "card-title", style: "margin:0" }, title), aside ? h("span", {}, aside) : null) : null, kids);
 }
 
 export function kpi(label, value, sub, tone) {
