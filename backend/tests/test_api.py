@@ -134,6 +134,8 @@ def test_exposure_and_report_endpoints():
 
 def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
     from starlette.testclient import TestClient
+
+    from app.api import create_app
     from tests.helpers import make_service
 
     admin_key = "production-admin-secret-that-is-long-enough-123456"
