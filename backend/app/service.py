@@ -755,7 +755,7 @@ class GenomeGuardService:
                            "by_degree": by_degree},
                 "model": ("SIMULATED: expected-average kinship from the pedigree file (real "
                           "parent/child links where it has them); " if getattr(
-                              self, "provenance", {}).get("genotypes") == "real_1000g" else
+                              self, "provenance", {}).get("genotypes") in ("real_1000g", "real_custom") else
                           "SIMULATED: expected-average kinship from a synthetic pedigree; ")
                          + "real sharing varies and this is not a forecast about any real database.",
                 "note": "Nodes are pseudonyms for this view only."}
