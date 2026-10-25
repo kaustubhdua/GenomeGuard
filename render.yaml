@@ -1,7 +1,7 @@
-# Render blueprint for a single web service (Docker). Check Render's current free-tier limits
-# and sleep behaviour before relying on the public demo; free instances may sleep when idle, so
-# allow time for cold starts. Without a persistent disk the database is re-created (and the audit
-# chain restarts) on every deploy or restart. This configuration is for synthetic data only.
+# Render blueprint for the public-data research instance. The image builds a cohort from IGSR's
+# public 1000 Genomes release and maps its published dataset-level use terms to DUO-inspired policy.
+# This is NOT participant-specific consent or production healthcare readiness. Without a persistent
+# disk, requests and audit history reset on deploy/restart; the readiness endpoint will remain 503.
 services:
   - type: web
     name: genomeguard
