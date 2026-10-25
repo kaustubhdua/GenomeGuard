@@ -861,6 +861,8 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                              "cohort with an authorized --consent-json file")
         if not source_meta.get("consent_records_matched"):
             raise ValueError("non-demo mode requires explicit consent records for every selected sample")
+        if not source_meta.get("consent_source_file") or not source_meta.get("consent_records_sha256"):
+            raise ValueError("non-demo mode requires consent-source provenance from --consent-json")
 
     store = store or Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
@@ -907,13 +909,16 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:
         kind = "real_1000g"
-    else:
+    elif stored_meta.get("genotypes_real") is False:
         kind = "synthetic"
+    else:
+        kind = "custom"
     consent_simulated = stored_meta.get("consent_simulated") is not False
     svc.provenance = {
         "genotypes": kind,
         "genotypes_label": {"real_1000g": "Real genotypes (1000 Genomes)",
                             "synthetic": "Synthetic genotypes",
+                            "custom": "Custom cohort (real-data provenance not established)",
                             "unknown": "Genotype provenance unknown"}[kind],
         "consent": "simulated" if consent_simulated else "source_records",
         "consent_label": ("Simulated consent records" if consent_simulated
