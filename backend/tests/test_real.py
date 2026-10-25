@@ -259,6 +259,10 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
         assert svc.provenance["consent_records_matched"] == 44
         assert svc.provenance["consent_policy"]["not_individual_consent"] is True
         assert "not participant-specific" in svc.provenance["consent_label"]
+        assert len(svc.provenance["source_vcf_sha256"]) == 64
+        assert len(svc.provenance["source_sample_metadata_sha256"]) == 64
+        assert len(svc.provenance["consent_records_sha256"]) == 64
+        assert svc.provenance["dataset_id"] == "test-public-source-policy"
 
 
 # ---- the high-coverage release's pedigree: whitespace separated, different header names ----
