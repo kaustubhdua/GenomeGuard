@@ -33,7 +33,7 @@ export async function render() {
     h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px" },
       tourAvailable() ? h("button", { onclick: startTour }, "Guided walkthrough") : null,
       h("a", { class: tourAvailable() ? "btn ghost" : "btn", href: "#/requests" }, isSteward() ? "Review requests" : "Send a request"),
-      h("a", { class: "btn ghost", href: "#/donor" }, "See the patient view")),
+      h("a", { class: "btn ghost", href: "#/donor" }, "Participant view")),
     pipe, h("p", { class: "muted", style: "margin:12px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap" }, caption,
       latest ? h("button", { class: "ghost", onclick: () => pipe.replay() }, "Replay workflow") : null));
   root.append(hero);
