@@ -124,6 +124,10 @@ def main() -> int:
               page.locator("input#disease").count() == 1 and page.locator("select#disease").count() == 0)
 
         page.locator("#auth-kind").select_option("steward")
+        page.locator("#api-key-input").fill("invalid-steward-key")
+        page.locator("#connect-key").click()
+        page.get_by_text("The key was rejected", exact=False).wait_for(timeout=5000)
+        check("invalid steward key is rejected", page.locator('nav a[href="#/audit"]').count() == 0)
         page.locator("#api-key-input").fill("valid-steward-key")
         page.locator("#connect-key").click()
         page.get_by_text("Connected. This key stays in memory", exact=False).wait_for(timeout=5000)
