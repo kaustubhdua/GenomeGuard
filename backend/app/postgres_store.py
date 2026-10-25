@@ -14,7 +14,8 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
-from app.store import Store
+from app.store import Store, now_iso
+from app.core.audit_chain import GENESIS, entry_hash, jsonable
 
 _MIGRATIONS = Path(__file__).resolve().parents[1] / "migrations"
 
@@ -121,6 +122,33 @@ class PostgresStore(Store):
             self.connection.execute(statement, args)
             self.connection.commit()
             return 0
+
+
+    def append_audit_entry(self, actor: str, action: str, payload: Any, ts: str | None = None) -> dict:
+        """Serialize audit sequence allocation across workers and commit the row atomically."""
+        import json
+
+        with self.lock, self.connection.transaction():
+            # Transaction-scoped advisory lock coordinates separate workers and instances.
+            self.connection.execute("SELECT pg_advisory_xact_lock(71020261025)")
+            last = self.connection.execute(
+                "SELECT idx, hash FROM audit_log ORDER BY idx DESC LIMIT 1"
+            ).fetchone()
+            idx = int(last["idx"]) + 1 if last else 1
+            previous = last["hash"] if last else GENESIS
+            stamp = ts or now_iso()
+            safe_payload = jsonable(payload)
+            entry = {
+                "idx": idx, "ts": stamp, "actor": actor, "action": action,
+                "payload": safe_payload, "prev_hash": previous,
+                "hash": entry_hash(idx, stamp, actor, action, safe_payload, previous),
+            }
+            self.connection.execute(
+                "INSERT INTO audit_log(idx,ts,actor,action,payload_json,prev_hash,hash) "
+                "VALUES(%s,%s,%s,%s,%s,%s,%s)",
+                (idx, stamp, actor, action, json.dumps(safe_payload), previous, entry["hash"]),
+            )
+            return entry
 
     def close(self) -> None:
         with self.lock:
