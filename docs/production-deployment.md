@@ -14,6 +14,15 @@
 
 The image build and Render deployment completed successfully. The latest deployed build is `dep-dbevdtrncjis73aov4og`, running app commit `f50f31568e3b664e81f872dea98dc6a81b1bdb43`. Render logs record Uvicorn startup completion and HTTP 200 for the root page. See the [Render service dashboard](https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0) for current state.
 
+## Readiness is distinct from liveness
+
+- `GET /health` is a liveness/diagnostic endpoint. HTTP 200 means the application can answer requests; it does not mean real-data operation is safe.
+- `GET /health/ready` is a fail-closed production gate. On the currently deployed synthetic demo it is expected to return HTTP 503 with explicit unmet checks.
+- The gate checks demo mode, genotype provenance, source-matched consent coverage, and whether destructive tampering is disabled. It also explicitly reports durable storage, independent audit anchoring, and institutional identity integration as unverified because those capabilities are not implemented/verified in this deployment.
+- Do not manually override these results or treat an environment-variable assertion as evidence. Readiness must only be enabled after the underlying storage, identity, and audit integrations exist and have been independently tested.
+
+This endpoint intentionally prevents a healthy demo from being mistaken for a real-data production service. It is not a substitute for legal, privacy, clinical, or security approval.
+
 ## Verification
 
 The main branch's [CI run on the deployed commit](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193504185) passed the local backend, evaluation, browser, responsive, and automated accessibility checks.
