@@ -14,8 +14,8 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
-from app.store import Store, now_iso
 from app.core.audit_chain import GENESIS, entry_hash, jsonable
+from app.store import Store, now_iso
 
 _MIGRATIONS = Path(__file__).resolve().parents[1] / "migrations"
 
