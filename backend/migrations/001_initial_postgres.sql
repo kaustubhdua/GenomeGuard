@@ -27,7 +27,8 @@ CREATE TABLE requests (
 );
 CREATE INDEX requests_requester_id_id ON requests(requester_id, id DESC);
 CREATE TABLE decisions (
-  request_id BIGINT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE,
+  id BIGSERIAL PRIMARY KEY,
+  request_id BIGINT NOT NULL UNIQUE REFERENCES requests(id) ON DELETE CASCADE,
   outcome TEXT, reasons_json TEXT, risk_json TEXT, transform_json TEXT, explanation_text TEXT,
   needs_human INTEGER, reviewed_by TEXT, reviewed_at TEXT, private_json TEXT, release_json TEXT
 );
