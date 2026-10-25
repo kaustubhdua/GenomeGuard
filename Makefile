@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 
-.PHONY: setup seed run test eval eval-smoke demo lint fetch-real real-trios eval-real fetch-duo federated bench ui-smoke deploy-smoke
+.PHONY: setup seed run test eval eval-smoke demo lint fetch-real real-trios eval-real fetch-duo federated bench ui-smoke live-ui-smoke deploy-smoke
 
 setup:
 	python3 -m venv .venv
@@ -74,4 +74,10 @@ ui-smoke:
 	sleep 8
 	@set -e; trap 'kill `cat /tmp/gg-ui-smoke.pid`' EXIT; \
 		$(PY) scripts/deploy_smoke.py --base http://127.0.0.1:8767; \
+		$(PY) scripts/live_ui_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/ui_smoke.py --base http://127.0.0.1:8767
+
+# Read-only browser acceptance against an already deployed service. Does not mutate demo state.
+live-ui-smoke:
+	@test -n "$(URL)" || (echo "usage: make live-ui-smoke URL=https://your-service.onrender.com"; exit 2)
+	$(PY) scripts/live_ui_smoke.py --base $(URL)
