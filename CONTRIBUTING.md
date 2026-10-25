@@ -1,23 +1,49 @@
 # Contributing
 
-```
-make setup          # virtualenv + dev dependencies
-make lint test      # ruff and the backend test suite
-make eval-smoke     # quick red-team evaluation
-make demo           # scripted scenario against a throwaway server
-make ui-smoke       # headless-browser checks (needs Playwright and Chromium)
+Thanks for helping improve GenomeGuard. Contributions should make the system more correct, reproducible, understandable, and honest about its privacy and security boundaries.
+
+## Development setup
+
+Requirements: Python 3.11 or newer. Docker is optional.
+
+```bash
+make setup
+make seed
+make lint
+make test
+make eval-smoke
+make demo
 ```
 
-Guidelines:
+For browser, responsive, and automated accessibility checks, install Playwright and Chromium as described in the CI workflow, then run:
 
-- **The decision stays deterministic.** Agents may explain and advise; they never see genotypes,
-  donor ids or free text, and never decide. A change that lets model output relax a rule will be
-  rejected. The canary tests in `backend/tests/test_agents.py` and `test_copilot.py` enforce this.
-- **Every published number comes from a rerunnable script with fixed seeds.** If you change a
-  defence or an attack, regenerate `docs/eval-results.md` with `make eval` and commit it.
-- **Label provenance honestly.** A dataset counts as real only if the cohort file's metadata says
-  so. Consent and requesters are simulated and must stay labelled.
-- **Do not claim legal compliance.** Say "designed around the ideas of".
-- Add a test with every behaviour change. The frontend has no build step: plain ES modules in
-  `frontend/src`, checked by `make ui-smoke` (contrast, accessibility, phone widths).
-- Never commit downloaded genomic files; `data_real/` is ignored on purpose.
+```bash
+make ui-smoke
+```
+
+Run the full evaluation before changing privacy controls or interpreting benchmark results:
+
+```bash
+make eval
+```
+
+## Contribution expectations
+
+- Add regression tests for behavior changes, especially authorization, consent policy, privacy-budget accounting, anomaly controls, and audit integrity.
+- Keep deterministic policy enforcement separate from model-generated explanations. Agents must not gain write access or authority to loosen policy decisions.
+- Preserve visible data provenance. Default demo identities and consent records are simulated even when an optional workflow uses public real-genotype data.
+- Document assumptions, limitations, data sources, fixed seeds, and reproducible evaluation steps when changing scientific or privacy claims.
+- Do not describe the Beacon-style endpoint as certified/conformant unless the required conformance work has actually been completed.
+- Do not commit secrets, downloaded genomic files, sample-level cohorts, or participant identifiers.
+- Every published number must come from a rerunnable script with fixed seeds; regenerate `docs/eval-results.md` with `make eval` after changing a defence or attack.
+- Keep animations purposeful and respect reduced-motion preferences; test keyboard navigation, mobile layouts, and accessible error states.
+
+## Pull requests
+
+1. Explain the problem and user-visible effect.
+2. Include tests or a clear reason a test is not applicable.
+3. Run the relevant checks above and link any supporting CI run.
+4. State any remaining limitations or unverified behavior.
+5. Avoid bundling unrelated formatting or dependency changes with behavioral fixes.
+
+The CI workflow is the authoritative automated gate for the repository. Manual review is still required for deployment behavior, assistive-technology usability, and any security or scientific claims.
