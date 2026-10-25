@@ -18,7 +18,8 @@ FAILURES: list[str] = []
 
 
 def check(label: str, ok: bool, detail: str = "") -> None:
-    print(f"[{"PASS" if ok else "FAIL"}] {label}" + (f": {detail}" if detail else ""))
+    status = "PASS" if ok else "FAIL"
+    print(f"[{status}] {label}" + (f": {detail}" if detail else ""))
     if not ok:
         FAILURES.append(label)
 
