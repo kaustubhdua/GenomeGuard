@@ -1,4 +1,4 @@
-"""`make demo`: runs the 3-minute scripted scenario against a running server and checks each step.
+"""`make demo`: runs the end-to-end sample workflow against a running server and checks each step.
 
     python scripts/demo.py [--base http://127.0.0.1:8000]
 
