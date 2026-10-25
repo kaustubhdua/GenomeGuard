@@ -25,6 +25,11 @@ function probeSequence() {
 export async function render() {
   const root = h("div", {});
   root.dataset.title = "Requests";
+  if (!state.demo && !state.who && !state.adminKey) {
+    root.append(h("h1", {}, "Research requests"),
+      notice("warn", "Connect with an issued researcher API key or steward key in the sign-in panel before viewing or submitting requests."));
+    return root;
+  }
   root.append(h("h1", {}, "Data requests"),
     h("p", { class: "lede" }, isSteward()
       ? "Every request from every account. Open one to review it."
