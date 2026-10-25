@@ -312,7 +312,9 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                  source_metadata_file: str = "provided-sample-metadata",
                  source_vcf_file: str | None = None,
                  consent_records: dict[str, dict] | None = None,
-                 consent_source_file: str | None = None) -> tuple[SyntheticCohort, dict]:
+                 consent_source_file: str | None = None,
+                 source_name: str = "Operator-supplied VCF (source not independently authenticated)"
+                 ) -> tuple[SyntheticCohort, dict]:
     rng = np.random.default_rng(seed)
     info = parse_ped(ped_text)
     in_vcf = [s for s in vcf_samples(vcf) if s in info]
@@ -345,7 +347,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
     rels = relationships_from_pedigree(info, chosen)
     variants = {**cols, "maf": maf, "is_rare": maf < rare_maf,
                 "planted": np.zeros(len(maf), dtype=bool)}
-    meta = {"source": "1000 Genomes (IGSR)", "samples": n, "variants": int(G.shape[1]),
+    meta = {"source": source_name, "samples": n, "variants": int(G.shape[1]),
             "relative_pairs": len(rels), "consent_simulated": consent_records is None,
             "consent_source_file": Path(consent_source_file).name if consent_source_file else None,
             "consent_records_sha256": (sha256_file(Path(consent_source_file))
@@ -400,6 +402,8 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--seed", type=int, default=1337)
     b.add_argument("--no-family-first", action="store_true",
                    help="sample at random instead of taking whole families first")
+    b.add_argument("--source-name",
+                   help="operator-declared genotype source label; not independently authenticated")
     b.add_argument("--consent-json",
                    help="operator-authorized JSON mapping source sample IDs to explicit consent "
                         "records (use, disease, modifiers, population, consent_date, withdrawn); "
@@ -430,7 +434,10 @@ def main(argv: list[str] | None = None) -> None:
     c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed,
                            family_first=not a.no_family_first, source_metadata_file=metadata_file,
                            source_vcf_file=source_vcf_name, consent_records=consent_records,
-                           consent_source_file=a.consent_json)
+                           consent_source_file=a.consent_json,
+                           source_name=(a.source_name or
+                               ("1000 Genomes (IGSR)" if not a.vcf else
+                                "Operator-supplied VCF (source not independently authenticated)")))
     save_cohort(c, meta, Path(a.out))
     print(json.dumps(meta, indent=2))
     print(f"wrote {a.out}\nrun with: GG_REAL_COHORT_FILE={a.out} make run")
