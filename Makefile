@@ -1,5 +1,6 @@
 PY ?= .venv/bin/python
 PIP ?= .venv/bin/pip
+SOURCE ?= User-provided genomic cohort
 
 .PHONY: setup seed run test eval eval-smoke demo lint fetch-real real-trios eval-real fetch-duo federated bench ui-smoke live-ui-smoke deploy-smoke
 
@@ -44,7 +45,7 @@ fetch-real:
 #   make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt
 real-trios:
 	@test -n "$(VCF)" -a -n "$(PED)" || (echo "usage: make real-trios VCF=<vcf.gz> PED=<pedigree>"; exit 2)
-	PYTHONPATH=backend $(PY) -m app.data.real build --vcf $(VCF) --ped $(PED) --out data_real/1000g_trios.npz
+	PYTHONPATH=backend $(PY) -m app.data.real build --vcf $(VCF) --ped $(PED) --source "$(SOURCE)" --out data_real/1000g_trios.npz
 	@echo "now: GG_REAL_COHORT_FILE=data_real/1000g_trios.npz GG_DB_PATH=data_real/gg.sqlite3 make run"
 
 # Red-team evaluation on a real cohort file: make eval-real COHORT=data_real/1000g_trios.npz
