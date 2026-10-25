@@ -12,6 +12,7 @@ def secure_settings(**overrides):
         admin_api_key="a-unique-admin-secret-with-more-than-32-chars",
         master_key=base64.b64encode(b"x" * 32).decode(),
         allow_tamper_demo=False,
+        real_cohort_file="/tmp/authorized-real-cohort.npz",
     )
     return replace(base, **overrides)
 
@@ -30,6 +31,7 @@ def test_non_demo_settings_accept_unique_admin_key_and_32_byte_master_key():
         ({"master_key": "not-base64"}, "GG_MASTER_KEY"),
         ({"master_key": base64.b64encode(b"short").decode()}, "GG_MASTER_KEY"),
         ({"allow_tamper_demo": True}, "GG_ALLOW_TAMPER_DEMO"),
+        ({"real_cohort_file": ""}, "GG_REAL_COHORT_FILE"),
     ],
 )
 def test_non_demo_settings_reject_unsafe_values(overrides, message):
