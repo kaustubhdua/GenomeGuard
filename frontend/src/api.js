@@ -6,7 +6,8 @@ function readStorage(key) {
   catch { return ""; } // storage can be blocked by browser privacy settings
 }
 
-export const state = { who: readStorage("gg_who"), adminKey: "", demo: null, health: null, me: null, donors: [], donor: null };
+// Defer any remembered identity until the server confirms demo mode.
+export const state = { who: "", adminKey: "", demo: null, health: null, me: null, donors: [], donor: null };
 
 export const isSteward = () => state.who === "steward";
 
