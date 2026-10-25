@@ -51,7 +51,7 @@ in `backend/app/data/real.py` and a fixture test.
   called "real" is decided by the cohort file's own metadata (`genotypes_real`), never by the
   fact that a file was supplied; a file without it is labelled "custom cohort". The report records
   the file's SHA-256 and skips the seed-robustness section, which is synthetic-only. Say on the
-  slide which dataset the numbers came from; they will differ from the synthetic ones.
+  record which dataset produced the numbers; results will differ from synthetic-cohort results.
 - Real genomes have linkage disequilibrium and population structure that the synthetic generator
   only approximates, so attack success could move in either direction.
 
