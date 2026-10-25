@@ -1,6 +1,6 @@
 # Running on real genomes (1000 Genomes)
 
-GenomeGuard runs on synthetic data by default so a clean clone works without downloading genomes. The hosted GitHub Actions runner has now completed an end-to-end download, cohort build, and evaluation against the public 1000 Genomes Phase 3 chromosome 22 data. See [successful real-data validation run #40136240311](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311). Local reproduction still requires internet access.
+GenomeGuard runs on synthetic data by default so a clean clone works without downloading genomes. The hosted GitHub Actions runner has now completed an end-to-end download, cohort build, and evaluation against the public 1000 Genomes Phase 3 chromosome 22 data. See [successful real-data validation run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665). Local reproduction still requires internet access.
 
 That run verifies the real-genotype ingestion/evaluation path only. It does **not** verify real participant consent or a family-relative exposure cohort; the Phase 3 panel is unrelated by design.
 
@@ -23,7 +23,7 @@ That run verifies the real-genotype ingestion/evaluation path only. It does **no
 
 The official [IGSR 30x collection page](https://www.internationalgenome.org/data-portal/data-collection/1000genomes_30x) links the phased SNV/INDEL/SV VCFs and sample metadata for the 3,202-sample cohort. The publication identifies the pedigree metadata file as `1KGP.3202_samples.pedigree_info.txt` in the high-coverage working directory; see the [2022 Cell paper and its data availability](https://pmc.ncbi.nlm.nih.gov/articles/PMC9439720/).
 
-The dedicated [high-coverage family-cohort workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/family-data-validation.yml) downloads the official [chromosome-22 phased VCF](https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz) and the combined [pedigree/population metadata](https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/20130606_g1k_3202_samples_ped_population.txt). This has passed end-to-end in [run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277), including metadata checks and `eval-real`; verified cohort details are recorded below.
+The dedicated [high-coverage family-cohort workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/family-data-validation.yml) downloads the official [chromosome-22 phased VCF](https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.chr22.filtered.SNV_INDEL_SV_phased_panel.vcf.gz) and the combined [pedigree/population metadata](https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/20130606_g1k_3202_samples_ped_population.txt). This has passed end-to-end in [run #40174766759](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759), including metadata checks and `eval-real`; verified cohort details are recorded below.
 
 ## Build it
 
@@ -55,7 +55,7 @@ in `backend/app/data/real.py` and a fixture test.
 - Real genomes have linkage disequilibrium and population structure that the synthetic generator
   only approximates, so attack success could move in either direction.
 
-## Verified real-genotype evaluation (2026-10-24)
+## Verified real-genotype evaluation (2026-10-25)
 
 GitHub Actions downloaded the public Phase 3 chromosome 22 VCF, built a cohort with 600 samples and 3,000 variants, and ran `eval-real` successfully. Provenance metadata from that run:
 
@@ -72,10 +72,10 @@ Selected results from the generated evaluation report (attack/query traffic rema
 - Membership-inference AUC varied with release size and noise; at 500 variants, the simulated attack AUC was 0.721 for raw frequencies and 0.511 for binned frequencies with epsilon 0.5, with very low utility for the latter (correlation 0.020).
 - The query monitor froze all tested attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. This is a measured limitation of the simulated sliding-window monitor, not a claim that slow attacks are stopped.
 
-These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40136240311](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311) for 30 days.
-## Verified high-coverage family-cohort evaluation (2026-10-24)
+These results are evidence for the real-genotype processing path, not a formal privacy guarantee. The evaluation itself explicitly documents simplified attackers, synthetic traffic, and simplified epsilon accounting. The full generated Markdown and JSON reports are preserved as artifacts in [run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665) for 30 days.
+## Verified high-coverage family-cohort evaluation (2026-10-25)
 
-The dedicated high-coverage workflow passed on GitHub Actions: [run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277). It downloaded the official IGSR high-coverage chromosome-22 phased variant VCF and the 3,202-sample pedigree/population metadata file, built a pedigree-aware cohort, and completed `eval-real`.
+The dedicated high-coverage workflow passed on GitHub Actions: [run #40174766759](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759). It downloaded the official IGSR high-coverage chromosome-22 phased variant VCF and the 3,202-sample pedigree/population metadata file, built a pedigree-aware cohort, and completed `eval-real`.
 
 Verified cohort metadata:
 
@@ -89,4 +89,4 @@ Verified cohort metadata:
 
 The generated report shows strong trade-offs, not a production privacy guarantee. In this run, the differencing attack recovered 100% of target genotypes without a defence; Laplace noise alone reduced this to 31.0% ± 2.8%, and the ladder plus differencing guard reduced it to the guessing baseline of 55.1% ± 3.1% while blocking the second query in 100% of trials. The simulated monitor froze 100% of tested fast triangulation attacks at 5-, 30-, and 120-second gaps, but froze none at 600- and 1,200-second gaps. The report itself documents simplified attackers, synthetic query/consent data, and simplified sequential epsilon accounting.
 
-The report is available as a 30-day aggregate-only artifact in the [family-cohort run](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277). Raw genomic cohorts are not uploaded as workflow artifacts.
+The report is available as a 30-day aggregate-only artifact in the [family-cohort run](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759). Raw genomic cohorts are not uploaded as workflow artifacts.
