@@ -102,7 +102,9 @@ class PostgresStore(Store):
 
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:
-            return list(self.connection.execute(_translate(sql), args).fetchall())
+            rows = list(self.connection.execute(_translate(sql), args).fetchall())
+            self.connection.commit()
+            return rows
 
     def one(self, sql: str, args: tuple = ()) -> dict | None:
         rows = self.q(sql, args)
