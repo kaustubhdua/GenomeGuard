@@ -4,7 +4,7 @@ Read each result together with its workflow run and tested commit. A passing wor
 
 ## Main-branch application checks
 
-- [Latest main CI run #40188898749](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188898749) passed on app commit `8882f9958c664aa6012fe6a1ae0c6ee83dd6bd85`, including backend tests, lint, evaluation, scripted workflow, JavaScript/Python checks, browser routes, responsive layouts, automated accessibility checks, guided walkthrough, and screenshot capture.
+- [Latest main CI run #40193504185](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193504185) passed on merged commit `f50f31568e3b664e81f872dea98dc6a81b1bdb43`, including backend tests, lint, evaluation, scripted workflow, JavaScript/Python checks, browser routes, responsive layouts, automated accessibility checks, guided walkthrough, and screenshot capture.
 - [Product/UI cleanup PR #21](https://github.com/kaustubhdua/GenomeGuard/pull/21) passed full CI on PR head `23ea4f7015d306264b44e72663a893683c8d3bdd` in [run #40188338091](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188338091) and was squash-merged as `32e019e0fb79c47573cead15d5dc5a926c6b61a4`.
 - [1000 Genomes Phase 3 ingestion/evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188654628) — 600 samples × 3,000 variants; source hashes and build parameters are recorded.
 - [High-coverage family cohort validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188654612) — 600 samples and 355 observed pedigree relationship pairs; source metadata and simulated-consent status are recorded.
@@ -16,11 +16,11 @@ Read each result together with its workflow run and tested commit. A passing wor
 
 - Public URL: https://genomeguard.onrender.com
 - Render service: `srv-dbev1ka9lscs738813t0`
-- Current deployed source commit at the time of the following run: `8882f9958c664aa6012fe6a1ae0c6ee83dd6bd85`
-- Latest full live smoke run: [#40192847038](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40192847038) — passed health, static assets, synthetic-data and simulated-consent provenance, API docs, permit/deny/held workflows, requester isolation, invalid/absent credential rejection, steward access, audit verification, all nine routes in light and dark themes, responsive widths, keyboard command-palette navigation, mobile-menu behavior, reduced-motion preference, and 640px reflow.
-- Persistence experiment: the synthetic request `3` existed before a manual redeploy of commit `8882f9958c664aa6012fe6a1ae0c6ee83dd6bd85`; after the redeploy, the live API returned 404 for that request. This confirms the current free service did not preserve its SQLite request history. The live run includes the check.
+- Current deployed source commit: `f50f31568e3b664e81f872dea98dc6a81b1bdb43`
+- Latest full live smoke run: [#40193661761](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193661761) — passed health, static assets, synthetic-data and simulated-consent provenance, API docs, permit/deny/held workflows, requester isolation, invalid/absent credential rejection, steward access, audit verification, all nine routes in light and dark themes, responsive widths, keyboard command-palette navigation, mobile-menu behavior, reduced-motion preference, and 640px reflow.
+- Persistence experiment: the synthetic request `3` existed before a manual redeploy of commit `f50f31568e3b664e81f872dea98dc6a81b1bdb43`; after the redeploy, the live API returned 404 for that request. This confirms the current free service did not preserve its SQLite request history. The live run includes the check.
 
-The live axe-core scan found no critical or serious violations. It did report a moderate `heading-order` finding on the Overview and Request details pages in the deployed `8882f995` build. The semantic heading fix is included in [PR #22](https://github.com/kaustubhdua/GenomeGuard/pull/22) and must be verified again after that code is deployed. A successful automated scan is not a substitute for human screen-reader testing.
+The live axe-core scan found no critical/serious violations or heading-order findings across all nine routes in light and dark themes on deployed commit `f50f3156`. The heading hierarchy was corrected in [PR #22](https://github.com/kaustubhdua/GenomeGuard/pull/22). The live accessibility gate now treats heading-order regressions as failures. Automated checks do not replace human screen-reader testing.
 
 ## Limits and non-claims
 
