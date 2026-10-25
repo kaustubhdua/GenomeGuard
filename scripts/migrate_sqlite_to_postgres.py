@@ -25,7 +25,7 @@ TABLES = (
     "requesters", "requests", "decisions", "epsilon_ledger", "audit_log",
     "donor_access", "alerts",
 )
-SEQUENCES = ("relationships", "requesters", "requests", "donor_access", "alerts")
+SEQUENCES = ("relationships", "requesters", "requests", "decisions", "donor_access", "alerts")
 
 
 def audit_entries(rows):
