@@ -309,6 +309,8 @@ class AuditStore:
 
     def append_atomic(self, actor: str, action: str, payload: Any, ts: str | None = None) -> dict:
         """Append under the store lock; PostgreSQL overrides this with a cross-process lock."""
+        if hasattr(self.s, "append_audit_entry"):
+            return self.s.append_audit_entry(actor, action, payload, ts)
         with self.s.lock:
             last = self.last()
             idx = int(last["idx"]) + 1 if last else 1
