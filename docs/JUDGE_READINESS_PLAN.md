@@ -1,11 +1,13 @@
 # GenomeGuard — judge-readiness research and execution plan
 
-Last researched: 25 October 2026. Latest main baseline verified: `dfb618b909337c535a976b87950b0e31b4bcc7a0` with passing CI run [#40156142028](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40156142028). This is a prioritized engineering plan, not a claim that each item is already implemented or verified.
+Last researched: 25 October 2026. Latest full main CI baseline verified: `dbe400d20915709289f5c9569a6f5bf7cdf866ef`, passing [run #40175086012](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40175086012), including browser, responsive, and axe-core checks plus a desktop/mobile screenshot artifact. The real-data, family-cohort, Beacon-schema, and dependency-audit workflows have also passed on recent main commits. This is a prioritized engineering plan, not a claim that every item is implemented or verified.
 
 ## Executive recommendation
 
 Make the demo **trustworthy, repeatable, and easy to judge** before adding more features. The strongest story is: a researcher submits a genomic-data request; deterministic consent/risk policy constrains it; the steward copilot gathers only approved summaries; a human reviews escalations; the released result and decision are auditable. Keep the relative-exposure angle as the differentiator, but do not describe this prototype as a clinical tool or a legally compliant healthcare system.
 
+
+For the final judge walk-through, use [FINAL_JUDGE_RUNBOOK.md](FINAL_JUDGE_RUNBOOK.md), which contains a go/no-go checklist, expected outcomes, a three-minute script, and current standards/hosting references.
 ## P0 — Before the judging session
 
 ### 1. Prove the deployed commit and run the demo from a fresh session
@@ -22,7 +24,7 @@ Make the demo **trustworthy, repeatable, and easy to judge** before adding more 
 - If using 1000 Genomes genotypes, show the source, genome build, sample/variant counts, file SHA-256, build settings, and whether the cohort was family-enriched.
 - Consent/requester identities remain simulated even with real genotypes. Never call those real consents.
 - Do not commit downloaded VCFs, sample-level genotype files, keys, or participant identifiers.
-- The Phase 3 ingestion/evaluation path has now passed on GitHub Actions with 600 samples and 3,000 variants; see [real-data run #40136240311](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311) and [the source hashes/build parameters](real-data.md). The result is real-genotype evaluation, not real-consent evaluation. A dedicated workflow now downloads the official [IGSR high-coverage 3,202-sample collection with 602 trios](https://www.internationalgenome.org/data-portal/data-collection/1000genomes_30x) and builds a pedigree-aware cohort. The successful [high-coverage run #40136240277](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277) verified 355 relationship pairs and `family_enriched: true`; consent remains simulated.
+- The Phase 3 ingestion/evaluation path has now passed on GitHub Actions with 600 samples and 3,000 variants; see [real-data run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665) and [the source hashes/build parameters](real-data.md). The result is real-genotype evaluation, not real-consent evaluation. A dedicated workflow now downloads the official [IGSR high-coverage 3,202-sample collection with 602 trios](https://www.internationalgenome.org/data-portal/data-collection/1000genomes_30x) and builds a pedigree-aware cohort. The successful [high-coverage run #40174766759](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759) verified 355 relationship pairs and `family_enriched: true`; consent remains simulated.
 
 ### 3. Make the UI judge-ready without motion overload
 - Preserve route-level JavaScript code splitting and intent-based prefetching; keep native lazy loading for below-the-fold media, but do not lazy-load critical above-the-fold assets.

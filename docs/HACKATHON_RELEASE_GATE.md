@@ -4,7 +4,7 @@ Last updated: 25 October 2026. This document separates automated evidence from w
 
 ## Latest verified repository baseline
 
-The last full code-and-browser verification passed on commit `102302023b7a51ecdd2bca14ffb87468dadaac38`: GitHub Actions run [#40174766691](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766691) passed setup, lint, seed, Python tests, evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, the read-only UI smoke, and the complete browser suite with axe-core enabled. It also preserved judge-facing desktop/mobile screenshots as a CI artifact. The subsequent commits refresh this release-gate documentation; rerun CI on the final submission SHA before tagging a release.
+The latest full code-and-browser verification passed on main commit `de5287521161a3ee4b662a6f51f7a43823b14802`: GitHub Actions run [#40176502384](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40176502384) passed setup, lint, seed, Python tests (including request-ID enumeration and strict steward-review input regressions), evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, Playwright browser smoke, and pinned axe-core checks. It also preserved judge-facing desktop/mobile screenshots as a CI artifact ([downloadable for 14 days](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40176502384)). Rerun CI on the final submission SHA before tagging a release.
 
 The UI/performance changes split page modules by route, prefetch chunks on link hover/focus, add reduced-motion-aware motion, expose route loading with `aria-busy`, recover from failed route imports, and apply native lazy loading/async decoding. The suite checks nine routes, light/dark themes, the guided tour, responsive overflow at 320/375/414 px, blocked localStorage, and critical/serious axe-core findings. The first axe run exposed contrast, SVG naming, and keyboard-scroll issues; fixes are merged and the updated suite passed.
 
@@ -12,7 +12,7 @@ The real-data path passed end-to-end on hosted GitHub Actions on `main`: [Phase 
 
 The FHIR R4 Consent export has passed the HL7 FHIR Validator 7.0.1 against R4 4.0.1 and the project's extension package: [run #40145035362](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035362) reported 0 errors and 0 warnings. The validator checks a generated synthetic Consent resource; it does not prove that consent is legally valid. Full Beacon v2 conformance beyond core response schemas, formal differential-privacy accounting, a public deployment URL, persistent hosting, real authenticated tenant isolation, and independent production security/privacy review remain open. Core response envelopes are checked against pinned official GA4GH Beacon v2 schemas in [run #40145035388](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035388); this is not full Beacon certification.
 
-For the research-backed next steps and the final judge checklist, see [JUDGE_READINESS_PLAN.md](JUDGE_READINESS_PLAN.md).
+For the research-backed next steps, see [JUDGE_READINESS_PLAN.md](JUDGE_READINESS_PLAN.md); the practical three-minute demo script and go/no-go checklist are in [FINAL_JUDGE_RUNBOOK.md](FINAL_JUDGE_RUNBOOK.md).
 
 ## Product framing
 

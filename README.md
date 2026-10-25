@@ -137,7 +137,7 @@ enclave or real consent-management integration; no independent security review. 
 
 `backend/app/core/` rules and math | `backend/app/agents/` advisory agents | `backend/app/data/`
 generators and real-data loaders | `backend/redteam/` attacks and evaluation | `frontend/` UI |
-`docs/` architecture, threat model, eval, scalability, real-data, hackathon release gate, demo script, slide inputs | `scripts/` demo, bench, ui_smoke.
+`docs/` architecture, threat model, eval, scalability, real-data, hackathon release gate, judge-readiness plan, final judge runbook, demo script, slide inputs | `scripts/` demo, bench, UI smoke, deployment smoke.
 
 ## References
 
@@ -149,17 +149,18 @@ generators and real-data loaders | `backend/redteam/` attacks and evaluation | `
 
 ## Current verification evidence
 
-- [Main CI with Playwright and axe-core browser checks](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035396)
-- [1000 Genomes Phase 3 real-genotype ingestion/evaluation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240311)
-- [High-coverage pedigree cohort: 600 samples, 3,000 variants, 355 relationship pairs](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40136240277)
-- [HL7 FHIR R4 validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035362)
-- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035388)
+- [CI workflow page](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml) — representative full run after request-authorization hardening: [run #40176502384](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40176502384) on commit `de5287521161a3ee4b662a6f51f7a43823b14802`, including backend tests, request authorization/review regressions, evaluation, demo, JavaScript/Python checks, Playwright, responsive checks, axe-core, and a desktop/mobile screenshot artifact. Check the workflow page for the newest run.
+- [1000 Genomes Phase 3 ingestion/evaluation workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/real-data-validation.yml) — [successful run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665), 600 samples × 3,000 variants.
+- [High-coverage family cohort workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/family-data-validation.yml) — [successful run #40174766759](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759), 600 samples and 355 observed pedigree relationship pairs.
+- [HL7 FHIR R4 Consent validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173012914) — synthetic Consent export passed the pinned validator.
+- [GA4GH Beacon v2 core response-schema validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173357263) — schema-level checks only, not full certification.
+- [Dependency audit and CycloneDX SBOM](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173357246).
 
-These runs prove specific automated gates only. They do not prove that a public Render instance is live, that real consent exists, that Beacon v2 conformance is complete, or that the custom privacy accountant is formally differentially private. The high-coverage run validates pedigree-aware cohort building and simulated attack evaluation, not clinical or consent-management workflows.
+Use the workflow pages for the newest results and confirm the run SHA before presenting. These runs prove specific automated gates only. They do not prove that a public Render instance is live, that real consent exists, that Beacon v2 conformance is complete, or that the custom privacy accountant is formally differentially private. The high-coverage run validates pedigree-aware cohort building and simulated attack evaluation, not clinical or consent-management workflows.
 
 ## Hackathon release verification
 
-Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) as the final evidence checklist against every Tech Eximius judging criterion. It separates source-level implementation from evidence: main CI and axe-core browser QA have passed, real-genotype ingestion/evaluation has passed in CI, FHIR R4 validation has passed, and a deployed walkthrough still requires an authorized public hosting workspace. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
+Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) for the evidence matrix and [`docs/FINAL_JUDGE_RUNBOOK.md`](docs/FINAL_JUDGE_RUNBOOK.md) for the go/no-go checklist and three-minute presentation script. Main CI and axe-core browser QA have passed; real-genotype and pedigree-aware evaluation, FHIR R4 structural validation, Beacon core-schema checks, and dependency audit have also passed. A deployed walkthrough still requires an authorized Render workspace and verified public URL. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
 
 ## Audit anchor
 
