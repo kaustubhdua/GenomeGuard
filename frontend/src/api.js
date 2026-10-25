@@ -73,6 +73,11 @@ export async function connectKey(kind, key) {
   return result;
 }
 
+export function disconnectKey() {
+  state.adminKey = "";
+  setWho("");
+}
+
 export async function boot() {
   const [h, d, dn] = await Promise.all([call("/health"), call("/demo/requesters"), call("/demo/donors")]);
   state.health = h.data;
