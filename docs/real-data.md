@@ -28,11 +28,14 @@ The dedicated [high-coverage family-cohort workflow](https://github.com/kaustubh
 ## Build it
 
 ```
-make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt
+make real-trios VCF=path/to/chr22.vcf.gz PED=path/to/pedigree.txt SOURCE="1000 Genomes (IGSR) high-coverage 30x (GRCh38)"
 GG_REAL_COHORT_FILE=data_real/1000g_trios.npz GG_DB_PATH=data_real/gg.sqlite3 make run
 ```
 
 By default the build is **family-first** when a pedigree is supplied: it prefers families with two or more members in the VCF. The `family_enriched` metadata now reflects actual relationship pairs in the built cohort, not just the requested sampling option. If the source has no pedigree (as with Phase 3), the metadata correctly remains `family_enriched: false`. Do not describe a family-enriched cohort as representative of a population. Use `--no-family-first` on the module (`python -m app.data.real build ...`) for random sampling.
+
+
+Source labels are deliberately conservative. The automatic public Phase 3 download is labelled `1000 Genomes (IGSR) Phase 3`. If you pass local `--vcf` and `--ped` files, the default label is `User-provided genomic cohort`; pass `--source` only when you have verified the source. `make real-trios` defaults to a user-provided label for this reason. Cohort source metadata is persisted with the database at initial seed time, so changing `GG_REAL_COHORT_FILE` later cannot silently relabel an already-loaded database. Existing databases without persisted provenance are labelled unknown rather than inferred from the current environment.
 
 The default public Phase 3 panel provides sample and population labels but no family relationships; each sample is treated as unrelated. For real parent/child links, pass a separate pedigree file with family, individual, father, mother and population columns. The parser accepts tab- or whitespace-separated files and several header spellings
 (`Family ID / Individual ID / Paternal ID / Maternal ID`, or `FamilyID / SampleID / FatherID /
