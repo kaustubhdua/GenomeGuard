@@ -1,6 +1,6 @@
 # Real cohort ingestion and consent provenance
 
-GenomeGuard can parse real genotype files, but **real genotypes do not imply real consent**. The default importer assigns simulated DUO-inspired consent records so the research prototype can exercise its policy engine. That default is for synthetic/demo evaluation only.
+GenomeGuard supports real genotype files and two distinct consent-provenance paths. Operator-supplied, source-matched participant records are preferred when a dataset provides them. For the public 1000 Genomes release, an optional dataset-level policy profile maps the project's published public-release terms to DUO-inspired rules. That profile is **not participant-specific consent**, does not invent consent dates, and is not a legal or ethics determination. The default importer still creates simulated consent only for local demo evaluation.
 
 ## Production-mode invariant
 
@@ -14,6 +14,22 @@ With `GG_DEMO_MODE=false`, startup now fails closed unless all of the following 
 - The database's recorded provenance matches the configured cohort. GenomeGuard refuses to relabel an existing synthetic database as real.
 
 This guard is a technical safety check, **not** a determination that consent is legally valid. An authorized data controller must confirm the lawful basis, participant permissions, institutional approvals, data-use terms, retention and withdrawal rules before importing any data.
+
+## Dataset-level policy for the public 1000 Genomes release
+
+The checked-in profile at `docs/policies/igsr-1000-genomes-public-release.json` cites the official IGSR sample-collection principles. Those principles describe public Internet release and future research uses, including academic, commercial, and government research; they also state that samples/data cannot be withdrawn after release. GenomeGuard maps that dataset-level description to the broad DUO-inspired `GRU` use class for this specific public reference dataset.
+
+This is deliberately represented as `consent_basis: dataset_policy`, not as a per-participant consent record. No participant signature, consent date, or individual withdrawal state is fabricated. The UI and API provenance label must continue to say this is a dataset-level source-policy mapping and that independent legal/ethics review has not been performed. Do not reuse this profile for controlled-access data, private clinical cohorts, or any dataset with additional use restrictions.
+
+Build the public reference cohort with:
+
+```bash
+python -m app.data.real build \
+  --consent-policy-json docs/policies/igsr-1000-genomes-public-release.json \
+  --out data_real/1000g_phase3_chr22.npz --samples 600 --variants 3000
+```
+
+The Docker image uses this command at build time and retains only the derived cohort, not the downloaded VCF or sample panel. Source hashes and build parameters are recorded in cohort metadata. This gives the research instance real public genotypes and a documented dataset-level policy, but does **not** make the service production-ready or suitable for private participant records.
 
 ## Consent JSON input
 
