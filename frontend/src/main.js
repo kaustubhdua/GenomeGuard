@@ -1,4 +1,4 @@
-import { boot, connectKey, state, setWho, isSteward } from "./api.js";
+import { boot, connectKey, disconnectKey, state, setWho, isSteward } from "./api.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
 
@@ -205,6 +205,14 @@ $("connect-key").addEventListener("click", async () => {
   }
 });
 $("auth-kind").addEventListener("change", () => { $("auth-status").textContent = ""; });
+$("disconnect-key").addEventListener("click", () => {
+  disconnectKey();
+  $("api-key-input").value = "";
+  $("auth-status").textContent = "Disconnected. Credentials have been cleared from this tab.";
+  drawWho();
+  drawNav("");
+  render();
+});
 $("api-key-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); $("connect-key").click(); }
 });
