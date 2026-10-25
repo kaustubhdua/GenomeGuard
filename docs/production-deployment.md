@@ -6,7 +6,7 @@
 - Hosting: Render web service, free plan, Singapore region
 - Service: `srv-dbev1ka9lscs738813t0`
 - Deployed source commit: `8882f9958c664aa6012fe6a1ae0c6ee83dd6bd85`
-- Render deployment: `dep-dbev1pubs3rs73cc8dvg`
+- Render deployment: `dep-dbev8p7avr4c73c8tgm0`
 - Runtime: Docker, Python 3.12 image, Uvicorn
 - Data mode: synthetic cohort; consent and requester personas are simulated
 - Destructive audit-tampering demonstration: disabled in the hosted service environment
