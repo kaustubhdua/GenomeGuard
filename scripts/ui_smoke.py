@@ -214,6 +214,21 @@ def main() -> None:
                     check(f"{hsh} axe critical/serious", not blocking,
                           str(blocking)[:260] if blocking else f"{len(axe_violations)} non-blocking finding(s)")
                 r = pg.evaluate(AUDIT_JS)
+                if hsh == "#/overview":
+                    proof_layout = pg.evaluate("""() => {
+                      const card = document.querySelector(".g-main > .card:last-child");
+                      const facts = card?.querySelector("dl.facts");
+                      if (!card || !facts) return {missing: true};
+                      const cardRect = card.getBoundingClientRect();
+                      const dds = [...facts.querySelectorAll("dd")];
+                      const cols = getComputedStyle(facts).gridTemplateColumns.split(" ").map(parseFloat);
+                      return {missing: false, cardWidth: cardRect.width, columnCount: cols.length,
+                        valuesFit: dds.every(e => e.scrollWidth <= e.clientWidth + 1 &&
+                          e.getBoundingClientRect().right <= cardRect.right - 8 && e.clientWidth >= 100)};
+                    }""")
+                    check("overview evidence metrics stack without clipping",
+                          not proof_layout.get("missing") and proof_layout.get("columnCount") == 1
+                          and proof_layout.get("valuesFit", False), str(proof_layout))
                 bad = {k: v for k, v in r.items() if isinstance(v, list) and v}
                 check(f"{hsh}", r["h1"] == 1 and not bad,
                       str(bad)[:140] if bad else ("h1 count " + str(r["h1"]) if r["h1"] != 1 else ""))
