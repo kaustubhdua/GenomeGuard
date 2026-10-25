@@ -52,7 +52,9 @@ def main() -> int:
     health_status, health = 0, {}
     for attempt in range(max(1, args.retries)):
         health_status, health = call(base, "/health", timeout=args.timeout)
-        if health_status == 200 and health.get("status") == "ok":
+        if (health_status == 200 and health.get("status") == "ok"
+                and health.get("demo_mode") is False
+                and (health.get("provenance") or {}).get("consent") == "source_policy"):
             break
         if attempt + 1 < args.retries:
             time.sleep(args.retry_delay)
