@@ -92,3 +92,23 @@ def test_postgres_unit_of_work_rolls_back_all_store_writes(pg_store):
             )
             raise RuntimeError("injected failure")
     assert pg_store.one("SELECT id FROM requesters WHERE name=?", ("Rollback Researcher",)) is None
+
+
+def test_postgres_mutation_lock_prevents_concurrent_budget_lost_updates(pg_store):
+    url = os.environ["GG_TEST_DATABASE_URL"]
+    requester_id = pg_store.add_requester(
+        "Budget Researcher", "researcher", "standard", "test-institution", "budget-test-key"
+    )
+    stores = [pg_store] + [PostgresStore(url) for _ in range(3)]
+    try:
+        def charge(i):
+            store = stores[i % len(stores)]
+            with store.transaction():
+                spent = store.eps_spent(requester_id, "budget-dataset")
+                store.set_eps_spent(requester_id, "budget-dataset", spent + 0.1)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(charge, range(20)))
+        assert pg_store.eps_spent(requester_id, "budget-dataset") == pytest.approx(2.0)
+    finally:
+        for store in stores[1:]:
+            store.close()
