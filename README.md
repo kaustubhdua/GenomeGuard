@@ -149,7 +149,7 @@ generators and real-data loaders | `backend/redteam/` attacks and evaluation | `
 
 ## Current verification evidence
 
-- [Latest main CI workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml) — most recent completed full browser run before the request-authorization hardening merge: [#40175086012](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40175086012), including backend tests, evaluation, demo, JavaScript/Python checks, Playwright, responsive checks, axe-core, and a desktop/mobile screenshot artifact.
+- [Latest main CI workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml) — [passing run #40176502384](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40176502384) on commit `de5287521161a3ee4b662a6f51f7a43823b14802`, including backend tests, request authorization/review regressions, evaluation, demo, JavaScript/Python checks, Playwright, responsive checks, axe-core, and a desktop/mobile screenshot artifact.
 - [1000 Genomes Phase 3 ingestion/evaluation workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/real-data-validation.yml) — [successful run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665), 600 samples × 3,000 variants.
 - [High-coverage family cohort workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/family-data-validation.yml) — [successful run #40174766759](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766759), 600 samples and 355 observed pedigree relationship pairs.
 - [HL7 FHIR R4 Consent validation](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173012914) — synthetic Consent export passed the pinned validator.
