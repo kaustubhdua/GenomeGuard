@@ -4,7 +4,7 @@ Last updated: 25 October 2026. This document separates automated evidence from w
 
 ## Latest verified repository baseline
 
-The current `main` commit is `c7b3806817d03109b92296fb640f729085479310`. GitHub Actions run [#40145721943](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145721943) passed setup, lint, seed, Python tests, evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, and the complete browser UI suite with axe-core enabled.
+The current `main` commit at the time of this refresh is `dfb618b909337c535a976b87950b0e31b4bcc7a0`. GitHub Actions run [#40156142028](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40156142028) passed setup, lint, seed, Python tests, evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, and the complete browser UI suite with axe-core enabled.
 
 The UI/performance changes split page modules by route, prefetch chunks on link hover/focus, add reduced-motion-aware motion, expose route loading with `aria-busy`, recover from failed route imports, and apply native lazy loading/async decoding. The suite checks nine routes, light/dark themes, the guided tour, responsive overflow at 320/375/414 px, blocked localStorage, and critical/serious axe-core findings. The first axe run exposed contrast, SVG naming, and keyboard-scroll issues; fixes are merged and the updated suite passed.
 
@@ -36,7 +36,7 @@ The central claim for judges should be: **“Agents investigate and explain; det
 
 The default demo cohort is synthetic. Consent records and requester identities are simulated even if optional real 1000 Genomes genotypes are loaded. A real genotype file does **not** make its consent record real, does not make the platform production-ready, and does not establish legal compliance. Keep provenance visible in the UI, README, demo narration and result metadata.
 
-Both the Phase 3 and high-coverage family loaders have passed end-to-end CI against exact public files, with file hashes, source filenames, build parameters, sample/variant counts and relationship counts recorded in `docs/real-data.md`. This verifies ingestion and evaluation only; it does not turn simulated consent or requester identities into real ones. Never commit downloaded genomic data or real participant identifiers to this repository.
+Both the Phase 3 and high-coverage family loaders have passed end-to-end CI against public files, with source hashes, source filenames, build parameters, sample/variant counts and relationship counts recorded in `docs/real-data.md`. The latest main-branch CI is green; this does not imply a public Render service is live. This verifies ingestion and evaluation only; it does not turn simulated consent or requester identities into real ones. Never commit downloaded genomic data or real participant identifiers to this repository.
 
 ## Commands to run on a clean clone
 
