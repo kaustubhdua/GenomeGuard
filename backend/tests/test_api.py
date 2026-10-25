@@ -31,7 +31,7 @@ def test_readiness_distinguishes_demo_liveness_from_production_readiness():
     body = ready.json()
     assert body["status"] == "not_ready" and body["ready"] is False
     assert body["checks"]["demo_mode_disabled"] is False
-    assert body["checks"]["source_matched_consent"] is False
+    assert body["checks"]["source_authority_covers_all_samples"] is False
     assert body["checks"]["durable_storage_verified"] is False
     assert body["checks"]["external_audit_anchor_verified"] is False
     assert body["checks"]["institutional_identity_provider_verified"] is False
