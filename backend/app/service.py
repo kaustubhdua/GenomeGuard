@@ -924,9 +924,17 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
              "custom": "Custom cohort (real-data provenance not established)",
              "unknown": "Genotype provenance unknown"}[kind]
         ),
-        "consent": "simulated" if consent_simulated else "source_records",
-        "consent_label": ("Simulated consent records" if consent_simulated
-                          else "Operator-supplied source-matched consent records"),
+        "consent": ("simulated" if consent_simulated else
+                     "source_policy" if stored_meta.get("consent_basis") == "dataset_policy"
+                     else "source_records"),
+        "consent_label": (
+            "Simulated consent records" if consent_simulated else
+            "Dataset-level public-release terms (not participant-specific consent records)"
+            if stored_meta.get("consent_basis") == "dataset_policy" else
+            "Operator-supplied source-matched consent records"
+        ),
+        "consent_basis": stored_meta.get("consent_basis", "unknown"),
+        "consent_policy": stored_meta.get("consent_policy"),
         "consent_records_matched": stored_meta.get("consent_records_matched", 0),
         "consent_source": stored_meta.get("consent_source_file"),
         "genotype_source": stored_meta.get("source"),
