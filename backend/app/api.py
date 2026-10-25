@@ -435,16 +435,26 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         from app.core.federated import demo
         return _j(await run_in_threadpool(demo))
 
+    def documented_routes():
+        if settings.demo_mode:
+            return ROUTES_DOC
+        hidden_prefixes = ("/demo/", "/donor/", "/federated/")
+        hidden_exact = {"/eval/results", "/admin/untamper"}
+        return [entry for entry in ROUTES_DOC
+                if not entry[1].startswith(hidden_prefixes)
+                and entry[1] not in hidden_exact
+                and not entry[1].startswith("/admin/tamper/")]
+
     @route("GET", "/openapi.json", "Machine-readable endpoint list", "public")
     async def openapi(request):
         return _j({"openapi": "3.0.0-lite", "info": {"title": "GenomeGuard", "version": "0.2.0"},
                    "endpoints": [{"method": m, "path": p, "summary": s, "auth": w}
-                                 for m, p, s, w in ROUTES_DOC]})
+                                 for m, p, s, w in documented_routes()]})
 
     @route("GET", "/docs", "Human-readable endpoint list", "public")
     async def docs(request):
         rows = "".join(f"<tr><td>{m}</td><td><code>{p}</code></td><td>{s}</td><td>{w}</td></tr>"
-                       for m, p, s, w in ROUTES_DOC)
+                       for m, p, s, w in documented_routes())
         provenance = getattr(S(), "provenance", {})
         genotype_label = provenance.get("genotypes_label", "Genotype provenance unknown")
         consent_label = provenance.get("consent_label", "Consent provenance unknown")
