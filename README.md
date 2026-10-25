@@ -14,7 +14,7 @@ it, and a person signs off on anything risky.
 > simulated. It has had no independent security review and makes no claim of legal compliance
 > (it is designed around the ideas of DPDP, GDPR and HIPAA). Do not use it with real participant data.
 
-**Latest automated release check:** [main CI run #40186140229](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186140229) passed the backend suite, evaluation, scripted demo, browser smoke, responsive checks and axe-core scan on commit `ce5d85b5c5f3e1ebcf60f5f91bc084d3b05fc841`. This is CI evidence, not live-deployment evidence; the public URL and deployed SHA remain unverified.
+**Latest main CI:** [run #40186978293](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186978293) passed on current main commit `0f23dc5000a75125ce199fdad16a24d83ed7577e` (release-evidence documentation refresh). The latest full code-and-browser suite, [run #40186140229](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40186140229), passed on `ce5d85b5c5f3e1ebcf60f5f91bc084d3b05fc841`, including backend tests, evaluation, scripted demo, Playwright browser checks, responsive layouts, axe-core and screenshots. These are repository/CI checks, not live-deployment evidence; the public URL and deployed SHA remain unverified.
 
 ## Why
 
