@@ -125,6 +125,14 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .verdict{font:650 28px/1.15 var(--sans);letter-spacing:-.02em;margin:0 0 6px;display:block}
 .verdict.o-permit,.verdict.o-permit_with_transform,.verdict.o-deny,.verdict.o-escalate{background:none}
 
+/* Request history is a primary task surface: give the table the full card width instead of
+   placing it in the narrow content column used by the older ledger layout. */
+.request-history .tablewrap{margin-top:2px}
+.request-history table{min-width:760px}
+.request-history th:first-child,.request-history td:first-child{width:48px}
+.request-history th:nth-child(2),.request-history td:nth-child(2){white-space:nowrap}
+.request-history th:last-child{width:230px}
+
 /* ---------- tables ---------- */
 table{border-collapse:collapse;width:100%}
 th{text-align:left;font-weight:500;color:var(--ink-3);font-size:12.5px;padding:8px 12px 8px 0;border-bottom:1px solid var(--line)}

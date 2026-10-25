@@ -214,6 +214,21 @@ def main() -> None:
                     check(f"{hsh} axe critical/serious", not blocking,
                           str(blocking)[:260] if blocking else f"{len(axe_violations)} non-blocking finding(s)")
                 r = pg.evaluate(AUDIT_JS)
+                if hsh == "#/requests":
+                    history_layout = pg.evaluate("""() => {
+                      const card = document.querySelector(".request-history");
+                      const table = card?.querySelector("table");
+                      const date = table?.querySelector("tbody tr td:nth-child(2)");
+                      if (!card || !table || !date) return {missing: true};
+                      const cardRect = card.getBoundingClientRect();
+                      const tableRect = table.getBoundingClientRect();
+                      return {missing: false, cardWidth: cardRect.width, tableWidth: tableRect.width,
+                        tableUsesCard: tableRect.width >= cardRect.width * 0.8,
+                        timestampWhiteSpace: getComputedStyle(date).whiteSpace};
+                    }""")
+                    check("request history uses full card width and readable timestamps",
+                          not history_layout.get("missing") and history_layout.get("tableUsesCard")
+                          and history_layout.get("timestampWhiteSpace") == "nowrap", str(history_layout))
                 if hsh == "#/overview":
                     proof_layout = pg.evaluate("""() => {
                       const card = document.querySelector(".g-main > .card:last-child");
