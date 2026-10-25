@@ -10,8 +10,9 @@ Run on a machine with internet access; the hosted CI workflow verifies the offic
 What is real and what is not (state this on any slide that mentions it):
   * REAL: genotypes, allele frequencies, population labels, and any parent/child links present in
     the pedigree file. 1000 Genomes participants consented to open public release.
-  * SIMULATED: consent records. 1000 Genomes has no per-donor DUO consent, so each real genome is
-    given a synthetic consent record (flagged `consent_simulated` in the file's metadata).
+  * CONSENT: by default, records are simulated because 1000 Genomes does not provide the
+    per-donor DUO fields this engine evaluates. Production mode requires an operator-authorized
+    `--consent-json` mapping for every selected source sample; missing records fail the build.
   * The Phase 3 release was built from deliberately UNRELATED people, so with the default files
     there are almost no relative pairs and the family-exposure demo will be sparse. For real
     families use the IGSR high-coverage release that includes 602 trios, by passing --vcf and
@@ -354,7 +355,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
             "family_enriched": bool(family_first and rels), "seed": seed,
             "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
                                  "keep_prob": keep_prob, "rare_maf": rare_maf,
-                                 "withdrawn_rate": withdrawn_rate},
+                                 "withdrawn_rate": None if consent_records is not None else withdrawn_rate},
             "source_vcf_file": source_vcf_file or vcf.name, "source_vcf_sha256": sha256_file(vcf),
             "source_sample_metadata_file": source_metadata_file,
             "source_sample_metadata_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest(),
