@@ -1,0 +1,127 @@
+"""PostgreSQL-backed implementation of the Store contract.
+
+This adapter deliberately reuses the domain/store methods in app.store.Store while replacing
+SQLite's connection semantics with PostgreSQL, an explicit schema migration, and transactional
+writes. It is opt-in via GG_DATABASE_URL; no database is created or provisioned by this module.
+"""
+from __future__ import annotations
+
+import re
+import threading
+from pathlib import Path
+from typing import Any
+
+import psycopg
+from psycopg.rows import dict_row
+
+from app.store import Store
+
+_MIGRATIONS = Path(__file__).resolve().parents[1] / "migrations"
+
+
+def _translate(sql: str) -> str:
+    """Translate the small, known SQLite SQL subset used by Store into PostgreSQL SQL."""
+    statement = sql.strip()
+    if statement.upper().startswith("INSERT OR REPLACE INTO DECISIONS"):
+        match = re.match(
+            r"INSERT OR REPLACE INTO decisions\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
+            statement, re.IGNORECASE,
+        )
+        if not match:
+            raise ValueError("unsupported decisions upsert statement")
+        columns = [c.strip() for c in match.group(1).split(",")]
+        updates = ", ".join(f"{c}=EXCLUDED.{c}" for c in columns if c != "request_id")
+        statement = (f"INSERT INTO decisions ({', '.join(columns)}) VALUES ({match.group(2)}) "
+                     f"ON CONFLICT (request_id) DO UPDATE SET {updates}")
+    elif statement.upper().startswith("INSERT OR REPLACE INTO EPSILON_LEDGER"):
+        statement = (
+            "INSERT INTO epsilon_ledger(requester_id,dataset_id,epsilon_spent,updated_at) "
+            "VALUES(?,?,?,?) ON CONFLICT(requester_id,dataset_id) DO UPDATE SET "
+            "epsilon_spent=EXCLUDED.epsilon_spent, updated_at=EXCLUDED.updated_at"
+        )
+    return statement.replace("?", "%s")
+
+
+class _ConnectionCompat:
+    """Minimal connection facade for the existing Store methods; SQL remains parameterized."""
+    def __init__(self, connection: psycopg.Connection) -> None:
+        self.connection = connection
+
+    def execute(self, sql: str, args: tuple = ()):
+        return self.connection.execute(_translate(sql), args)
+
+    def executemany(self, sql: str, args):
+        return self.connection.cursor().executemany(_translate(sql), args)
+
+    def commit(self) -> None:
+        self.connection.commit()
+
+
+class PostgresStore(Store):
+    """PostgreSQL store with serialized connection access and versioned migrations."""
+
+    backend = "postgresql"
+    durable = True  # means PostgreSQL is configured, not that provider backups are verified
+
+    def __init__(self, database_url: str, *, connect_timeout: int = 10) -> None:
+        if not database_url or not database_url.startswith(("postgres://", "postgresql://")):
+            raise ValueError("GG_DATABASE_URL must be a PostgreSQL connection URL")
+        self.path = "postgresql"
+        self.lock = threading.RLock()
+        self.connection = psycopg.connect(
+            database_url, connect_timeout=connect_timeout, row_factory=dict_row,
+            application_name="GenomeGuard",
+        )
+        self.db = _ConnectionCompat(self.connection)
+        try:
+            self._migrate()
+        except Exception:
+            self.connection.close()
+            raise
+
+    def _migrate(self) -> None:
+        migration = _MIGRATIONS / "001_initial_postgres.sql"
+        if not migration.is_file():
+            raise RuntimeError(f"PostgreSQL migration is missing: {migration.name}")
+        with self.lock, self.connection.transaction():
+            self.connection.execute(
+                "CREATE TABLE IF NOT EXISTS schema_migrations "
+                "(version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+            )
+            applied = self.connection.execute(
+                "SELECT version FROM schema_migrations WHERE version=1"
+            ).fetchone()
+            if applied:
+                return
+            # Migration files contain only DDL statements without procedural blocks.
+            for statement in migration.read_text(encoding="utf-8").split(";"):
+                if statement.strip():
+                    self.connection.execute(statement)
+            self.connection.execute("INSERT INTO schema_migrations(version) VALUES (1)")
+
+    def q(self, sql: str, args: tuple = ()) -> list[dict]:
+        with self.lock:
+            return list(self.connection.execute(_translate(sql), args).fetchall())
+
+    def one(self, sql: str, args: tuple = ()) -> dict | None:
+        rows = self.q(sql, args)
+        return rows[0] if rows else None
+
+    def x(self, sql: str, args: tuple = ()) -> int:
+        """Execute one statement atomically and return generated id where applicable."""
+        with self.lock:
+            statement = _translate(sql)
+            insert = re.match(r"INSERT\s+INTO\s+(\w+)", statement, re.IGNORECASE)
+            id_tables = {"requesters", "requests", "alerts"}
+            if insert and insert.group(1).lower() in id_tables:
+                statement = statement.rstrip().rstrip(";") + " RETURNING id"
+                row = self.connection.execute(statement, args).fetchone()
+                self.connection.commit()
+                return int(row["id"]) if row else 0
+            self.connection.execute(statement, args)
+            self.connection.commit()
+            return 0
+
+    def close(self) -> None:
+        with self.lock:
+            self.connection.close()
