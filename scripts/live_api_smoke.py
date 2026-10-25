@@ -130,7 +130,7 @@ def main() -> int:
     except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         check("live API acceptance completed", False, f"{type(exc).__name__}: {str(exc)[:240]}")
 
-    print("\\n" + ("LIVE API SMOKE PASSED" if not FAILURES
+    print("\n" + ("LIVE API SMOKE PASSED" if not FAILURES
                      else f"LIVE API SMOKE FAILED ({len(FAILURES)} checks)"))
     return 1 if FAILURES else 0
 
