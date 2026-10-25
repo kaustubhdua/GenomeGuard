@@ -1,56 +1,55 @@
-# Production deployment record
+# Hosted deployment record
 
-## Current hosted demo
+## Current public research instance
 
 - Public URL: https://genomeguard.onrender.com
 - Hosting: Render web service, free plan, Singapore region
 - Service: `srv-dbev1ka9lscs738813t0`
-- Deployed source commit: `f50f31568e3b664e81f872dea98dc6a81b1bdb43`
-- Render deployment: `dep-dbevdtrncjis73aov4og`
+- Deployed source commit: `154ee80916e1a45080bc4160902516768afaee15`
+- Render deployment: `dep-dbf0ijrrjlhs73951960` (reported `live`)
 - Runtime: Docker, Python 3.12 image, Uvicorn
-- Data mode: synthetic cohort; consent and requester personas are simulated
-- Destructive audit-tampering demonstration: disabled in the hosted service environment
-- Secrets: a generated master key and admin key are configured as Render environment variables; never copy them into repository files, screenshots, or issue comments.
+- Data: public 1000 Genomes/IGSR chromosome 22 genotype calls, 600 samples × 3,000 variants
+- Policy provenance: a versioned mapping of published dataset-level public-release terms; not participant-specific consent and not independent legal review
+- Demo mode and destructive audit-tampering mode: disabled
+- Explanations: built-in templates; no live LLM configured
+- Secrets: master and admin keys are environment configuration and must never be committed to the repository or copied into public issues/screenshots.
 
-The image build and Render deployment completed successfully. The latest deployed build is `dep-dbevdtrncjis73aov4og`, running app commit `f50f31568e3b664e81f872dea98dc6a81b1bdb43`. Render logs record Uvicorn startup completion and HTTP 200 for the root page. See the [Render service dashboard](https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0) for current state.
+The Docker image builds the cohort from the official public source and records source-file and policy-file hashes. See the [Render service dashboard](https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0) for live service state.
 
-## Readiness is distinct from liveness
+## Health and readiness
 
-- `GET /health` is a liveness/diagnostic endpoint. HTTP 200 means the application can answer requests; it does not mean real-data operation is safe.
-- `GET /health/ready` is a fail-closed production gate. On the currently deployed synthetic demo it is expected to return HTTP 503 with explicit unmet checks.
-- The gate checks demo mode, genotype provenance, source-matched consent coverage, and whether destructive tampering is disabled. It also explicitly reports durable storage, independent audit anchoring, and institutional identity integration as unverified because those capabilities are not implemented/verified in this deployment.
-- Do not manually override these results or treat an environment-variable assertion as evidence. Readiness must only be enabled after the underlying storage, identity, and audit integrations exist and have been independently tested.
+- `GET /health` is a liveness/provenance endpoint. HTTP 200 means the app can answer requests; it does not mean production use is safe.
+- `GET /health/ready` intentionally returns HTTP 503 with `ready: false` while required production controls are unverified.
+- The latest [live research-mode workflow #40199498444](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498444) verified real public-source genotype provenance, the dataset-level policy boundary, disabled demo endpoints, unauthorized-call rejection, all nine UI routes, responsive layouts, keyboard behavior, reduced motion, reflow, and automated accessibility checks.
+- [Main CI run #40199498577](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40199498577) passed on deployed source commit `154ee80916e1a45080bc4160902516768afaee15`.
 
-This endpoint intentionally prevents a healthy demo from being mistaken for a real-data production service. It is not a substitute for legal, privacy, clinical, or security approval.
+## Why the service is not production-ready
 
-## Verification
+The following are explicit, unmet requirements, not implied future promises:
 
-The main branch's [CI run on the deployed commit](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193504185) passed the local backend, evaluation, browser, responsive, and automated accessibility checks.
+1. **Durable persistence and recovery:** The service is on Render's free plan with no persistent disk. SQLite lives at `/data/genomeguard.sqlite3`, on an ephemeral filesystem. Request history and audit events can be lost on restart/redeploy. No production backup/restore drill has passed.
+2. **Institutional identity and authorization:** The app accepts provisioned API keys. It has no verified institutional OIDC/SSO integration, membership lifecycle, MFA policy, or institutional identity proof. API keys alone are not proof of researcher identity.
+3. **External audit anchoring:** The hash chain is tamper-evident, not immutable if an actor can rewrite the database and recompute hashes. No independently controlled external anchor or trusted timestamp is configured.
+4. **Consent/legal authority:** The current public dataset's policy is dataset-level public-release provenance. It is not a per-participant consent record, does not support withdrawal, and has not been independently reviewed for a specific intended use or jurisdiction. Do not apply it to private/controlled-access data.
+5. **Clinical/security/privacy assurance:** No independent security penetration test, privacy impact assessment, institutional ethics review, or clinical validation has been completed. The privacy ledger is not a formal differential-privacy guarantee; the cryptographic/federated components are not independently audited.
+6. **Human accessibility review:** Automated checks pass, but manual testing with a screen reader and assistive technology remains outstanding.
+7. **Operational controls:** Backup/restore, incident response, retention/deletion, monitoring/alerting, disaster recovery, and multi-instance consistency have not been verified.
 
-A separate [live deployment smoke workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-deployment-smoke.yml) checks the public health endpoint, static assets, provenance labels, API documentation, all nine UI routes in light and dark themes, responsive overflow, keyboard navigation, reduced motion, 640px reflow, and axe-core findings. It exercises live request governance and authorization using synthetic demo personas. [Run #40193661761](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40193661761) passed these checks on app commit `f50f31568e3b664e81f872dea98dc6a81b1bdb43`. The axe-core scan found no critical/serious violations or heading-order findings on any of the nine routes in either theme.
+The readiness endpoint must remain fail-closed until the relevant capabilities exist and their behavior is tested. Do not store private participant information, identifiable genomic data, or clinical records in this public instance.
 
-## Persistence and operational limitations
+## Reproduce checks
 
-This deployment uses Render's free web-service plan and does not have a configured persistent disk. The application database path is `/data/genomeguard.sqlite3`, but the container filesystem is ephemeral. **Do not rely on requests, consent changes, or audit history surviving a restart, redeploy, or instance replacement.** A restart may reseed a fresh synthetic dataset and reset the local audit chain.
-
-No production persistence guarantee, backup/restore process, external audit anchoring, multi-instance consistency, or disaster-recovery procedure has been verified. Do not store real participant information, private genomic data, or real consent records in this demo. The application is research software, not a clinical or production healthcare service.
-
-The service configuration currently does not expose a platform-level `/health` health-check path; the endpoint is tested by the smoke workflow, but Render's own health-check configuration should be set to `/health` if the service settings permit it.
-
-## Reproduce live checks
-
-From a local clone with Python 3.11+, the project dependencies, and Playwright Chromium installed:
+From a local clone with Python 3.11+, dependencies, and Playwright Chromium installed:
 
 ```bash
-python scripts/deploy_smoke.py --base https://genomeguard.onrender.com
-python scripts/live_api_smoke.py --base https://genomeguard.onrender.com
+python scripts/live_research_mode_smoke.py --base https://genomeguard.onrender.com
 python scripts/live_ui_smoke.py --base https://genomeguard.onrender.com
 npm install --prefix /tmp/gg-axe --no-save --package-lock=false axe-core@4.14.0
 AXE_CORE_PATH=/tmp/gg-axe/node_modules/axe-core/axe.min.js python scripts/live_accessibility_smoke.py --base https://genomeguard.onrender.com
 ```
 
-The API acceptance script creates three synthetic request records (permitted, denied, and held) and adds corresponding audit events. It does not change consent, freeze accounts, or tamper with audit history. Use it only against the synthetic demo. The UI smoke script is read-only and visits each of the nine routes in light and dark themes plus narrow mobile widths.
+The research-mode smoke checks are read-only. UI and accessibility scripts navigate routes and exercise browser controls but do not create real participant data. Run any write-enabled API acceptance test only against an isolated test instance with synthetic fixtures.
 
 ## Release status
 
-A successful container build and a Render `live` status prove deployment, not product completeness. Before treating this as production-ready, the project would still need durable database storage, a real identity and consent architecture, independent security/privacy review, external audit anchoring, operational monitoring, backup/restore testing, and human accessibility review with assistive technology.
+The hosted site is a working **public-genotype research instance**, not a production genomic-data-governance service. It uses real public genotype calls and source-documented policy provenance, while deliberately disabling synthetic demo endpoints in the hosted mode. Durable storage, institutional identity, external audit anchoring, consent governance for any non-public cohort, independent review, and human screen-reader testing remain release blockers.
