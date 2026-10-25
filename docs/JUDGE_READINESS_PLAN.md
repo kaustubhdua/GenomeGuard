@@ -1,11 +1,13 @@
 # GenomeGuard — judge-readiness research and execution plan
 
-Last researched: 25 October 2026. Latest main baseline verified: `dfb618b909337c535a976b87950b0e31b4bcc7a0` with passing CI run [#40156142028](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40156142028). This is a prioritized engineering plan, not a claim that each item is already implemented or verified.
+Last researched: 25 October 2026. Latest full main CI baseline verified: `dbe400d20915709289f5c9569a6f5bf7cdf866ef`, passing [run #40175086012](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40175086012), including browser, responsive, and axe-core checks plus a desktop/mobile screenshot artifact. The real-data, family-cohort, Beacon-schema, and dependency-audit workflows have also passed on recent main commits. This is a prioritized engineering plan, not a claim that every item is implemented or verified.
 
 ## Executive recommendation
 
 Make the demo **trustworthy, repeatable, and easy to judge** before adding more features. The strongest story is: a researcher submits a genomic-data request; deterministic consent/risk policy constrains it; the steward copilot gathers only approved summaries; a human reviews escalations; the released result and decision are auditable. Keep the relative-exposure angle as the differentiator, but do not describe this prototype as a clinical tool or a legally compliant healthcare system.
 
+
+For the final judge walk-through, use [FINAL_JUDGE_RUNBOOK.md](FINAL_JUDGE_RUNBOOK.md), which contains a go/no-go checklist, expected outcomes, a three-minute script, and current standards/hosting references.
 ## P0 — Before the judging session
 
 ### 1. Prove the deployed commit and run the demo from a fresh session
