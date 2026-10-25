@@ -26,7 +26,7 @@ async function heldId() {
 
 const STEPS = [
   { title: "What this is", hash: "#/overview",
-    text: "Genomic data can expose a person's relatives, who never agreed to anything. GenomeGuard sits in front of the data and decides who can see what, explains why, and keeps a record nobody can quietly edit. Agents advise. Fixed rules decide. A person signs off on anything risky." },
+    text: "Genomic data can expose a person's relatives, who never agreed to anything. GenomeGuard sits in front of the data and decides who can see what, explains why, and keeps a hash-chained record that makes unaltered history verifiable against a trusted external anchor. Agents advise. Fixed rules decide. A person signs off on anything risky." },
   { title: "A researcher asks for diabetes statistics", hash: () => (ctx.study ? "#/request/" + ctx.study : "#/requests"),
     text: "A registered researcher wants allele frequencies for a diabetes study, including two very rare variants. The system will check consent, score the risk, add protections and record everything.",
     action: { label: "Send the researcher's request", run: async () => {
