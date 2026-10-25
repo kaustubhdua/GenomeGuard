@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +56,8 @@ class _ConnectionCompat:
         return self.connection.cursor().executemany(_translate(sql), args)
 
     def commit(self) -> None:
-        self.connection.commit()
+        if not self.connection.info.transaction_status or self.connection.info.transaction_status.name == "IDLE":
+            self.connection.commit()
 
 
 class PostgresStore(Store):
@@ -69,6 +71,7 @@ class PostgresStore(Store):
             raise ValueError("GG_DATABASE_URL must be a PostgreSQL connection URL")
         self.path = "postgresql"
         self.lock = threading.RLock()
+        self._transaction_depth = 0
         self.connection = psycopg.connect(
             database_url, connect_timeout=connect_timeout, row_factory=dict_row,
             application_name="GenomeGuard",
@@ -109,7 +112,8 @@ class PostgresStore(Store):
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:
             rows = list(self.connection.execute(_translate(sql), args).fetchall())
-            self.connection.commit()
+            if self._transaction_depth == 0:
+                self.connection.commit()
             return rows
 
     def one(self, sql: str, args: tuple = ()) -> dict | None:
@@ -125,12 +129,25 @@ class PostgresStore(Store):
             if insert and insert.group(1).lower() in id_tables:
                 statement = statement.rstrip().rstrip(";") + " RETURNING id"
                 row = self.connection.execute(statement, args).fetchone()
-                self.connection.commit()
+                if self._transaction_depth == 0:
+                    self.connection.commit()
                 return int(row["id"]) if row else 0
             self.connection.execute(statement, args)
-            self.connection.commit()
+            if self._transaction_depth == 0:
+                self.connection.commit()
             return 0
 
+
+    @contextmanager
+    def transaction(self):
+        """Atomic unit of work; nested store calls use savepoints and do not commit early."""
+        with self.lock:
+            self._transaction_depth += 1
+            try:
+                with self.connection.transaction():
+                    yield
+            finally:
+                self._transaction_depth -= 1
 
     def append_audit_entry(self, actor: str, action: str, payload: Any, ts: str | None = None) -> dict:
         """Serialize audit sequence allocation across workers and commit the row atomically."""
