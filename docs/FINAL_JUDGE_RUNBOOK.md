@@ -8,6 +8,7 @@
 - [ ] Record the actual public URL, Render service name/ID, deployed commit SHA, and successful deploy timestamp from the Render dashboard. A `render.yaml` file is not proof of a live deployment.
 - [ ] Confirm the deployed commit equals the reviewed GitHub `main` commit.
 - [ ] Run `make deploy-smoke URL=<actual-public-url>` from a clean environment. Save the output with the commit SHA and UTC timestamp.
+- [ ] Run the read-only deployed-browser smoke: install Playwright/Chromium if needed, then run `python scripts/live_ui_smoke.py --base <actual-public-url>`. It checks all nine routes in light/dark themes, JavaScript/HTTP errors, and 320/375/414 px overflow without submitting requests or changing demo state.
 - [ ] Open the URL in a private/incognito browser, wait through any cold start, refresh once, and verify the page recovers normally.
 - [ ] Keep the app on the synthetic demo cohort. Do not import or enter real participant data.
 - [ ] If the service uses the free Render plan, expect idle spin-down after 15 minutes and a cold start of roughly one minute; local filesystem and SQLite changes are ephemeral. Seed/reset immediately before judging and do not promise durable history.
