@@ -26,7 +26,7 @@ eval:
 eval-smoke:
 	PYTHONPATH=backend $(PY) -m redteam.run_eval --quick
 
-# Scripted 3-minute scenario. Starts a throwaway server on a fresh database, runs the checks.
+# End-to-end sample workflow. Starts a throwaway server on a fresh database and checks each step.
 demo:
 	rm -f /tmp/gg-demo.sqlite3
 	GG_DB_PATH=/tmp/gg-demo.sqlite3 GG_ALLOW_TAMPER_DEMO=true PYTHONPATH=backend \
