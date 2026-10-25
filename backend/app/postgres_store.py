@@ -46,8 +46,9 @@ def _translate(sql: str) -> str:
 
 class _ConnectionCompat:
     """Minimal connection facade for the existing Store methods; SQL remains parameterized."""
-    def __init__(self, connection: psycopg.Connection) -> None:
+    def __init__(self, connection: psycopg.Connection, store) -> None:
         self.connection = connection
+        self.store = store
 
     def execute(self, sql: str, args: tuple = ()):
         return self.connection.execute(_translate(sql), args)
@@ -56,7 +57,7 @@ class _ConnectionCompat:
         return self.connection.cursor().executemany(_translate(sql), args)
 
     def commit(self) -> None:
-        if not self.connection.info.transaction_status or self.connection.info.transaction_status.name == "IDLE":
+        if self.store._transaction_depth == 0:
             self.connection.commit()
 
 
@@ -76,7 +77,7 @@ class PostgresStore(Store):
             database_url, connect_timeout=connect_timeout, row_factory=dict_row,
             application_name="GenomeGuard",
         )
-        self.db = _ConnectionCompat(self.connection)
+        self.db = _ConnectionCompat(self.connection, self)
         try:
             self._migrate()
         except Exception:
