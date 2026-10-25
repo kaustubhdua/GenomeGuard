@@ -893,8 +893,9 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         raise ValueError("database dataset ID does not match GG_DATASET_ID; use a separate database "
                          "or the matching dataset ID")
     if s.real_cohort_file and not stored_meta.get("provenance_unknown"):
-        for key in ("source_vcf_sha256", "consent_records_sha256", "genotypes_real",
-                    "consent_simulated", "consent_records_matched"):
+        for key in ("source_vcf_sha256", "source_sample_metadata_sha256",
+                    "consent_records_sha256", "source_vcf_file", "consent_source_file",
+                    "genotypes_real", "consent_simulated", "consent_records_matched"):
             if stored_meta.get(key) != source_meta.get(key):
                 raise ValueError("configured real cohort does not match the cohort already stored in "
                                  "the database; use a fresh database path or restore its matching source")
