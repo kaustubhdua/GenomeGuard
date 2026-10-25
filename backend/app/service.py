@@ -847,49 +847,64 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     s = settings or get_settings()
     store = store or Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
+    source_meta: dict = {}
     if not store.has_dataset():
         if s.real_cohort_file:
-            from app.data.real import load_cohort
+            from app.data.real import load_cohort, read_meta
 
             cohort = load_cohort(s.real_cohort_file)
+            source_meta = read_meta(s.real_cohort_file)
+            if not source_meta:
+                source_meta = {"source": "Cohort file with missing provenance metadata",
+                               "genotypes_real": False, "provenance_missing": True}
         else:
             cohort = generate(n_donors=s.n_donors, n_variants=s.n_variants,
                               n_populations=s.n_populations, n_families=s.n_families,
                               seed=s.seed, n_planted=s.n_planted_rare, rare_maf=p.rare_maf)
-        store.save_cohort(cohort, master, s.dataset_id)
+            source_meta = {
+                "source": "Built-in synthetic cohort generator", "genotypes_real": False,
+                "consent_simulated": True, "relative_pairs": len(cohort.relationships),
+                "pedigree_relationships_present": bool(cohort.relationships),
+            }
+        store.save_cohort(cohort, master, s.dataset_id, source_meta)
+    # Provenance must describe the dataset actually loaded from this database, not whichever
+    # file happens to be configured in the current process environment.
+    source_meta = store.dataset_metadata(s.dataset_id) or {}
     ds = store.load_dataset(master, s.dataset_id)
     llm = llm or LLM(s.anthropic_api_key, s.llm_model)
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
                              admin_key=s.admin_api_key, **kwargs)
-    kind = "synthetic"
-    source_meta: dict = {}
-    if s.real_cohort_file:  # metadata, not the filename, determines provenance
-        from app.data.real import read_meta
-
-        source_meta = read_meta(s.real_cohort_file)
-        source = str(source_meta.get("source") or "")
-        if source_meta.get("genotypes_real") is True:
-            kind = "real_1000g" if source.lower().startswith("1000 genomes") else "real_custom"
-        else:
-            kind = "custom"
+    source = str(source_meta.get("source") or "")
+    if not source_meta:
+        kind = "unknown"
+    elif source_meta.get("genotypes_real") is True:
+        kind = "real_1000g" if source.lower().startswith("1000 genomes") else "real_custom"
+    elif source == "Built-in synthetic cohort generator":
+        kind = "synthetic"
+    else:
+        kind = "custom"
     source_labels = {
         "real_1000g": "Real genotypes (1000 Genomes / IGSR)",
         "real_custom": "Real genotypes (user-provided cohort)",
         "custom": "Custom cohort file (not verified as real)",
         "synthetic": "Synthetic genotypes",
+        "unknown": "Genotype provenance unknown",
     }
     if kind == "synthetic":
         relatives_label = "Synthetic pedigree; expected sharing is modelled"
-        source_label = "Built-in synthetic cohort generator"
+        source_label = source
+    elif kind == "unknown":
+        relatives_label = "Provenance unavailable; family exposure cannot be trusted"
+        source_label = "Existing database (provenance unavailable)"
     elif kind == "custom":
         relatives_label = "Custom cohort relationships are not verified"
-        source_label = str(source_meta.get("source") or "Unverified custom cohort file")
+        source_label = source or "Unverified custom cohort file"
     elif source_meta.get("relative_pairs", 0):
         relatives_label = "Source pedigree links; expected sharing is modelled"
-        source_label = str(source_meta.get("source") or "Unspecified real-genotype source")
+        source_label = source or "Unspecified real-genotype source"
     else:
         relatives_label = "No relative pairs in the selected cohort; family exposure may be sparse"
-        source_label = str(source_meta.get("source") or "Unspecified real-genotype source")
+        source_label = source or "Unspecified real-genotype source"
     svc.provenance = {
         "genotypes": kind, "genotypes_label": source_labels[kind], "source_label": source_label,
         "consent": "simulated", "consent_label": "Simulated consent records",
