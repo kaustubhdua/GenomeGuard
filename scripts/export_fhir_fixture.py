@@ -16,6 +16,8 @@ from app.service import bootstrap
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="/tmp/genomeguard-consent-r4.json")
+    parser.add_argument("--invalid-status", action="store_true",
+                        help="deliberately corrupt the synthetic fixture to test validator failure")
     args = parser.parse_args()
     settings = Settings()
     settings.db_path = ":memory:"
@@ -24,6 +26,8 @@ def main() -> None:
     donor = next(d for d in service.ds.donors
                  if not d.withdrawn and d.consent.get("use") == "DS")
     resource = service.donor_consent_fhir(donor.id)
+    if args.invalid_status:
+        resource["status"] = "not-a-valid-fhir-consent-status"
     output = Path(args.out)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(resource, indent=2) + "\n", encoding="utf-8")
