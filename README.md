@@ -1,51 +1,74 @@
 # GenomeGuard
 
-> Genomic data can expose your relatives, so we built a guard that decides who can see what,
-> explains why, and proves it never looked the other way.
+**Genomic data governance and privacy-risk research prototype**
 
-GenomeGuard is a consent-aware, relative-aware governance and security layer in front of a
-genomic data store. Every data request is checked against donor consent, scored for
-re-identification risk (including the risk to donors' **relatives**), protected when needed,
-monitored for attack patterns, and written to a tamper-evident audit log. Agents explain
-decisions in plain language but never see genomic data and never hold final authority.
+GenomeGuard is a policy-first gateway for genomic research requests. It evaluates use restrictions, estimates disclosure risk to donors and their relatives, applies output protections, monitors suspicious query patterns, and records decisions in a verifiable audit chain. Advisory agents help explain evidence; deterministic policy code constrains decisions, and high-risk cases can be escalated to a human steward.
 
-**Hackathon track: Track 2, Agentic AI for Healthcare.** GenomeGuard covers all four themes:
+The goal is to make genomic data sharing easier to govern and easier to audit without implying that an AI model can grant access on its own.
 
-| Track 2 theme | Where it shows up |
-|---|---|
-| Decision support | Agents give stewards a case summary and the questions to answer on held requests. A **steward copilot** chooses which read-only evidence to gather (consent, risk, relatives, history, audit) and recommends; a rules baseline caps it (it can never be more permissive than the rules), and a human decides. |
-| Information management | Consent, risk, privacy budget and a tamper-evident audit chain for every genomic release. |
-| Patient interaction | The patient portal: donors see who used statistics that included them, ask a consent concierge (fixed questions only) and withdraw in two clicks. |
-| Workflow automation | Requests are triaged automatically: approve, approve with protections, deny, or hold for review. Anomalous accounts are frozen. |
+## Product capabilities
 
-"Agents advise, rules decide": the agents never see genotypes and never hold final authority.
+- **Request governance:** evaluate requests against simulated consent and use restrictions; approve, protect, deny, or hold for review.
+- **Privacy-risk controls:** estimate uniqueness, membership and relative-exposure signals; transform or withhold risky outputs.
+- **Abuse monitoring:** detect suspicious query patterns, throttle or freeze demo accounts, and require steward action to unfreeze.
+- **Accountability:** preserve a SHA-256 hash-chained audit trail and verify whether recorded history has changed.
+- **Steward assistance:** gather allow-listed evidence and produce an advisory summary without giving the agent access to raw genotypes or final authority.
+- **Interoperability research:** expose a Beacon v2-style endpoint and export a synthetic FHIR R4 Consent resource for structural validation.
 
-**Data statement: all data in this repository is synthetic.** An optional path builds a cohort
-from real, openly released 1000 Genomes genotypes (see below); consent records are always
-simulated. Designed around the ideas of DPDP, GDPR and HIPAA. **It makes no claim of legal
-compliance.**
+## Current status and intended use
 
-## Deploy the synthetic demo
+**This repository is a research and demonstration prototype, not a clinical or production healthcare service.** Automated local and browser checks have passed on a recorded GitHub Actions revision; check the linked workflows below for the exact commit and newest results. A public hosted instance has not been verified in this repository's release evidence, so this README does not present a live deployment URL.
+
+The default demo uses synthetic genotypes and simulated consent, requester identities, and query traffic. Optional workflows can ingest publicly released 1000 Genomes genotype data for research evaluation; this does not make consent records real. The project makes no claim of legal compliance, clinical readiness, formal differential privacy, audited cryptography, or full GA4GH Beacon certification.
+
+## Run locally
+
+Requirements: Python 3.11 or newer; Docker is optional. The deterministic agent explanations work without a hosted AI API key.
+
+```bash
+# Install the project and development tools
+make setup
+
+# Create the synthetic demo database
+make seed
+
+# Run the automated checks
+make lint
+make test
+make eval-smoke
+
+# Start the app (open http://localhost:8000)
+make run
+```
+
+For the scripted end-to-end demo and browser checks:
+
+```bash
+make demo
+make ui-smoke
+```
+
+Or start the Docker Compose setup:
+
+```bash
+docker compose up --build
+```
+
+In demo mode, the Overview provides a guided walkthrough. The **Acting as** selector changes the demo role. Demo identities and steward credentials are intentionally available only for the synthetic demonstration; never use demo mode or its tamper controls with real participant data.
+
+With `ANTHROPIC_API_KEY` configured, the optional model integration can generate agent explanations. Without it, deterministic templates are used. The model is not the policy enforcement layer.
+
+## Deploy a synthetic demo
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/kaustubhdua/GenomeGuard)
 
-This opens Render's Blueprint flow; it does **not** mean a public instance is already deployed. Sign in, review the generated environment settings, set `GG_MASTER_KEY` as a base64-encoded random 32-byte key in Render's secret manager, and wait for the service health check to pass. The blueprint intentionally uses demo mode and simulated data. Never use its published demo credentials or tamper-demo controls with real participant data. A live URL must be copied from the Render dashboard and tested before it is listed as a working deployment.
+The button opens Render's Blueprint setup; it is **not evidence that a public service is already running**. Review the generated settings, provide `GG_MASTER_KEY` as a base64-encoded random 32-byte secret in the hosting provider's secret manager, deploy, and verify the actual service URL before sharing it.
 
-## Run it
+The included Render blueprint uses demo mode and a free instance. Free Render services can sleep when idle and lose local SQLite/filesystem changes on spin-down, restart, or redeploy; this is acceptable only for a resettable synthetic demonstration, not durable audit history. See the [Render free-service limitations](https://render.com/docs/free). Use `make deploy-smoke URL=https://your-service.onrender.com` and `make live-ui-smoke URL=https://your-service.onrender.com` against the actual deployment before treating it as verified.
 
-```
-make setup && make seed && make test && make eval && make run     # then open http://localhost:8000
-make demo                                                        # scripted 3-minute scenario, checked
-make bench                                                       # latency / audit-cost numbers, see docs/scalability.md
-make ui-smoke                                                    # headless-browser UI check (contrast, a11y, phones, tour)
-make deploy-smoke URL=https://your-service.onrender.com              # read-only check after deployment
-```
-In demo mode the Overview has a **3-minute guided tour** that performs the real actions for you.
-No API key is needed. With `ANTHROPIC_API_KEY` set, agents write the explanations; without it,
-deterministic templates do. Docker: `docker compose up --build`.
+## Optional real-data evaluation
 
-Demo accounts and the steward key are published at `/demo/requesters` (demo mode, synthetic data
-only). Use the "Acting as" selector in the app to switch roles.
+The default experience remains synthetic. To build a local cohort from public 1000 Genomes data, see [Real-data workflow](docs/real-data.md) and the `make fetch-real` / `make eval-real` targets below. Check the dataset's usage terms, keep downloaded data out of Git, and do not interpret real genotypes as evidence of real consent or a production-ready workflow.
 
 ## What is real and what is simulated
 
@@ -158,9 +181,9 @@ generators and real-data loaders | `backend/redteam/` attacks and evaluation | `
 
 Use the workflow pages for the newest results and confirm the run SHA before presenting. These runs prove specific automated gates only. They do not prove that a public Render instance is live, that real consent exists, that Beacon v2 conformance is complete, or that the custom privacy accountant is formally differentially private. The high-coverage run validates pedigree-aware cohort building and simulated attack evaluation, not clinical or consent-management workflows.
 
-## Hackathon release verification
+## Release verification
 
-Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) for the evidence matrix and [`docs/FINAL_JUDGE_RUNBOOK.md`](docs/FINAL_JUDGE_RUNBOOK.md) for the go/no-go checklist and three-minute presentation script. Main CI and axe-core browser QA have passed; real-genotype and pedigree-aware evaluation, FHIR R4 structural validation, Beacon core-schema checks, and dependency audit have also passed. A deployed walkthrough still requires an authorized Render workspace and verified public URL. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
+Use [`docs/HACKATHON_RELEASE_GATE.md`](docs/HACKATHON_RELEASE_GATE.md) for the evidence matrix and [`docs/FINAL_JUDGE_RUNBOOK.md`](docs/FINAL_JUDGE_RUNBOOK.md) for the release go/no-go checklist and reproducible walkthrough. Main CI and axe-core browser QA have passed; real-genotype and pedigree-aware evaluation, FHIR R4 structural validation, Beacon core-schema checks, and dependency audit have also passed. A deployed walkthrough still requires an authorized Render workspace and verified public URL. Do not describe the system as production-ready or claim that all data is real: the default cohort is synthetic, and consent/requester records remain simulated even with optional real genotypes.
 
 ## Audit anchor
 
