@@ -31,7 +31,7 @@ export async function render() {
     h("h1", { style: "margin:0 0 6px" }, "Genomic data, shared with proof."),
     h("p", { class: "lede" }, "GenomeGuard is a team of AI agents that sits in front of a genomic data store. They check consent, weigh re-identification risk, add protections and keep a tamper-evident record. The agents advise. Fixed rules decide, and a person signs off on anything risky."),
     h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px" },
-      tourAvailable() ? h("button", { onclick: startTour }, "Take the 3-minute tour") : null,
+      tourAvailable() ? h("button", { onclick: startTour }, "Guided walkthrough") : null,
       h("a", { class: tourAvailable() ? "btn ghost" : "btn", href: "#/requests" }, isSteward() ? "Review requests" : "Send a request"),
       h("a", { class: "btn ghost", href: "#/donor" }, "See the patient view")),
     pipe, h("p", { class: "muted", style: "margin:12px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap" }, caption,
