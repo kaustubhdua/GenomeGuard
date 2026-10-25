@@ -1,7 +1,7 @@
-# Render blueprint for a single web service (Docker). Check Render's CURRENT free-tier limits and
-# sleep behaviour before relying on it for judging; free instances may sleep when idle, so open
-# the link shortly before presenting. Without a persistent disk the database is re-created (and
-# the audit chain restarts) on every deploy or restart: acceptable for a synthetic-data demo.
+# Render blueprint for a single web service (Docker). Check Render's current free-tier limits
+# and sleep behaviour before relying on the public demo; free instances may sleep when idle, so
+# allow time for cold starts. Without a persistent disk the database is re-created (and the audit
+# chain restarts) on every deploy or restart. This configuration is for synthetic data only.
 services:
   - type: web
     name: genomeguard
