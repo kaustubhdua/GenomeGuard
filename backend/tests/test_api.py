@@ -22,6 +22,21 @@ def test_health_and_docs_and_openapi():
     assert {"POST /requests", "GET /audit/verify"} <= {f"{e['method']} {e['path']}" for e in eps}
 
 
+def test_readiness_distinguishes_demo_liveness_from_production_readiness():
+    svc, c = make_client()
+    live = c.get("/health")
+    assert live.status_code == 200 and live.json()["status"] == "ok"
+    ready = c.get("/health/ready")
+    assert ready.status_code == 503
+    body = ready.json()
+    assert body["status"] == "not_ready" and body["ready"] is False
+    assert body["checks"]["demo_mode_disabled"] is False
+    assert body["checks"]["source_matched_consent"] is False
+    assert body["checks"]["durable_storage_verified"] is False
+    assert body["checks"]["external_audit_anchor_verified"] is False
+    assert body["checks"]["institutional_identity_provider_verified"] is False
+
+
 def test_auth_required():
     svc, c = make_client()
     assert c.post("/requests", json=DEMO_REQ).status_code == 401
