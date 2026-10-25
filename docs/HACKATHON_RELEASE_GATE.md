@@ -4,11 +4,11 @@ Last updated: 25 October 2026. This document separates automated evidence from w
 
 ## Latest verified repository baseline
 
-The current `main` commit at the time of this refresh is `dfb618b909337c535a976b87950b0e31b4bcc7a0`. GitHub Actions run [#40156142028](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40156142028) passed setup, lint, seed, Python tests, evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, and the complete browser UI suite with axe-core enabled.
+The current `main` commit at this refresh is `102302023b7a51ecdd2bca14ffb87468dadaac38`. GitHub Actions run [#40174766691](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766691) passed setup, lint, seed, Python tests, evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, the read-only UI smoke, and the complete browser suite with axe-core enabled. It also preserved judge-facing desktop/mobile screenshots as a CI artifact.
 
 The UI/performance changes split page modules by route, prefetch chunks on link hover/focus, add reduced-motion-aware motion, expose route loading with `aria-busy`, recover from failed route imports, and apply native lazy loading/async decoding. The suite checks nine routes, light/dark themes, the guided tour, responsive overflow at 320/375/414 px, blocked localStorage, and critical/serious axe-core findings. The first axe run exposed contrast, SVG naming, and keyboard-scroll issues; fixes are merged and the updated suite passed.
 
-The real-data path passed end-to-end on hosted GitHub Actions on both the release branch and `main`: [Phase 3 run #40145620292](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145620292) built 600 samples × 3,000 variants and completed `eval-real`; [high-coverage family run #40145624174](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145624174) verified 355 pedigree relationship pairs and completed `eval-real`. Source hashes and build parameters are recorded in [real-data.md](real-data.md). The Phase 3 cohort has zero relative pairs by design; consent and query traffic remain simulated.
+The real-data path passed end-to-end on hosted GitHub Actions on `main`: [Phase 3 run #40174766665](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766665) built 600 samples × 3,000 variants and completed `eval-real`; [high-coverage family run #40173357241](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40173357241) verified 355 pedigree relationship pairs and completed `eval-real`. Source hashes and build parameters are recorded in [real-data.md](real-data.md). The Phase 3 cohort has zero relative pairs by design; consent and query traffic remain simulated.
 
 The FHIR R4 Consent export has passed the HL7 FHIR Validator 7.0.1 against R4 4.0.1 and the project's extension package: [run #40145035362](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035362) reported 0 errors and 0 warnings. The validator checks a generated synthetic Consent resource; it does not prove that consent is legally valid. Full Beacon v2 conformance beyond core response schemas, formal differential-privacy accounting, a public deployment URL, persistent hosting, real authenticated tenant isolation, and independent production security/privacy review remain open. Core response envelopes are checked against pinned official GA4GH Beacon v2 schemas in [run #40145035388](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40145035388); this is not full Beacon certification.
 
@@ -27,7 +27,7 @@ The central claim for judges should be: **“Agents investigate and explain; det
 | Innovation and creativity | Consent-aware governance, relative-exposure model, privacy/utility evaluation, Beacon-style endpoint, auditable decision trail | Demonstrate one coherent end-to-end story; explain what is novel relative to existing consent-management and genomic privacy tools |
 | Relevance to Track 2 | Request triage, steward copilot, consent summaries, donor-facing portal and withdrawal flow | Show that each UI action changes backend state or returns a backend-derived result; distinguish governance simulation from clinical decision-making |
 | Technical implementation | Python/Starlette API, encryption helpers, audit chain, DP-style noise and budget ledger, anomaly rules, agent tool loop, red-team harness | Run clean-clone setup, tests, lint, full evaluation and demo; inspect current CI result and retain logs |
-| UI/UX and presentation | Multi-page UI, route code splitting, motion preferences, guided tour, responsive smoke suite, pinned axe-core WCAG A/AA scan | Automated axe/Playwright checks pass; manual keyboard, screen-reader, 200% zoom/reflow and user testing remain |
+| UI/UX and presentation | Multi-page UI, route code splitting, motion preferences, guided tour, read-only deployed-site smoke, responsive suite, pinned axe-core WCAG A/AA scan, screenshot artifacts | Automated axe/Playwright checks pass; manual keyboard, screen-reader, 200% zoom/reflow and user testing remain |
 | Real-world impact | Addresses genomic privacy, consent restrictions, relatives' exposure, and accountable access | Use carefully sourced background claims; make clear this is not a clinical product and has not been independently security- or legally reviewed |
 | Scalability and feasibility | Benchmark harness and scalability notes; SQLite-based single-process deployment | Re-run benchmark locally; describe single-process/SQLite limits and what changes for concurrent multi-site production |
 | Team presentation and communication | Three-minute demo script and docs | Team must record and watch the final video, prepare a maximum-six-slide deck, add working repo/prototype/video links, and rehearse judge questions |
@@ -56,6 +56,8 @@ Optional additional checks:
     python -m pip install playwright
     python -m playwright install chromium
     make ui-smoke
+    # Read-only browser check for an already deployed service (all routes, themes, phone widths):
+    make live-ui-smoke URL=https://your-service.onrender.com
 
 Real-data experiments are optional and require separately downloaded inputs:
 
@@ -72,7 +74,8 @@ Before calling the prototype “deployed and working”:
 
 - [ ] Confirm the public URL loads from a fresh browser session and from a phone network.
 - [ ] Run `make deploy-smoke URL=https://your-service.onrender.com`; it checks the landing page, static assets, health/audit status, synthetic-data provenance, demo account availability and core API documentation without mutating state or printing keys.
-- [ ] Exercise the full guided tour on the deployed service, not only localhost.
+- [ ] Run `make live-ui-smoke URL=https://your-service.onrender.com`; it visits all nine routes in light/dark themes, checks JavaScript/HTTP errors and checks 320/375/414 px overview layouts without changing demo state. Request-detail routes report a documented empty state if the instance has no requests yet.
+- [ ] Exercise the full guided tour on a resettable synthetic demo/staging instance; it submits requests and changes demo state, so do not run it against a judge session you need to preserve.
 - [ ] Confirm /health reports the expected data provenance and a valid audit chain.
 - [ ] Verify that API errors, reloads, and a cold start do not leave the UI stuck.
 - [ ] Confirm whether the host provides persistent storage. Without it, SQLite state and the audit history may reset on restart or redeploy; disclose that limitation.
