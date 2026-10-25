@@ -52,7 +52,11 @@ function listSection(res) {
         h("td", {}, badge(r.outcome), r.status === "held" ? h("span", { class: "pill warn", style: "margin-left:8px" }, "waiting for review") : null));
       return tr;
     }))));
-  return row("History", `${rows.length} request${rows.length > 1 ? "s" : ""}`, t);
+  return h("section", { class: "card request-history", "aria-labelledby": "request-history-title" },
+    h("div", { class: "card-h" },
+      h("h2", { id: "request-history-title" }, "Request history"),
+      h("span", {}, `${rows.length} request${rows.length > 1 ? "s" : ""}`)),
+    t);
 }
 
 function formSection(out) {
