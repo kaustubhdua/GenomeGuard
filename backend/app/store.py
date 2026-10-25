@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS donors(id INTEGER PRIMARY KEY, cohort_id TEXT, popula
 CREATE TABLE IF NOT EXISTS genotypes(donor_id INTEGER PRIMARY KEY, genotype_blob BLOB);
 CREATE TABLE IF NOT EXISTS variants(id INTEGER PRIMARY KEY, chrom TEXT, pos INTEGER, ref TEXT,
   alt TEXT, maf REAL, is_rare INTEGER, planted INTEGER);
+CREATE TABLE IF NOT EXISTS dataset_metadata(dataset_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS relationships(id INTEGER PRIMARY KEY AUTOINCREMENT, donor_a INTEGER,
   donor_b INTEGER, relation TEXT, meioses INTEGER, shared_fraction REAL);
 CREATE TABLE IF NOT EXISTS requesters(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, role TEXT,
@@ -91,8 +92,12 @@ class Store:
     def has_dataset(self) -> bool:
         return bool(self.one("SELECT 1 AS x FROM donors LIMIT 1"))
 
-    def save_cohort(self, cohort, master: bytes, dataset_id: str) -> None:
-        """Write a SyntheticCohort. Genotypes are encrypted before they touch the database."""
+    def dataset_metadata(self, dataset_id: str) -> dict | None:
+        row = self.one("SELECT metadata_json FROM dataset_metadata WHERE dataset_id=?", (dataset_id,))
+        return json.loads(row["metadata_json"]) if row else None
+
+    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None) -> None:
+        """Write a cohort and its provenance metadata. Genotypes are encrypted before persistence."""
         v = cohort.variants
         planted = set(cohort.planted)
         with self.lock:
@@ -116,6 +121,13 @@ class Store:
                 "VALUES(?,?,?,?,?)",
                 [(r["donor_a"], r["donor_b"], r["relation"], r["meioses"], r["shared"])
                  for r in cohort.relationships])
+            provenance = metadata or {
+                "source": "Built-in synthetic cohort generator", "genotypes_real": False,
+                "consent_simulated": True, "relative_pairs": len(cohort.relationships),
+                "pedigree_relationships_present": bool(cohort.relationships),
+            }
+            d.execute("INSERT OR REPLACE INTO dataset_metadata(dataset_id,metadata_json) VALUES(?,?)",
+                      (dataset_id, json.dumps(provenance, sort_keys=True)))
             d.commit()
 
     def load_dataset(self, master: bytes, dataset_id: str) -> Dataset:
