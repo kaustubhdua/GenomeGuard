@@ -115,6 +115,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         v = S().audit.verify()
         prov = getattr(S(), "provenance", {})
         return _j({"status": "ok", "synthetic_data_only": prov.get("genotypes") == "synthetic",
+                   "provenance_known": prov.get("genotypes") != "unknown",
+                   "consent_simulated": prov.get("consent") == "simulated",
                    "donors": S().ds.n_donors, "variants": S().ds.n_variants,
                    "k_min": S().p.k_min, "audit_chain_ok": v["ok"], "provenance": prov,
                    "agents_use_llm": S().team.agents["explainer"].llm.available,
@@ -408,11 +410,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def docs(request):
         rows = "".join(f"<tr><td>{m}</td><td><code>{p}</code></td><td>{s}</td><td>{w}</td></tr>"
                        for m, p, s, w in ROUTES_DOC)
+        provenance = getattr(S(), "provenance", {})
+        genotype_label = provenance.get("genotypes_label", "Genotype provenance unknown")
+        consent_label = provenance.get("consent_label", "Consent provenance unknown")
         return HTMLResponse(
             "<!doctype html><meta charset=utf-8><title>GenomeGuard API</title>"
             "<style>body{font:15px system-ui;margin:2rem;max-width:60rem}td,th{padding:.3rem .8rem;"
             "text-align:left;border-bottom:1px solid #ddd}</style><h1>GenomeGuard API</h1>"
-            f"<p>{'Real 1000 Genomes genotypes with simulated consent.' if getattr(S(), 'provenance', {}).get('genotypes') == 'real_1000g' else 'All data is synthetic.'} "
+            f"<p>Genotypes: {genotype_label}. Consent: {consent_label}. "
+            "These labels describe imported provenance; they do not certify legal authority.</p>"
             "Send <code>X-API-Key</code> (requester) or "
             f"<code>X-Admin-Key</code> (reviewer).</p><table><tr><th>Method<th>Path<th>What<th>Auth"
             f"</tr>{rows}</table>")
