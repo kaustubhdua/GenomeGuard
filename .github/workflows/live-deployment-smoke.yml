@@ -7,6 +7,7 @@ on:
       - "scripts/live_api_smoke.py"
       - "scripts/deploy_smoke.py"
       - "scripts/live_ui_smoke.py"
+      - "scripts/live_accessibility_smoke.py"
   workflow_dispatch:
     inputs:
       base_url:
@@ -42,3 +43,9 @@ jobs:
         run: python scripts/live_api_smoke.py --base "$BASE_URL"
       - name: Verify nine routes in light/dark themes and narrow mobile layouts
         run: python scripts/live_ui_smoke.py --base "$BASE_URL"
+      - name: Install pinned axe-core accessibility rules
+        run: npm install --prefix /tmp/gg-axe --no-save --package-lock=false axe-core@4.14.0
+      - name: Verify live accessibility, keyboard, reduced motion and 200 percent reflow
+        env:
+          AXE_CORE_PATH: /tmp/gg-axe/node_modules/axe-core/axe.min.js
+        run: python scripts/live_accessibility_smoke.py --base "$BASE_URL"
