@@ -146,6 +146,7 @@ def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
     monkeypatch.setenv("GG_ADMIN_API_KEY", admin_key)
     monkeypatch.setenv("GG_MASTER_KEY", master_key)
     monkeypatch.setenv("GG_REAL_COHORT_FILE", "/secure/authorized-cohort.npz")
+    monkeypatch.setenv("GG_DATASET_ID", "approved-cohort-2026-01")
     client = TestClient(create_app(svc))
 
     assert client.get("/demo/requesters").status_code == 404
