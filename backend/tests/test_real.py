@@ -110,6 +110,8 @@ def test_build_save_load_roundtrip():
         make_vcf(v)
         c, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=1)
         assert meta["genotypes_real"] and meta["consent_simulated"]
+        assert meta["source"] == "User-provided genomic cohort"
+        assert c.donors[0]["cohort_id"].startswith("CUSTOM-")
         assert meta["source_vcf_file"] == "t.vcf.gz"
         assert len(meta["source_vcf_sha256"]) == 64
         assert len(meta["source_sample_metadata_sha256"]) == 64
