@@ -12,10 +12,12 @@ const ROSTER = [
 ];
 
 export async function render() {
+  const hasIdentity = !!(state.demo || state.who || state.adminKey);
   const [reqs, verify, ev, me] = await Promise.all([
-    api("/requests"), api("/audit/verify"),
+    hasIdentity ? api("/requests") : Promise.resolve({ ok: false, status: 401, data: null }),
+    api("/audit/verify"),
     state.demo ? api("/eval/results") : Promise.resolve({ ok: false }),
-    isSteward() ? Promise.resolve({ ok: false }) : api("/me"),
+    isSteward() || !hasIdentity ? Promise.resolve({ ok: false }) : api("/me"),
   ]);
   const rows = reqs.ok ? reqs.data.requests || [] : [];
   const hl = state.health || {};
@@ -46,9 +48,12 @@ export async function render() {
   if (pv.genotypes) root.append(card("Where the data comes from", "Labelled so nothing is overstated",
     h("dl", { class: "facts" },
       h("dt", {}, "Genotypes"), h("dd", {}, pv.genotypes_label),
-      h("dt", {}, "Consent records"), h("dd", {}, pv.consent_label + (pv.consent === "simulated"
-        ? " — simulated records; not valid participant consent."
-        : " — imported source records; legal validity is not independently verified.")),
+      h("dt", {}, "Consent / use-policy basis"), h("dd", {}, pv.consent_label + (
+        pv.consent === "simulated"
+          ? " — simulated records; not valid participant consent."
+          : pv.consent === "source_policy"
+            ? " — mapped from public dataset terms; not participant-specific consent and not independently legally reviewed."
+            : " — imported source records; legal validity is not independently verified.")),
       h("dt", {}, "Relatives"), h("dd", {}, pv.relatives_label),
       h("dt", {}, "Agents"), h("dd", {}, pv.agents_label + ". They never see genotypes."),
       h("dt", {}, "Storage"), h("dd", {}, pv.encryption))));

@@ -198,6 +198,75 @@ def test_loaded_cohort_works_with_dataset_and_consent_engine():
         assert res.considered == 44
 
 
+def test_dataset_public_release_policy_is_real_source_provenance_not_fake_personal_consent():
+    with tempfile.TemporaryDirectory() as d:
+        v, out, policy_path = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz", Path(d) / "policy.json"
+        make_vcf(v)
+        policy = {
+            "policy_id": "test-public-release-v1",
+            "source_url": "https://example.org/source-terms",
+            "scope": "dataset",
+            "duo_use": "GRU",
+            "duo_modifiers": [],
+            "withdrawal_supported": False,
+            "review_status": "source_documented_not_legal_review",
+        }
+        policy_path.write_text(__import__("json").dumps(policy), encoding="utf-8")
+        cohort, meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=8,
+            consent_policy=policy, consent_source_file=str(policy_path),
+        )
+        assert meta["genotypes_real"] is True
+        assert meta["consent_simulated"] is False
+        assert meta["consent_basis"] == "dataset_policy"
+        assert meta["consent_records_matched"] == 44
+        assert meta["consent_policy"]["not_individual_consent"] is True
+        assert len(meta["consent_records_sha256"]) == 64
+        assert all(d["consent"]["consent_basis"] == "dataset_policy" for d in cohort.donors)
+        assert all(d["consent"]["consent_date"] is None for d in cohort.donors)
+        assert all(d["consent"]["source_policy_id"] == "test-public-release-v1"
+                   for d in cohort.donors)
+        real.save_cohort(cohort, meta, out)
+        assert real.read_meta(out)["consent_basis"] == "dataset_policy"
+
+
+def test_production_bootstrap_preserves_dataset_policy_provenance():
+    with tempfile.TemporaryDirectory() as d:
+        v, out, policy_path = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz", Path(d) / "policy.json"
+        make_vcf(v)
+        policy = {
+            "policy_id": "test-public-release-v1",
+            "source_url": "https://example.org/source-terms",
+            "scope": "dataset",
+            "duo_use": "GRU",
+            "duo_modifiers": [],
+            "withdrawal_supported": False,
+            "review_status": "source_documented_not_legal_review",
+        }
+        policy_path.write_text(__import__("json").dumps(policy), encoding="utf-8")
+        cohort, meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=9,
+            consent_policy=policy, consent_source_file=str(policy_path),
+        )
+        real.save_cohort(cohort, meta, out)
+        settings = Settings(
+            db_path=":memory:", demo_mode=False, allow_tamper_demo=False,
+            admin_api_key="a-unique-production-admin-secret-long-enough",
+            master_key=base64.b64encode(b"x" * 32).decode(),
+            real_cohort_file=str(out), dataset_id="test-public-source-policy",
+        )
+        svc = bootstrap(settings)
+        assert svc.provenance["genotypes"] == "real_vcf"
+        assert svc.provenance["consent"] == "source_policy"
+        assert svc.provenance["consent_records_matched"] == 44
+        assert svc.provenance["consent_policy"]["not_individual_consent"] is True
+        assert "not participant-specific" in svc.provenance["consent_label"]
+        assert len(svc.provenance["source_vcf_sha256"]) == 64
+        assert len(svc.provenance["source_sample_metadata_sha256"]) == 64
+        assert len(svc.provenance["consent_records_sha256"]) == 64
+        assert svc.provenance["dataset_id"] == "test-public-source-policy"
+
+
 # ---- the high-coverage release's pedigree: whitespace separated, different header names ----
 PED_HC = "\n".join([
     "FamilyID SampleID FatherID MotherID Sex Population Superpopulation",

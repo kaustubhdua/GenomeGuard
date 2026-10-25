@@ -25,16 +25,75 @@ function probeSequence() {
 export async function render() {
   const root = h("div", {});
   root.dataset.title = "Requests";
+  if (!state.demo && !state.who && !state.adminKey) {
+    root.append(h("h1", {}, "Research requests"),
+      notice("warn", "Connect with an issued researcher API key or steward key in the sign-in panel before viewing or submitting requests."));
+    return root;
+  }
   root.append(h("h1", {}, "Data requests"),
     h("p", { class: "lede" }, isSteward()
       ? "Every request from every account. Open one to review it."
-      : "Ask for allele frequencies. GenomeGuard checks donor consent, scores re-identification risk, applies protections and records everything in the audit log."));
+      : "Ask for allele frequencies. GenomeGuard checks source policy, scores re-identification risk, applies protections and records the decision in the audit log."));
+  const provision = provisionSection();
+  if (provision) root.append(provision);
   const out = h("div", {});
   if (!isSteward()) root.append(formSection(out));
   root.append(out);
   const list = await api("/requests");
   out.append(listSection(list));
   return root;
+}
+
+function provisionSection() {
+  if (state.demo || !isSteward() || !state.adminKey) return null;
+  const name = h("input", { id: "new-requester-name", type: "text", autocomplete: "off", maxlength: 120 });
+  const institution = h("input", { id: "new-requester-institution", type: "text", autocomplete: "organization", maxlength: 200 });
+  const level = h("select", { id: "new-requester-level" },
+    h("option", { value: "registered" }, "Registered researcher"),
+    h("option", { value: "controlled" }, "Controlled-access researcher"));
+  const message = h("div", { "aria-live": "polite" });
+  const issue = h("button", { type: "button", onclick: async () => {
+    const body = { name: name.value.trim(), institution: institution.value.trim(),
+      credential_level: level.value };
+    if (body.name.length < 2 || body.institution.length < 2) {
+      message.replaceChildren(notice("err", "Enter a researcher name and institution."));
+      return;
+    }
+    issue.disabled = true;
+    const result = await api("/admin/requesters", { method: "POST", body });
+    issue.disabled = false;
+    if (!result.ok) {
+      message.replaceChildren(notice("err", errorText(result)));
+      return;
+    }
+    const key = h("input", { type: "text", value: result.data.api_key, readonly: true,
+      autocomplete: "off", spellcheck: "false", "aria-label": "New researcher API key" });
+    const copy = h("button", { class: "ghost", type: "button", onclick: async () => {
+      try {
+        await navigator.clipboard.writeText(result.data.api_key);
+        copy.textContent = "Copied";
+      } catch {
+        key.focus(); key.select();
+        copy.textContent = "Select and copy";
+      }
+    }}, "Copy key");
+    message.replaceChildren(
+      notice("ok", `Created ${result.data.name}. Save this key now; it is returned once and cannot be recovered.`),
+      h("label", { class: "f", for: "new-api-key" }, "One-time API key", key),
+      copy);
+    key.id = "new-api-key";
+    name.value = "";
+    institution.value = "";
+  }}, "Issue researcher key");
+  return h("section", { class: "card", "aria-labelledby": "issue-researcher-title" },
+    h("h2", { id: "issue-researcher-title" }, "Researcher access"),
+    h("p", { class: "muted" }, "Create a named account and issue a one-time API key. Use a verified identity and institution according to your organisation's access policy; GenomeGuard does not independently verify affiliations."),
+    h("div", { class: "form" },
+      h("label", { class: "f", for: "new-requester-name" }, "Researcher name", name),
+      h("label", { class: "f", for: "new-requester-institution" }, "Institution", institution),
+      h("label", { class: "f", for: "new-requester-level" }, "Access tier", level),
+      issue),
+    message);
 }
 
 function listSection(res) {

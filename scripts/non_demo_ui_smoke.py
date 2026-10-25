@@ -71,6 +71,13 @@ def main() -> int:
             if headers.get("x-admin-key") == "valid-steward-key":
                 return fulfill(route, 200, {"length": 0, "head_hash": "0" * 64})
             return fulfill(route, 401, {"error": "unauthorized", "message": "steward key required"})
+        if path == "/admin/requesters" and req.method == "POST":
+            if headers.get("x-admin-key") == "valid-steward-key":
+                payload = json.loads(req.post_data or "{}")
+                return fulfill(route, 201, {"id": 18, "name": payload.get("name"),
+                    "institution": payload.get("institution"), "credential_level": payload.get("credential_level"),
+                    "api_key": "one-time-issued-researcher-key", "shown_once": True})
+            return fulfill(route, 401, {"error": "unauthorized", "message": "steward key required"})
         if path == "/audit/verify":
             if headers.get("x-admin-key") == "valid-steward-key":
                 return fulfill(route, 200, {"ok": True, "length": 0, "head_hash": "0" * 64})
@@ -135,6 +142,18 @@ def main() -> int:
         check("steward navigation appears after authentication",
               page.locator('nav a[href="#/audit"]').count() == 1)
         check("steward key is not persisted to localStorage",
+              page.evaluate("localStorage.getItem('gg_who')") is None)
+        check("steward can open researcher provisioning form",
+              page.locator("#new-requester-name").count() == 1)
+        page.locator("#new-requester-name").fill("New Researcher")
+        page.locator("#new-requester-institution").fill("Research Institute")
+        page.locator("#issue-researcher-title + p")  # ensure the access section is rendered
+        page.get_by_role("button", name="Issue researcher key").click()
+        page.get_by_label("New researcher API key").wait_for(timeout=5000)
+        check("one-time researcher key is displayed after provisioning",
+              page.locator('input[aria-label="New researcher API key"]').input_value()
+              == "one-time-issued-researcher-key")
+        check("issued researcher key is not persisted to localStorage",
               page.evaluate("localStorage.getItem('gg_who')") is None)
 
         page.locator("#disconnect-key").click()

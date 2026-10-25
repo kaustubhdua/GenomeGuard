@@ -1,0 +1,53 @@
+name: live-research-mode-smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "render.yaml"
+      - "backend/app/api.py"
+      - "backend/app/service.py"
+      - "backend/app/data/real.py"
+      - "frontend/src/**"
+      - "scripts/live_research_mode_smoke.py"
+      - "scripts/live_ui_smoke.py"
+      - "scripts/live_accessibility_smoke.py"
+      - ".github/workflows/live-research-mode-smoke.yml"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Public research-mode URL"
+        required: true
+        default: "https://genomeguard.onrender.com"
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: genomeguard-live-research-mode
+  cancel-in-progress: false
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BASE_URL: ${{ inputs.base_url || 'https://genomeguard.onrender.com' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install browser smoke dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" playwright
+          python -m playwright install --with-deps chromium
+          npm install --prefix /tmp/gg-axe --no-save --package-lock=false axe-core@4.14.0
+      - name: Verify live real-data provenance, production gates, and disabled demo endpoints
+        run: python scripts/live_research_mode_smoke.py --base "$BASE_URL" --retries 60 --retry-delay 15 --timeout 30
+      - name: Verify nine live UI routes in light/dark themes and mobile widths
+        run: python scripts/live_ui_smoke.py --base "$BASE_URL" --timeout 60000
+      - name: Verify live accessibility, keyboard, reduced motion, and reflow
+        env:
+          AXE_CORE_PATH: /tmp/gg-axe/node_modules/axe-core/axe.min.js
+        run: python scripts/live_accessibility_smoke.py --base "$BASE_URL" --timeout 60000

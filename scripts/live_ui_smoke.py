@@ -1,8 +1,7 @@
 """Read-only Playwright smoke checks for a deployed GenomeGuard UI.
 
 Unlike scripts/ui_smoke.py, this never starts a local server, submits a request,
-freezes an account, changes consent, or runs the guided tour. It is safe for a
-synthetic demo deployment whose current state should be preserved.
+freezes an account, changes consent, or runs the guided tour. It checks routes in either demo or non-demo research mode without mutating data.
 
 Usage: python scripts/live_ui_smoke.py --base https://actual-service.example
 """

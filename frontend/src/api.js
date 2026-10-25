@@ -79,12 +79,22 @@ export function disconnectKey() {
 }
 
 export async function boot() {
-  const [h, d, dn] = await Promise.all([call("/health"), call("/demo/requesters"), call("/demo/donors")]);
+  const h = await call("/health");
   state.health = h.data;
+  state.demo = null;
+  state.donors = [];
+  if (!h.ok || !h.data?.demo_mode) {
+    // Never call demo-only endpoints or reuse a demo key in real-data mode.
+    state.who = "";
+    state.adminKey = "";
+    try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
+    state.donor = null;
+    return;
+  }
+  const [d, dn] = await Promise.all([call("/demo/requesters"), call("/demo/donors")]);
   state.demo = d.ok ? d.data : null;
   state.donors = dn.ok ? dn.data.donors : [];
   if (!state.demo) {
-    // Never reuse a previously selected public-demo key on a non-demo deployment.
     state.who = "";
     state.adminKey = "";
     try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }

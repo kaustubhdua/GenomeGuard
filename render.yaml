@@ -1,7 +1,7 @@
-# Render blueprint for a single web service (Docker). Check Render's current free-tier limits
-# and sleep behaviour before relying on the public demo; free instances may sleep when idle, so
-# allow time for cold starts. Without a persistent disk the database is re-created (and the audit
-# chain restarts) on every deploy or restart. This configuration is for synthetic data only.
+# Render blueprint for the public-data research instance. The image builds a cohort from IGSR's
+# public 1000 Genomes release and maps its published dataset-level use terms to DUO-inspired policy.
+# This is NOT participant-specific consent or production healthcare readiness. Without a persistent
+# disk, requests and audit history reset on deploy/restart; the readiness endpoint will remain 503.
 services:
   - type: web
     name: genomeguard
@@ -10,9 +10,13 @@ services:
     healthCheckPath: /health
     envVars:
       - key: GG_DEMO_MODE
-        value: "true"
+        value: "false"  # Disable public demo credentials and simulated personas
       - key: GG_ALLOW_TAMPER_DEMO
         value: "false"  # Keep destructive audit-tampering demo disabled on hosted service
+      - key: GG_REAL_COHORT_FILE
+        value: /app/data_real/1000g_phase3_chr22.npz
+      - key: GG_DATASET_ID
+        value: igsr-1000g-phase3-public-release
       - key: GG_MASTER_KEY
         sync: false   # set by hand: python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
       - key: GG_ADMIN_API_KEY

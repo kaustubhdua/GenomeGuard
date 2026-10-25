@@ -296,18 +296,34 @@ def _validated_consent(record: dict, sample: str) -> tuple[dict, bool]:
     population = record.get("population")
     if population is not None and not isinstance(population, str):
         raise ValueError(f"consent population for {sample} must be a string or null")
+    consent_basis = record.get("consent_basis", "participant_record")
     consent_date = record.get("consent_date")
-    if not isinstance(consent_date, str):
-        raise ValueError(f"consent record for {sample} requires consent_date YYYY-MM-DD")
-    try:
-        date.fromisoformat(consent_date)
-    except ValueError:
-        raise ValueError(f"consent record for {sample} has invalid consent_date") from None
+    if consent_basis == "dataset_policy":
+        if consent_date is not None:
+            raise ValueError(f"dataset-level policy for {sample} must not invent a participant consent date")
+        if not isinstance(record.get("source_policy_id"), str) or not record["source_policy_id"].strip():
+            raise ValueError(f"dataset-level policy for {sample} requires source_policy_id")
+        if not isinstance(record.get("source_policy_url"), str) or not record["source_policy_url"].startswith("https://"):
+            raise ValueError(f"dataset-level policy for {sample} requires an HTTPS source_policy_url")
+        if record.get("withdrawal_supported") is not False:
+            raise ValueError(f"dataset-level public-release policy for {sample} must state its withdrawal boundary")
+    else:
+        if not isinstance(consent_date, str):
+            raise ValueError(f"consent record for {sample} requires consent_date YYYY-MM-DD")
+        try:
+            date.fromisoformat(consent_date)
+        except ValueError:
+            raise ValueError(f"consent record for {sample} has invalid consent_date") from None
     withdrawn = record.get("withdrawn")
     if not isinstance(withdrawn, bool):
         raise ValueError(f"consent record for {sample} requires boolean withdrawn")
-    return {"use": use, "disease": disease, "modifiers": sorted(set(modifiers)),
-            "population": population, "consent_date": consent_date}, withdrawn
+    validated = {"use": use, "disease": disease, "modifiers": sorted(set(modifiers)),
+                 "population": population, "consent_date": consent_date,
+                 "consent_basis": consent_basis}
+    for key in ("source_policy_id", "source_policy_url", "withdrawal_supported"):
+        if key in record:
+            validated[key] = record[key]
+    return validated, withdrawn
 
 
 def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: int = 3000,
@@ -317,8 +333,27 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                  source_vcf_file: str | None = None,
                  consent_records: dict[str, dict] | None = None,
                  consent_source_file: str | None = None,
+                 consent_policy: dict | None = None,
                  source_name: str = "Operator-supplied VCF (source not independently authenticated)"
                  ) -> tuple[SyntheticCohort, dict]:
+    if consent_records is not None and consent_policy is not None:
+        raise ValueError("use either --consent-json or --consent-policy-json, not both")
+    if consent_policy is not None:
+        required = ("policy_id", "source_url", "duo_use", "duo_modifiers",
+                    "withdrawal_supported", "scope", "review_status")
+        missing = [key for key in required if key not in consent_policy]
+        if missing:
+            raise ValueError(f"consent policy missing required fields: {missing}")
+        if consent_policy["scope"] != "dataset":
+            raise ValueError("only explicitly dataset-scoped source policies are supported")
+        if consent_policy["review_status"] != "source_documented_not_legal_review":
+            raise ValueError("source policy must disclose that legal validity has not been independently reviewed")
+        if consent_policy["withdrawal_supported"] is not False:
+            raise ValueError("this public-release policy must explicitly disclose that participant withdrawal is not supported")
+        if consent_policy["duo_use"] not in {"GRU", "HMB", "DS"}:
+            raise ValueError("consent policy duo_use must be GRU, HMB, or DS")
+        if not isinstance(consent_policy["source_url"], str) or not consent_policy["source_url"].startswith("https://"):
+            raise ValueError("consent policy source_url must be HTTPS")
     rng = np.random.default_rng(seed)
     info = parse_ped(ped_text)
     in_vcf = [s for s in vcf_samples(vcf) if s in info]
@@ -336,6 +371,22 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                 f"consent file has no explicit record for {len(missing_consent)} selected samples; "
                 f"examples: {missing_consent[:5]}"
             )
+    if consent_policy is not None:
+        consent_records = {
+            sample: {
+                "use": consent_policy["duo_use"],
+                "disease": consent_policy.get("disease"),
+                "modifiers": consent_policy["duo_modifiers"],
+                "population": consent_policy.get("population"),
+                "consent_date": None,
+                "withdrawn": False,
+                "consent_basis": "dataset_policy",
+                "source_policy_id": consent_policy["policy_id"],
+                "source_policy_url": consent_policy["source_url"],
+                "withdrawal_supported": False,
+            }
+            for sample in chosen
+        }
     donors = []
     for i, sample in enumerate(chosen, start=1):
         pop = info[sample]["pop"] or "UNK"
@@ -352,16 +403,28 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
     variants = {**cols, "maf": maf, "is_rare": maf < rare_maf,
                 "planted": np.zeros(len(maf), dtype=bool)}
     meta = {"source": source_name, "samples": n, "variants": int(G.shape[1]),
-            "relative_pairs": len(rels), "consent_simulated": consent_records is None,
+            "relative_pairs": len(rels),
+            "consent_simulated": consent_records is None and consent_policy is None,
+            "consent_basis": ("dataset_policy" if consent_policy is not None else
+                              "participant_records" if consent_records is not None else "simulated"),
+            "consent_policy": ({
+                "policy_id": consent_policy["policy_id"],
+                "source_url": consent_policy["source_url"],
+                "scope": consent_policy["scope"],
+                "review_status": consent_policy["review_status"],
+                "terms_summary": consent_policy.get("terms_summary"),
+                "withdrawal_supported": consent_policy["withdrawal_supported"],
+                "not_individual_consent": True,
+            } if consent_policy is not None else None),
             "consent_source_file": Path(consent_source_file).name if consent_source_file else None,
             "consent_records_sha256": (sha256_file(Path(consent_source_file))
                                        if consent_source_file else None),
-            "consent_records_matched": 0 if consent_records is None else len(chosen),
+            "consent_records_matched": 0 if consent_records is None and consent_policy is None else len(chosen),
             "genotypes_real": True,
             "family_enriched": bool(family_first and rels), "seed": seed,
             "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
                                  "keep_prob": keep_prob, "rare_maf": rare_maf,
-                                 "withdrawn_rate": None if consent_records is not None else withdrawn_rate},
+                                 "withdrawn_rate": None if consent_records is not None or consent_policy is not None else withdrawn_rate},
             "source_vcf_file": source_vcf_file or vcf.name, "source_vcf_sha256": sha256_file(vcf),
             "source_sample_metadata_file": source_metadata_file,
             "source_sample_metadata_sha256": hashlib.sha256(ped_text.encode("utf-8")).hexdigest(),
@@ -410,8 +473,10 @@ def main(argv: list[str] | None = None) -> None:
                    help="operator-declared genotype source label; not independently authenticated")
     b.add_argument("--consent-json",
                    help="operator-authorized JSON mapping source sample IDs to explicit consent "
-                        "records (use, disease, modifiers, population, consent_date, withdrawn); "
-                        "without this file consent is simulated and must not be used in production")
+                        "records (use, disease, modifiers, population, consent_date, withdrawn)")
+    b.add_argument("--consent-policy-json",
+                   help="dataset-level policy profile derived from public source terms; never "
+                        "represents participant-specific consent and is not a legal determination")
     a = ap.parse_args(argv)
     cache = Path("data_real")
     if a.vcf:
@@ -430,15 +495,25 @@ def main(argv: list[str] | None = None) -> None:
         ped_text = download(metadata_url, cache / "samples.ped").read_text()
         metadata_file = metadata_url.rsplit("/", 1)[-1]
     consent_records = None
+    consent_policy = None
+    consent_source_file = a.consent_json
+    if a.consent_json and a.consent_policy_json:
+        raise ValueError("use either --consent-json or --consent-policy-json, not both")
     if a.consent_json:
         consent_path = Path(a.consent_json)
         consent_records = json.loads(consent_path.read_text(encoding="utf-8"))
         if not isinstance(consent_records, dict):
             raise ValueError("--consent-json must contain an object keyed by source sample ID")
+    if a.consent_policy_json:
+        policy_path = Path(a.consent_policy_json)
+        consent_policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        if not isinstance(consent_policy, dict):
+            raise ValueError("--consent-policy-json must contain a dataset-level policy object")
+        consent_source_file = a.consent_policy_json
     c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed,
                            family_first=not a.no_family_first, source_metadata_file=metadata_file,
                            source_vcf_file=source_vcf_name, consent_records=consent_records,
-                           consent_source_file=a.consent_json,
+                           consent_source_file=consent_source_file, consent_policy=consent_policy,
                            source_name=(a.source_name or
                                ("1000 Genomes (IGSR)" if not a.vcf else
                                 "Operator-supplied VCF (source not independently authenticated)")))
@@ -448,6 +523,10 @@ def main(argv: list[str] | None = None) -> None:
     if meta["consent_simulated"]:
         print("WARNING: consent records are simulated. Do not use this cohort in non-demo mode "
               "or for real participant data.")
+    elif meta.get("consent_basis") == "dataset_policy":
+        print("NOTICE: consent terms are mapped from a dataset-level public-release policy; "
+              "they are not participant-specific consent records and have not had independent "
+              "legal review. Read the policy provenance before use.")
     if meta["relative_pairs"] == 0:
         print("note: no relative pairs found (expected for the unrelated Phase 3 samples); the "
               "family-exposure demo will be empty. See the module docstring for trio data.")

@@ -1,9 +1,14 @@
-import { api } from "../api.js";
+import { api, state } from "../api.js";
 import { h, row, notice, errorText } from "../ui.js";
 
 export async function render() {
   const root = h("div", {});
   root.dataset.title = "Federated analysis";
+  if (!state.demo) {
+    root.append(h("h1", {}, "Federated analysis"),
+      notice("warn", "The current multi-site and homomorphic-encryption walkthrough uses simulated sites and is disabled in the public-data research instance. It is not a deployed multi-organization federation."));
+    return root;
+  }
   root.append(h("h1", {}, "Federated analysis"),
     h("p", { class: "lede" }, "This experiment illustrates how sites could combine selected statistics using secret sharing without pooling their input rows. It uses simulated sites and does not represent a hardened multi-organization deployment."));
   const res = await api("/federated/demo");
