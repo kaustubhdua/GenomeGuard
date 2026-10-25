@@ -110,7 +110,7 @@ def main() -> int:
             zoom_ctx.close()
         browser.close()
 
-    print("\\n" + ("LIVE ACCESSIBILITY SMOKE PASSED" if not FAILURES
+    print("\n" + ("LIVE ACCESSIBILITY SMOKE PASSED" if not FAILURES
                      else f"LIVE ACCESSIBILITY SMOKE FAILED ({len(FAILURES)} checks)"))
     return 1 if FAILURES else 0
 
