@@ -33,17 +33,19 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install -e '.[dev]'
-          .venv/bin/python -c "import site; print(site.getsitepackages()[0])" > /tmp/genomeguard-site-packages.txt
+          # Audit every resolved third-party package; exclude only this local project, which is not published on PyPI.
+          .venv/bin/python -m pip freeze | grep -vi "genomeguard" > /tmp/genomeguard-audit-requirements.txt
+          test -s /tmp/genomeguard-audit-requirements.txt
       - name: Install pinned pip-audit in an isolated tool environment
         run: |
           python -m venv /tmp/audit-venv
           /tmp/audit-venv/bin/python -m pip install --upgrade pip
           /tmp/audit-venv/bin/python -m pip install pip-audit==2.10.1
       - name: Fail on known vulnerabilities in resolved runtime and development dependencies
-        run: /tmp/audit-venv/bin/pip-audit --strict --path "$(cat /tmp/genomeguard-site-packages.txt)"
+        run: /tmp/audit-venv/bin/pip-audit --strict --requirement /tmp/genomeguard-audit-requirements.txt
       - name: Generate CycloneDX SBOM
         if: always()
-        run: /tmp/audit-venv/bin/pip-audit --format cyclonedx-json --path "$(cat /tmp/genomeguard-site-packages.txt)" --output /tmp/genomeguard-sbom.json || true
+        run: /tmp/audit-venv/bin/pip-audit --format cyclonedx-json --requirement /tmp/genomeguard-audit-requirements.txt --output /tmp/genomeguard-sbom.json || true
       - name: Preserve dependency inventory
         if: always()
         uses: actions/upload-artifact@v7
