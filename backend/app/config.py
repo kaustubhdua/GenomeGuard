@@ -36,9 +36,9 @@ class Settings:
     n_populations: int = field(default_factory=lambda: _env("n_populations", 3, int))
     n_families: int = field(default_factory=lambda: _env("n_families", 120, int))
     n_planted_rare: int = field(default_factory=lambda: _env("n_planted_rare", 5, int))
-    # Optional: path to a cohort built by `python -m app.data.real build` (real 1000 Genomes
-    # genotypes, simulated consent). When set and the database is empty, it replaces the synthetic
-    # cohort. Unset = fully synthetic.
+    # Path to a cohort built by `python -m app.data.real build`. Production mode requires real
+    # genotype provenance plus explicit source-matched consent records; synthetic consent is
+    # accepted only in demo mode.
     real_cohort_file: str = field(default_factory=lambda: _env("real_cohort_file", ""))
 
 
@@ -64,6 +64,8 @@ def validate_settings(s: Settings) -> None:
         problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:
         problems.append("GG_ALLOW_TAMPER_DEMO must be false")
+    if not s.real_cohort_file.strip():
+        problems.append("GG_REAL_COHORT_FILE must point to a real cohort with explicit consent records")
     if not s.master_key:
         problems.append("GG_MASTER_KEY must be set to a random base64-encoded 32-byte key")
     else:
