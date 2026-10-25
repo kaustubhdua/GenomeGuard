@@ -10,9 +10,13 @@ services:
     healthCheckPath: /health
     envVars:
       - key: GG_DEMO_MODE
-        value: "true"
+        value: "false"  # Disable public demo credentials and simulated personas
       - key: GG_ALLOW_TAMPER_DEMO
         value: "false"  # Keep destructive audit-tampering demo disabled on hosted service
+      - key: GG_REAL_COHORT_FILE
+        value: /app/data_real/1000g_phase3_chr22.npz
+      - key: GG_DATASET_ID
+        value: igsr-1000g-phase3-public-release
       - key: GG_MASTER_KEY
         sync: false   # set by hand: python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
       - key: GG_ADMIN_API_KEY
