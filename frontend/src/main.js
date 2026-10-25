@@ -86,7 +86,7 @@ function drawProv() {
   if (!p.genotypes) { el.hidden = true; return; }
   el.textContent = p.genotypes_label + ", " + p.consent_label.toLowerCase();
   el.title = [p.genotypes_label, p.consent_label, p.relatives_label, p.agents_label, p.encryption].join(". ");
-  el.classList.toggle("real", p.genotypes === "real_1000g");
+  el.classList.toggle("real", p.genotypes === "real_vcf");
 }
 
 function drawWho() {
