@@ -129,6 +129,39 @@ def test_build_save_load_roundtrip():
         assert np.allclose(c.variants["maf"], c2.variants["maf"])
 
 
+def test_build_cohort_uses_explicit_source_matched_consent_records():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {"use": "GRU", "disease": None, "modifiers": [],
+                     "population": None, "consent_date": "2024-01-15", "withdrawn": False}
+            for sample in SAMPLES
+        }
+        c, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                                    seed=3, consent_records=records)
+        assert meta["genotypes_real"] is True
+        assert meta["consent_simulated"] is False
+        assert meta["consent_records_matched"] == 44
+        assert all(d["consent"]["use"] == "GRU" and not d["withdrawn"] for d in c.donors)
+        assert all(d["consent"]["consent_date"] == "2024-01-15" for d in c.donors)
+
+
+def test_build_cohort_refuses_missing_or_malformed_consent_records():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        with pytest.raises(ValueError, match="no explicit record"):
+            real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                              consent_records={"dad": {"use": "GRU"}})
+        bad = {sample: {"use": "GRU", "disease": None, "modifiers": [],
+                        "population": None, "consent_date": "not-a-date", "withdrawn": False}
+               for sample in SAMPLES}
+        with pytest.raises(ValueError, match="invalid consent_date"):
+            real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                              consent_records=bad)
+
+
 def test_loaded_cohort_works_with_dataset_and_consent_engine():
     from app.core.consent import ConsentRequest, eligible_cohort
     from app.core.dataset import Dataset
