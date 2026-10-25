@@ -226,6 +226,8 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert all(d["consent"]["consent_date"] is None for d in cohort.donors)
         assert all(d["consent"]["source_policy_id"] == "test-public-release-v1"
                    for d in cohort.donors)
+        real.save_cohort(cohort, meta, out)
+        assert real.read_meta(out)["consent_basis"] == "dataset_policy"
 
 
 def test_production_bootstrap_preserves_dataset_policy_provenance():
