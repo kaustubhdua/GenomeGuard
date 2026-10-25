@@ -91,7 +91,7 @@ def main() -> int:
         mobile.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
         mobile.locator("#menu").click()
         check("mobile menu opens", mobile.locator("#shell.open").count() == 1)
-        mobile.locator("#scrim").click(position={"x": 5, "y": 5})
+        mobile.locator("#scrim").click(position={"x": 300, "y": 100})
         check("mobile menu closes via backdrop", mobile.locator("#shell.open").count() == 0)
         mobile_ctx.close()
 
