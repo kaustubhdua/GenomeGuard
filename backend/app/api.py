@@ -329,11 +329,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("POST", "/admin/tamper/{idx:int}", "DEMO ONLY: corrupt one audit entry", "admin")
     async def tamper(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "demo-only endpoint")
         admin(request)
         return _j(S().tamper(request.path_params["idx"]))
 
     @route("POST", "/admin/untamper", "DEMO ONLY: remove the tamper-demo marker", "admin")
     async def untamper(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "demo-only endpoint")
         admin(request)
         return _j(S().untamper())
 
@@ -361,12 +365,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("GET", "/eval/results", "Stored red-team evaluation metrics", "public")
     async def eval_results(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "synthetic evaluation results are disabled outside demo mode")
         if not EVAL_JSON.exists():
             raise ServiceError(404, "not_found", "run `make eval` first")
         return JSONResponse(json.loads(EVAL_JSON.read_text()))
 
     # ---- donor portal (patient side): authenticated by a per-donor key, never by the steward key
     def donor_auth(request: Request) -> int:
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "participant identity integration is not configured")
         did = request.path_params["id"]
         if not S().donor_authenticated(did, request.headers.get("x-donor-key")):
             raise ServiceError(401, "unauthorized", "donor key required (X-Donor-Key)")
@@ -413,6 +421,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/federated/he", "Homomorphic (Paillier) allele-count aggregation demo "
            "(synthetic)", "public")
     async def federated_he(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "synthetic federated demo is disabled outside demo mode")
         from app.core.federated import he_demo
 
         return _j(await run_in_threadpool(he_demo))
@@ -420,6 +430,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/federated/demo", "Simulated hospitals with secure aggregation (synthetic)",
            "public")
     async def federated_demo(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "synthetic federated demo is disabled outside demo mode")
         from app.core.federated import demo
         return _j(await run_in_threadpool(demo))
 
