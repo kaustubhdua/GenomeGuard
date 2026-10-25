@@ -280,14 +280,17 @@ def _validated_consent(record: dict, sample: str) -> tuple[dict, bool]:
     if not isinstance(record, dict):
         raise ValueError(f"consent record for {sample} must be a JSON object")
     use = record.get("use")
-    if use not in {"GRU", "HMB", "DS"}:
+    if not isinstance(use, str) or use not in {"GRU", "HMB", "DS"}:
         raise ValueError(f"consent record for {sample} needs use GRU, HMB, or DS")
     disease = record.get("disease")
+    if disease is not None and not isinstance(disease, str):
+        raise ValueError(f"consent disease for {sample} must be a string or null")
     if use == "DS" and (not isinstance(disease, str) or not disease.strip()):
         raise ValueError(f"disease-specific consent for {sample} requires disease")
     modifiers = record.get("modifiers")
     allowed_modifiers = {"NCU", "NPU", "NMDS", "NAGR", "NCTRL"}
-    if not isinstance(modifiers, list) or any(m not in allowed_modifiers for m in modifiers):
+    if not isinstance(modifiers, list) or any(
+            not isinstance(m, str) or m not in allowed_modifiers for m in modifiers):
         raise ValueError(f"consent record for {sample} needs a list of recognized modifiers")
     population = record.get("population")
     if population is not None and not isinstance(population, str):
