@@ -42,6 +42,7 @@ export async function render() {
   if (pv.genotypes) root.append(card("Where the data comes from", "Labelled so nothing is overstated",
     h("dl", { class: "facts" },
       h("dt", {}, "Genotypes"), h("dd", {}, pv.genotypes_label),
+      h("dt", {}, "Source"), h("dd", {}, pv.source_label || "Source not recorded"),
       h("dt", {}, "Consent records"), h("dd", {}, pv.consent_label + " (real donors never gave per-person consent for this demo)"),
       h("dt", {}, "Relatives"), h("dd", {}, pv.relatives_label),
       h("dt", {}, "Agents"), h("dd", {}, pv.agents_label + ". They never see genotypes."),
@@ -61,7 +62,7 @@ export async function render() {
   const proof = h("dl", { class: "facts" },
     h("dt", {}, "Differencing attack, no defence"), h("dd", {}, diff ? pct(diff.none.mean, 0) + " recovered" : "run make eval"),
     h("dt", {}, "Same attack with GenomeGuard"), h("dd", {}, diff ? pct(diff.ladder_plus_guard.mean, 0) + " (guessing is " + pct(diff.baseline.mean, 0) + ")" : "n/a"),
-    h("dt", {}, "Donors / variants"), h("dd", {}, `${hl.donors ?? "n/a"} / ${hl.variants ?? "n/a"} (${{ real_1000g: "real 1000 Genomes", custom: "custom cohort file" }[pv.genotypes] || "synthetic"})`),
+    h("dt", {}, "Donors / variants"), h("dd", {}, `${hl.donors ?? "n/a"} / ${hl.variants ?? "n/a"} (${{ real_1000g: "real 1000 Genomes", real_custom: "real user-provided cohort", custom: "unverified custom cohort", synthetic: "synthetic" }[pv.genotypes] || "unverified cohort"})`),
     h("dt", {}, "Smallest cohort released"), h("dd", {}, String(hl.k_min ?? "n/a")));
   root.append(h("div", { class: "grid g-main" },
     card("Recent activity", rows.length ? h("a", { href: "#/requests" }, "All requests") : null, feed),
