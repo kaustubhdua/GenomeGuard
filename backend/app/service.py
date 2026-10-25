@@ -26,9 +26,9 @@ import json
 import re
 import time
 from collections.abc import Callable
-from functools import wraps
 from dataclasses import replace
 from datetime import UTC, datetime
+from functools import wraps
 
 import numpy as np
 
