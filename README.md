@@ -108,7 +108,7 @@ Performance on a 2 vCPU machine: about 30 requests per second, median 33 ms per 
 ```
 make fetch-real                                    # 1000 Genomes Phase 3, chr22
 GG_REAL_COHORT_FILE=data_real/1000g_chr22.npz make seed && make run
-make real-trios VCF=<chr22.vcf.gz> PED=<pedigree>  # high-coverage release: real parent/child links
+make real-trios VCF=<chr22.vcf.gz> PED=<pedigree> SOURCE="1000 Genomes (IGSR) high-coverage 30x (GRCh38)"  # real parent/child links
 make eval-real COHORT=data_real/1000g_trios.npz    # evaluation on that cohort
 ```
 
