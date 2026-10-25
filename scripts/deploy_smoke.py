@@ -55,6 +55,8 @@ def main() -> int:
         health = json.loads(body)
         check("health endpoint responds", status == 200 and "json" in content_type.lower())
         check("service reports healthy", health.get("status") == "ok")
+        check("data provenance is explicitly known", health.get("provenance_known") is True)
+        check("consent simulation is explicitly disclosed", health.get("consent_simulated") is True)
         check("audit chain verifies", health.get("audit_chain_ok") is True)
         check("demo mode enabled for public smoke test", health.get("demo_mode") is True)
         check("genotypes are synthetic", health.get("synthetic_data_only") is True
