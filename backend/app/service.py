@@ -864,7 +864,13 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         if not source_meta.get("consent_source_file") or not source_meta.get("consent_records_sha256"):
             raise ValueError("non-demo mode requires consent-source provenance from --consent-json")
 
-    store = store or Store(s.db_path)
+    if store is None:
+        if s.database_url:
+            from app.postgres_store import PostgresStore
+
+            store = PostgresStore(s.database_url)
+        else:
+            store = Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
     if not store.has_dataset():
         if s.real_cohort_file:
