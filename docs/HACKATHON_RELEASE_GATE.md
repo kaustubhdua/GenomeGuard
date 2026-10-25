@@ -4,7 +4,7 @@ Last updated: 25 October 2026. This document separates automated evidence from w
 
 ## Latest verified repository baseline
 
-The current `main` commit at this refresh is `102302023b7a51ecdd2bca14ffb87468dadaac38`. GitHub Actions run [#40174766691](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766691) passed setup, lint, seed, Python tests, evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, the read-only UI smoke, and the complete browser suite with axe-core enabled. It also preserved judge-facing desktop/mobile screenshots as a CI artifact.
+The last full code-and-browser verification passed on commit `102302023b7a51ecdd2bca14ffb87468dadaac38`: GitHub Actions run [#40174766691](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40174766691) passed setup, lint, seed, Python tests, evaluation smoke/full evaluation, scripted demo, JavaScript syntax checks, Python compilation, the read-only UI smoke, and the complete browser suite with axe-core enabled. It also preserved judge-facing desktop/mobile screenshots as a CI artifact. The subsequent commits refresh this release-gate documentation; rerun CI on the final submission SHA before tagging a release.
 
 The UI/performance changes split page modules by route, prefetch chunks on link hover/focus, add reduced-motion-aware motion, expose route loading with `aria-busy`, recover from failed route imports, and apply native lazy loading/async decoding. The suite checks nine routes, light/dark themes, the guided tour, responsive overflow at 320/375/414 px, blocked localStorage, and critical/serious axe-core findings. The first axe run exposed contrast, SVG naming, and keyboard-scroll issues; fixes are merged and the updated suite passed.
 
