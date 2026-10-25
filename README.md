@@ -3,11 +3,11 @@
 [![CI](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Live synthetic demo:** https://genomeguard.onrender.com — uses simulated consent and synthetic data; research use only.
+**Live research instance:** https://genomeguard.onrender.com — built from public 1000 Genomes genotypes with a documented dataset-level policy mapping. This is not participant-specific consent, has no institutional identity provider or durable request/audit storage, and is not for clinical use.
 
 GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Advisory AI components explain evidence for reviewers; deterministic application code remains responsible for access decisions.
 
-> **Research software — not for clinical or production use.** The default environment uses synthetic data, and requester identities and consent records are simulated. The project has not undergone independent security, privacy, clinical, or legal review. It must not be used to make decisions about real people or to store identifiable participant data.
+> **Research software — not for clinical or production use.** The hosted research instance uses public 1000 Genomes genotype data and a dataset-level public-release policy mapping; local demo mode still uses synthetic data. The policy mapping is not participant-specific consent, and requester API keys are not verified institutional identities. The service has not undergone independent security, privacy, clinical, or legal review. It must not be used for private participant data or clinical decisions.
 
 ## What it does
 
@@ -24,13 +24,13 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 
 | Area | Current implementation | Important boundary |
 | --- | --- | --- |
-| Consent and requester identity | Policy simulation and demo personas | Not connected to a real identity provider or real participant consent system |
-| Genotype data | Synthetic default cohort; optional public-data research path | Public genotypes do not supply consent, authorization, or a production data-governance workflow |
+| Consent and requester identity | Public-release dataset policy mapping in hosted research mode; synthetic personas only in local demo mode | No participant-specific consent records in the public dataset, and no institutional identity provider |
+| Genotype data | Hosted cohort built from public 1000 Genomes chromosome 22 VCF; synthetic default for local demo mode | Public genotypes are not private clinical data; source-level terms are not individual consent or legal authorization |
 | Privacy protections | Risk heuristics, transformations, and a simplified privacy-budget ledger | Not a formally audited differential-privacy implementation |
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | Local development and a Render blueprint | A public deployment, persistent production storage, tenant isolation, and operational readiness must be verified separately |
+| Hosting and persistence | Public Render research instance; SQLite database on an ephemeral container filesystem | Requests and audit history can reset on restart/deploy; durable storage, tenant isolation, external audit anchoring, and production readiness remain unverified |
 
 These boundaries are intentional and should remain visible in the interface and any exported results.
 
