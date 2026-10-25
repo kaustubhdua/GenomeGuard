@@ -278,7 +278,8 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                  keep_prob: float = 0.004, seed: int = 1337, rare_maf: float = 0.01,
                  withdrawn_rate: float = 0.03, family_first: bool = False,
                  source_metadata_file: str = "provided-sample-metadata",
-                 source_vcf_file: str | None = None) -> tuple[SyntheticCohort, dict]:
+                 source_vcf_file: str | None = None,
+                 source: str = "User-provided genomic cohort") -> tuple[SyntheticCohort, dict]:
     rng = np.random.default_rng(seed)
     info = parse_ped(ped_text)
     in_vcf = [s for s in vcf_samples(vcf) if s in info]
@@ -290,9 +291,10 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
     freq = G.sum(axis=0) / (2.0 * n)
     maf = np.minimum(freq, 1 - freq)
     donors = []
+    cohort_namespace = "1000G" if source.lower().startswith("1000 genomes") else "CUSTOM"
     for i, s in enumerate(chosen, start=1):
         pop = info[s]["pop"] or "UNK"
-        donors.append({"id": i, "cohort_id": "1000G-" + pop, "population": pop,
+        donors.append({"id": i, "cohort_id": cohort_namespace + "-" + pop, "population": pop,
                        "consent": _consent(rng, pop),  # SIMULATED consent
                        "family_id": i, "withdrawn": bool(rng.random() < withdrawn_rate)})
     fam_of = {}
@@ -301,7 +303,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
     rels = relationships_from_pedigree(info, chosen)
     variants = {**cols, "maf": maf, "is_rare": maf < rare_maf,
                 "planted": np.zeros(len(maf), dtype=bool)}
-    meta = {"source": "1000 Genomes (IGSR)", "samples": n, "variants": int(G.shape[1]),
+    meta = {"source": source, "samples": n, "variants": int(G.shape[1]),
             "relative_pairs": len(rels), "consent_simulated": True, "genotypes_real": True,
             "family_enriched": bool(family_first and rels), "seed": seed,
             "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
@@ -342,6 +344,7 @@ def main(argv: list[str] | None = None) -> None:
     b = sub.add_parser("build")
     b.add_argument("--vcf", help="local VCF(.gz); default: download 1000G chr22")
     b.add_argument("--source-vcf-name", help="original source filename when --vcf is a renamed local cache")
+    b.add_argument("--source", help="source label; automatic official download defaults to 1000 Genomes, local files default to user-provided")
     b.add_argument("--ped", help="local pedigree file or URL; default: official Phase 3 sample/population panel (unrelated samples)")
     b.add_argument("--chrom", default="22")
     b.add_argument("--out", default="data_real/1000g_chr22.npz")
@@ -356,9 +359,11 @@ def main(argv: list[str] | None = None) -> None:
     if a.vcf:
         vcf = Path(a.vcf)
         source_vcf_name = a.source_vcf_name or vcf.name
+        source_label = a.source or "User-provided genomic cohort"
     else:
         vcf_url = resolve_vcf_url(a.chrom)
         source_vcf_name = a.source_vcf_name or vcf_url.rsplit("/", 1)[-1]
+        source_label = a.source or "1000 Genomes (IGSR) Phase 3"
         vcf = download(vcf_url, cache / f"chr{a.chrom}.vcf.gz")
     if a.ped and Path(a.ped).exists():
         ped_path = Path(a.ped)
@@ -370,7 +375,7 @@ def main(argv: list[str] | None = None) -> None:
         metadata_file = metadata_url.rsplit("/", 1)[-1]
     c, meta = build_cohort(vcf, ped_text, a.samples, a.variants, a.keep_prob, a.seed,
                            family_first=not a.no_family_first, source_metadata_file=metadata_file,
-                           source_vcf_file=source_vcf_name)
+                           source_vcf_file=source_vcf_name, source=source_label)
     save_cohort(c, meta, Path(a.out))
     print(json.dumps(meta, indent=2))
     print(f"wrote {a.out}\nrun with: GG_REAL_COHORT_FILE={a.out} make run")
