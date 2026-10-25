@@ -862,17 +862,38 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
                              admin_key=s.admin_api_key, **kwargs)
     kind = "synthetic"
-    if s.real_cohort_file:  # a cohort file is real only if ITS metadata says so
+    source_meta: dict = {}
+    if s.real_cohort_file:  # metadata, not the filename, determines provenance
         from app.data.real import read_meta
 
-        kind = "real_1000g" if read_meta(s.real_cohort_file).get("genotypes_real") else "custom"
+        source_meta = read_meta(s.real_cohort_file)
+        source = str(source_meta.get("source") or "")
+        if source_meta.get("genotypes_real") is True:
+            kind = "real_1000g" if source.lower().startswith("1000 genomes") else "real_custom"
+        else:
+            kind = "custom"
+    source_labels = {
+        "real_1000g": "Real genotypes (1000 Genomes / IGSR)",
+        "real_custom": "Real genotypes (user-provided cohort)",
+        "custom": "Custom cohort file (not verified as real)",
+        "synthetic": "Synthetic genotypes",
+    }
+    if kind == "synthetic":
+        relatives_label = "Synthetic pedigree; expected sharing is modelled"
+        source_label = "Built-in synthetic cohort generator"
+    elif kind == "custom":
+        relatives_label = "Custom cohort relationships are not verified"
+        source_label = str(source_meta.get("source") or "Unverified custom cohort file")
+    elif source_meta.get("relative_pairs", 0):
+        relatives_label = "Source pedigree links; expected sharing is modelled"
+        source_label = str(source_meta.get("source") or "Unspecified real-genotype source")
+    else:
+        relatives_label = "No relative pairs in the selected cohort; family exposure may be sparse"
+        source_label = str(source_meta.get("source") or "Unspecified real-genotype source")
     svc.provenance = {
-        "genotypes": kind,
-        "genotypes_label": {"real_1000g": "Real genotypes (1000 Genomes)",
-                            "custom": "Custom cohort file (provenance not stated)",
-                            "synthetic": "Synthetic genotypes"}[kind],
+        "genotypes": kind, "genotypes_label": source_labels[kind], "source_label": source_label,
         "consent": "simulated", "consent_label": "Simulated consent records",
-        "relatives": "kinship_model", "relatives_label": "Relative exposure is a model",
+        "relatives": "kinship_model", "relatives_label": relatives_label,
         "agents": "llm" if llm.available else "templates",
         "agents_label": "Agents: live LLM" if llm.available else "Agents: built-in templates",
         "encryption": "AES-256-GCM at rest",
