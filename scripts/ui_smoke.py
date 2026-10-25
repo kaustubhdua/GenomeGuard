@@ -222,12 +222,12 @@ def main() -> None:
                       const cardRect = card.getBoundingClientRect();
                       const dds = [...facts.querySelectorAll("dd")];
                       const cols = getComputedStyle(facts).gridTemplateColumns.split(" ").map(parseFloat);
-                      return {missing: false, cardWidth: cardRect.width, valueColumn: cols.at(-1),
+                      return {missing: false, cardWidth: cardRect.width, columnCount: cols.length,
                         valuesFit: dds.every(e => e.scrollWidth <= e.clientWidth + 1 &&
-                          e.getBoundingClientRect().right <= cardRect.right - 8)};
+                          e.getBoundingClientRect().right <= cardRect.right - 8 && e.clientWidth >= 100)};
                     }""")
-                    check("overview evidence values have a readable column",
-                          not proof_layout.get("missing") and proof_layout.get("valueColumn", 0) >= 96
+                    check("overview evidence metrics stack without clipping",
+                          not proof_layout.get("missing") and proof_layout.get("columnCount") == 1
                           and proof_layout.get("valuesFit", False), str(proof_layout))
                 bad = {k: v for k, v in r.items() if isinstance(v, list) and v}
                 check(f"{hsh}", r["h1"] == 1 and not bad,
