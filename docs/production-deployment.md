@@ -12,13 +12,13 @@
 - Destructive audit-tampering demonstration: disabled in the hosted service environment
 - Secrets: a generated master key and admin key are configured as Render environment variables; never copy them into repository files, screenshots, or issue comments.
 
-The image build and Render deployment completed successfully. Render logs record application startup completion and HTTP 200 for the root page. See the [Render service dashboard](https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0) for current state.
+The image build and Render deployment completed successfully. The most recent intentional redeploy was `dep-dbev8p7avr4c73c8tgm0`, running app commit `8882f9958c664aa6012fe6a1ae0c6ee83dd6bd85`. Render logs record Uvicorn startup completion and HTTP 200 for the root page. See the [Render service dashboard](https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0) for current state.
 
 ## Verification
 
 The main branch's [CI run on the deployed commit](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40188898749) passed the local backend, evaluation, browser, responsive, and automated accessibility checks.
 
-A separate [live deployment smoke workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-deployment-smoke.yml) checks the public health endpoint, static assets, provenance labels, API documentation, nine UI routes in light and dark themes, and narrow mobile viewport overflow. The workflow also exercises live request governance and authorization using synthetic demo personas. Record the run links and results in [verification evidence](verification.md) after each run; a queued or in-progress run is not a pass.
+A separate [live deployment smoke workflow](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-deployment-smoke.yml) checks the public health endpoint, static assets, provenance labels, API documentation, all nine UI routes in light and dark themes, responsive overflow, keyboard navigation, reduced motion, 640px reflow, and axe-core findings. It exercises live request governance and authorization using synthetic demo personas. [Run #40192847038](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40192847038) passed these checks on app commit `8882f9958c664aa6012fe6a1ae0c6ee83dd6bd85`.
 
 ## Persistence and operational limitations
 
