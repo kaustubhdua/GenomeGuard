@@ -1,6 +1,6 @@
 # GenomeGuard — judge-readiness research and execution plan
 
-Last researched: 25 October 2026. Latest full main CI baseline verified: `dbe400d20915709289f5c9569a6f5bf7cdf866ef`, passing [run #40175086012](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40175086012), including browser, responsive, and axe-core checks plus a desktop/mobile screenshot artifact. The real-data, family-cohort, Beacon-schema, and dependency-audit workflows have also passed on recent main commits. This is a prioritized engineering plan, not a claim that every item is implemented or verified.
+Last researched: 25 October 2026. Latest full code-and-browser CI baseline verified: `de5287521161a3ee4b662a6f51f7a43823b14802`, passing [run #40176502384](https://github.com/kaustubhdua/GenomeGuard/actions/runs/40176502384), including backend tests, lint, evaluation, demo, Playwright, responsive, and axe-core checks plus desktop/mobile screenshots. The real-data, family-cohort, Beacon-schema, and dependency-audit workflows have also passed on recent commits. This is a prioritized engineering plan, not a claim that every item is implemented or verified.
 
 ## Executive recommendation
 
