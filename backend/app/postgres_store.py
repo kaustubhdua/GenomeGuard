@@ -146,6 +146,9 @@ class PostgresStore(Store):
             self._transaction_depth += 1
             try:
                 with self.connection.transaction():
+                    # Serialize mutation units across instances. This conservative lock prevents
+                    # concurrent requests from racing the privacy-budget read/charge sequence.
+                    self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
                     yield
             finally:
                 self._transaction_depth -= 1
