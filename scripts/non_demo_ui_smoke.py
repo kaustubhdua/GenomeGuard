@@ -149,7 +149,7 @@ def main() -> int:
         page.locator("#new-requester-institution").fill("Research Institute")
         page.locator("#issue-researcher-title + p")  # ensure the access section is rendered
         page.get_by_role("button", name="Issue researcher key").click()
-        page.get_by_label("One-time API key").wait_for(timeout=5000)
+        page.get_by_label("New researcher API key").wait_for(timeout=5000)
         check("one-time researcher key is displayed after provisioning",
               page.locator('input[aria-label="New researcher API key"]').input_value()
               == "one-time-issued-researcher-key")
