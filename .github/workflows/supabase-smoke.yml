@@ -1,0 +1,49 @@
+name: Supabase migration smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "supabase/functions/genomeguard-health/**"
+      - ".github/workflows/supabase-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  health-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify deployed migration gate fails closed until migration is complete
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          code="$(curl --silent --show-error --max-time 15 --output "$body" --write-out '%{http_code}' \
+            'https://hkyieaovolkethovyenb.supabase.co/functions/v1/genomeguard-health')"
+          echo "HTTP status: $code"
+          cat "$body"
+          python - "$code" "$body" <<'PY'
+          import json
+          import sys
+
+          code = int(sys.argv[1])
+          with open(sys.argv[2], encoding="utf-8") as handle:
+              body = json.load(handle)
+
+          assert body.get("component") == "supabase-edge-function", body
+          assert body.get("database_status_store") == "reachable", body
+          assert "SUPABASE_SERVICE_ROLE_KEY" not in json.dumps(body), body
+
+          if body.get("status") == "ready":
+              assert code == 200, (code, body)
+              assert body.get("api_migration_complete") is True, body
+              assert body.get("genomic_dataset_loaded") is True, body
+              assert body.get("render_dependency_present") is False, body
+              assert body.get("release_gate_passed") is True, body
+          else:
+              assert code == 503, (code, body)
+              assert body.get("release_gate_passed") is False, body
+              assert body.get("status") == "migration_incomplete", body
+          PY
