@@ -83,6 +83,8 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Hosted deployment and operational limitations](docs/production-deployment.md)
 - [PostgreSQL operations, backups, and recovery](docs/postgresql-operations.md)
 - [Evidence-based completion audit (26 October 2026)](docs/completion-audit-2026-10-26.md)
+- [Supabase + Vercel deployment guide](docs/supabase-vercel-deployment.md)
+- [Supabase schema isolation notes](docs/supabase-schema-notes.md)
 
 ## Security and privacy
 
