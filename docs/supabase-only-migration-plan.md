@@ -18,6 +18,7 @@ Status checked: 2026-10-27. This is an implementation plan and status ledger, no
 - Added an index for `donor_access.request_id` after the Supabase performance advisor identified that foreign key as unindexed.
 - Verified the schema and tables exist. Application tables are empty; the genomic cohort has not been imported and the application API has not been migrated to Edge Functions.
 - Deployed the first Edge Function, `genomeguard-health` (version 1). It reads a non-sensitive deployment-status row and intentionally returns HTTP 503 / `migration_incomplete` until the API, cohort, and release gates are explicitly marked complete. This is a migration-status endpoint, not the GenomeGuard API.
+- Added `.github/workflows/supabase-smoke.yml` to validate the live function response and ensure the readiness gate remains fail-closed. The smoke workflow must pass before this part of the migration is considered verified.
 - Added `public.genomeguard_deployment_status` with RLS enabled, no browser-role grants, and an explicit server-role read policy. The service-role key is used only inside the function; it is not returned to clients.
 - Supabase security advisor returned no lints at the last check. The performance advisor initially flagged the donor-access request foreign key; an index migration was applied. Re-run advisors after the next schema changes.
 
