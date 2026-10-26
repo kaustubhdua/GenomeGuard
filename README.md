@@ -30,7 +30,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | Public Render research instance; SQLite database on an ephemeral container filesystem | Requests and audit history can reset on restart/deploy; durable storage, tenant isolation, external audit anchoring, and production readiness remain unverified |
+| Hosting and persistence | Existing hosted research instance still runs on Render; the `common 1` Supabase project now has an isolated, empty GenomeGuard schema | The Supabase schema is provisioned but the running backend is not yet migrated to it; no Supabase-only API deployment, cohort import, or production readiness is verified |
 
 These boundaries are intentional and should remain visible in the interface and any exported results.
 
@@ -85,6 +85,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Evidence-based completion audit (26 October 2026)](docs/completion-audit-2026-10-26.md)
 - [Supabase + Vercel deployment guide](docs/supabase-vercel-deployment.md)
 - [Supabase schema isolation notes](docs/supabase-schema-notes.md)
+- [Supabase-only backend migration plan and acceptance gates](docs/supabase-only-migration-plan.md)
 
 ## Security and privacy
 
