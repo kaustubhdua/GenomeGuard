@@ -1,0 +1,55 @@
+name: Deployment configuration checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deployment-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Validate Vercel configuration and frontend asset references
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const configPath = 'frontend/vercel.json';
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          if (!Array.isArray(config.rewrites) || config.rewrites.length < 2) {
+            throw new Error('Vercel must keep the static alias and API fallback rewrites.');
+          }
+          const alias = config.rewrites.find((r) => r.source === '/static/:path*');
+          if (!alias || alias.destination !== '/:path*') {
+            throw new Error('Static alias must map /static/src/* to /src/* under Root Directory frontend.');
+          }
+          const fallback = config.rewrites.find((r) => r.source === '/(.*)');
+          if (!fallback || fallback.destination !== 'https://genomeguard.onrender.com/$1') {
+            throw new Error('Until API parity passes, fallback must retain the existing backend to avoid breaking the live app.');
+          }
+          const html = fs.readFileSync('frontend/index.html', 'utf8');
+          const refs = [...html.matchAll(/(?:src|href)="\/static\/([^"]+)"/g)].map((m) => m[1]);
+          for (const ref of refs) {
+            const target = path.join('frontend', ref);
+            if (!fs.existsSync(target)) throw new Error('Missing frontend asset: ' + target);
+          }
+          console.log('Vercel JSON valid; static asset references exist:', refs.join(', '));
+          NODE
+      - name: Validate Supabase migration and Edge Function source files exist
+        run: |
+          test -s supabase/functions/genomeguard-health/index.ts
+          test -s supabase/migrations/20261027000000_genomeguard_schema.sql
+          test -s supabase/migrations/20261027001000_index_donor_access_request.sql
+          test -s supabase/migrations/20261027002000_deployment_status.sql
+          test -s supabase/migrations/20261027003000_deployment_status_policy.sql
