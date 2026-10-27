@@ -20,7 +20,7 @@ Status checked: 2026-10-27. This is an implementation plan and status ledger, no
 - Deployed the first Edge Function, `genomeguard-health` (version 1). It reads a non-sensitive deployment-status row and intentionally returns HTTP 503 / `migration_incomplete` until the API, cohort, and release gates are explicitly marked complete. This is a migration-status endpoint, not the GenomeGuard API.
 - Added `.github/workflows/supabase-smoke.yml` to validate the live function response and ensure the readiness gate remains fail-closed. The smoke workflow must pass before this part of the migration is considered verified.
 - Added `public.genomeguard_deployment_status` with RLS enabled, no browser-role grants, and an explicit server-role read policy. The service-role key is used only inside the function; it is not returned to clients.
-- Supabase security advisor returned no lints at the last check. The performance advisor initially flagged the donor-access request foreign key; an index migration was applied. Re-run advisors after the next schema changes.
+- Current security advisor reports RLS disabled on all 13 private application tables. Direct privilege checks confirm `anon` and `authenticated` have no schema USAGE or table SELECT/INSERT privileges, but RLS remains a critical defense-in-depth gap. A new reviewed migration enables RLS and revokes default browser-role grants; it has not been applied to production pending an explicit decision because it intentionally defines no client-facing policies. The performance advisor reports only unused-index informational findings after the donor-access foreign-key index was added.
 
 ## Critical migration rule
 
