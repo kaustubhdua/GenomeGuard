@@ -77,6 +77,15 @@ class PostgresStore(Store):
             database_url, connect_timeout=connect_timeout, row_factory=dict_row,
             application_name="GenomeGuard",
         )
+        # Keep GenomeGuard objects isolated from other applications sharing a Supabase project.
+        # The database URL is a server-side secret; never put it in frontend/Vercel public env vars.
+        try:
+            with self.connection.transaction():
+                self.connection.execute("CREATE SCHEMA IF NOT EXISTS genomeguard")
+                self.connection.execute("SET search_path TO genomeguard, public")
+        except Exception:
+            self.connection.close()
+            raise
         self.db = _ConnectionCompat(self.connection, self)
         try:
             self._migrate()
