@@ -35,7 +35,7 @@ Use the connection string copied from the Supabase dashboard; do not guess the d
 
 1. The Vercel project `genome-guard` (`prj_Q2uhnuLdzXTo4JoZUXqzhW6YuICT`) has been located and its project settings updated to **Root Directory** `frontend`, static/Other framework, no build/install command, and output directory `.`.
 2. Vercel SSO protection is now scoped to **preview deployments only**; production deployment URLs are intended to be publicly viewable while previews remain protected. This is suitable only for the existing public research prototype and does not make it safe for private participant data.
-3. The latest known Vercel deployment was `READY` before the settings change. A new production deployment could not be started through the connected Vercel API because it denied permission to create production deployments. A GitHub-triggered deployment must confirm the new settings are actually used.
+3. A GitHub-triggered preview deployment from this branch is now reported `READY`, confirming the linked Vercel build completed after the root-directory/protection settings update. The connected Vercel API denied direct creation of a production deployment, and the preview content could not be independently fetched because Vercel denied this connector access. Production deployment and live route acceptance therefore remain unverified.
 4. No build command or API keys are required for the static frontend.
 5. Verify that `/` serves the UI, `/static/src/style.css` resolves to the frontend stylesheet, and `/health` and application API paths proxy to Render. Then exercise the full UI in the preview.
 6. Promote to production only after API routes, credentials, headers, error states and all core flows pass acceptance tests.
