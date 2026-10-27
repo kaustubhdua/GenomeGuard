@@ -54,8 +54,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
           python -m pip install pip-audit
-      - name: Audit resolved Python environment
-        run: pip-audit --strict --skip-editable
+      - name: Export resolved third-party dependencies
+        run: python -m pip freeze --exclude-editable > /tmp/requirements-audit.txt
+      - name: Audit resolved third-party dependencies
+        run: pip-audit --strict -r /tmp/requirements-audit.txt
   gitleaks:
     name: Secret scanning
     runs-on: ubuntu-latest
