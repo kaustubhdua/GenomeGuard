@@ -1,6 +1,8 @@
 # GenomeGuard
 
 [![CI](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/ci.yml)
+[![Security verification](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/security.yml/badge.svg)](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/security.yml)
+[![Live acceptance](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-acceptance.yml/badge.svg)](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-acceptance.yml)
 [![License: All rights reserved](https://img.shields.io/badge/License-All%20rights%20reserved-red.svg)](LICENSE)
 
 **Live research instance:** https://genomeguard.onrender.com — built from public 1000 Genomes genotypes with a documented dataset-level policy mapping. This is not participant-specific consent, has no institutional identity provider or durable request/audit storage, and is not for clinical use.
@@ -30,7 +32,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | Existing hosted research instance still runs on Render; the `common 1` Supabase project now has an isolated, empty GenomeGuard schema | The Supabase schema is provisioned but the running backend is not yet migrated to it; no Supabase-only API deployment, cohort import, or production readiness is verified |
+| Hosting and persistence | Existing hosted research instance still runs on Render; the `common 1` Supabase project has an isolated GenomeGuard schema | The Supabase schema is provisioned but the running backend is not yet migrated to it; no Supabase-only API deployment, cohort import, or production readiness is verified |
 
 These boundaries are intentional and should remain visible in the interface and any exported results.
 
@@ -83,6 +85,9 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Hosted deployment and operational limitations](docs/production-deployment.md)
 - [PostgreSQL operations, backups, and recovery](docs/postgresql-operations.md)
 - [Evidence-based completion audit (26 October 2026)](docs/completion-audit-2026-10-26.md)
+- [Production assurance implementation status](docs/production-assurance-implementation-2026-10-26.md)
+- [OWASP ASVS verification register](docs/asvs-verification.md)
+- [Incident response and recovery runbooks](docs/incident-response.md)
 - [Supabase + Vercel deployment guide](docs/supabase-vercel-deployment.md)
 - [Supabase schema isolation notes](docs/supabase-schema-notes.md)
 - [Supabase-only backend migration plan and acceptance gates](docs/supabase-only-migration-plan.md)
