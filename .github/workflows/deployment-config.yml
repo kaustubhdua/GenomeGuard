@@ -53,6 +53,7 @@ jobs:
           test -s supabase/migrations/20261027001000_index_donor_access_request.sql
           test -s supabase/migrations/20261027002000_deployment_status.sql
           test -s supabase/migrations/20261027003000_deployment_status_policy.sql
+          test -s supabase/migrations/20261027010000_private_schema_rls.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -94,3 +95,6 @@ jobs:
           test "$tables" = "13"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_schema_privilege('anon', 'genomeguard', 'USAGE') AND NOT has_schema_privilege('authenticated', 'genomeguard', 'USAGE') AND NOT has_table_privilege('anon', 'public.genomeguard_deployment_status', 'SELECT') AND NOT has_table_privilege('authenticated', 'public.genomeguard_deployment_status', 'SELECT') AND has_table_privilege('service_role', 'public.genomeguard_deployment_status', 'SELECT')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 FROM public.genomeguard_deployment_status WHERE api_migration_complete = false AND genomic_dataset_loaded = false AND render_dependency_present = true AND release_gate_passed = false" | grep -q "(1 row)"
+          rls_tables="$(psql -h localhost -U postgres -d genomeguard_migration_test -Atc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='genomeguard' AND c.relkind='r' AND c.relrowsecurity")"
+          test "$rls_tables" = "13"
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_schema_privilege('anon', 'genomeguard', 'USAGE') AND NOT has_schema_privilege('authenticated', 'genomeguard', 'USAGE') AND NOT has_table_privilege('anon', 'genomeguard.donors', 'SELECT') AND NOT has_table_privilege('authenticated', 'genomeguard.donors', 'SELECT') AND NOT has_table_privilege('service_role', 'genomeguard.donors', 'SELECT')" | grep -q "(1 row)"
