@@ -33,11 +33,11 @@ Use the connection string copied from the Supabase dashboard; do not guess the d
 
 ## Configure Vercel
 
-1. In Vercel, import `kaustubhdua/GenomeGuard` from GitHub.
-2. Set **Root Directory** to `frontend` (not the repository root).
-3. Select the **Other** framework preset / static deployment. Do not choose Python; the frontend is static JavaScript, HTML and CSS.
-4. Leave the output directory as `.` as declared in `frontend/vercel.json`. No build command or API keys are required for this static frontend.
-5. Deploy a preview first. Verify that `/` serves the UI, `/static/src/style.css` resolves to the frontend stylesheet, and `/health` and application API paths proxy to Render. Then exercise the full UI in the preview.
+1. The Vercel project `genome-guard` (`prj_Q2uhnuLdzXTo4JoZUXqzhW6YuICT`) has been located and its project settings updated to **Root Directory** `frontend`, static/Other framework, no build/install command, and output directory `.`.
+2. Vercel SSO protection is now scoped to **preview deployments only**; production deployment URLs are intended to be publicly viewable while previews remain protected. This is suitable only for the existing public research prototype and does not make it safe for private participant data.
+3. The latest known Vercel deployment was `READY` before the settings change. A new production deployment could not be started through the connected Vercel API because it denied permission to create production deployments. A GitHub-triggered deployment must confirm the new settings are actually used.
+4. No build command or API keys are required for the static frontend.
+5. Verify that `/` serves the UI, `/static/src/style.css` resolves to the frontend stylesheet, and `/health` and application API paths proxy to Render. Then exercise the full UI in the preview.
 6. Promote to production only after API routes, credentials, headers, error states and all core flows pass acceptance tests.
 
 The Vercel configuration deliberately proxies API paths to the Render origin; it does not expose database credentials or Supabase secret keys to the browser. Vercel is not a replacement for the backend's data persistence.
