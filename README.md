@@ -32,13 +32,13 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | Existing hosted research instance still runs on Render; the `common 1` Supabase project has an isolated GenomeGuard schema | The Supabase schema is provisioned but the running backend is not yet migrated to it; no Supabase-only API deployment, cohort import, or production readiness is verified |
+| Hosting and persistence | Existing hosted research instance still runs on Render; the common 1 Supabase project has an isolated GenomeGuard schema | The Supabase schema is provisioned but the running backend is not yet migrated to it; no Supabase-only API deployment, cohort import, or production readiness is verified |
 
 These boundaries are intentional and should remain visible in the interface and any exported results.
 
 ## Get started
 
-Requirements: Python 3.11 or newer and the `make` utility.
+Requirements: Python 3.11 or newer and the make utility.
 
 ```bash
 git clone https://github.com/kaustubhdua/GenomeGuard.git
@@ -66,6 +66,8 @@ make demo
 The CI workflows also exercise API behavior, evaluation scenarios, browser routes, responsive layouts, accessibility checks, and selected interoperability/security validations. Results belong to the exact commit and workflow that produced them; a passing CI run does not establish that a hosted deployment is working.
 
 For optional public-genotype research evaluation, see [Real-data evaluation](docs/real-data.md). Review the data source, cohort build settings, and provenance before running it.
+
+For the latest evidence-based status of hosting, Supabase RLS, persistence and release blockers, see the [production-readiness audit (28 October 2026)](docs/production-readiness-audit-2026-10-28.md).
 
 ## Architecture
 
