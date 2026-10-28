@@ -9,7 +9,7 @@
   --ink:#14213d; --ink-2:#35415b; --ink-3:#697184;
   --line:#e6dbc4; --line-2:#efe6d5; --ring:#0f6e3a;
   --overlay:rgba(20,33,61,.48);
-  --permit:#0f6e3a; --transform:#a05010; --deny:#b7352a; --escalate:#2a3c8f;
+  --permit:#0f6e3a; --on-accent:#ffffff; --transform:#a05010; --deny:#b7352a; --escalate:#2a3c8f;
   --band-low:#0f6e3a; --band-med:#e8821b; --band-high:#b7352a; --glow:#e8821b;
   --rail:#14213d; --rail-ink:#f7f0e1; --rail-dim:#c1c9d7;
   --rail-line:rgba(255,255,255,.14); --rail-hover:rgba(255,255,255,.09);
@@ -26,7 +26,7 @@
   --ink:#edf2f7; --ink-2:#c4ceda; --ink-3:#97a5b7;
   --line:#314055; --line-2:#253347; --ring:#6cc38b;
   --overlay:rgba(0,0,0,.66);
-  --permit:#6cc38b; --transform:#ffbd76; --deny:#ff8e86; --escalate:#a7b7ff;
+  --permit:#6cc38b; --on-accent:#101722; --transform:#ffbd76; --deny:#ff8e86; --escalate:#a7b7ff;
   --band-low:#6cc38b; --band-med:#ffbd76; --band-high:#ff8e86; --glow:#ffbd76;
   --rail:#0b111a; --rail-ink:#edf2f7; --rail-dim:#9eacbf;
   --rail-line:rgba(255,255,255,.12); --rail-hover:rgba(255,255,255,.08);
@@ -87,7 +87,7 @@ h2 { letter-spacing:-.02em; }
 .badge { font-size:12px; }
 .pill { border:1px solid var(--line); }
 button,.btn {
-  border-radius:9px; background:var(--permit); border-color:var(--permit); color:#fff;
+  border-radius:9px; background:var(--permit); border-color:var(--permit); color:var(--on-accent);
   transition:transform .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease;
 }
 button:hover:not(:disabled):not(.ghost),.btn:hover:not(.ghost) {
