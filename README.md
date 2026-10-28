@@ -80,6 +80,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Evaluation results](docs/eval-results.md)
 - [Scalability notes](docs/scalability.md)
 - [Application walkthrough](docs/walkthrough.md)
+- [Three-minute demo script](docs/demo-script.md)
 - [Real-data evaluation and provenance](docs/real-data.md)
 - [Real cohort ingestion and consent requirements](docs/real-cohort-consent.md)
 - [Hosted deployment and operational limitations](docs/production-deployment.md)
