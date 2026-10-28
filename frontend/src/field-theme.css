@@ -1,0 +1,117 @@
+/* GenomeGuard field-first theme.
+   Visual direction: calm cream surfaces, deep navy typography, restrained green
+   primary actions and saffron micro-accent inspired by NIRDHOOM's product UI.
+   CSS-only adaptation for GenomeGuard's existing vanilla-JS app: no copied assets,
+   runtime dependencies, fabricated data, or decorative metric values are added. */
+:root {
+  color-scheme: light;
+  --bg:#f7f0e1; --card:#fffbf3; --card-2:#fbf5e9;
+  --ink:#14213d; --ink-2:#35415b; --ink-3:#697184;
+  --line:#e6dbc4; --line-2:#efe6d5; --ring:#0f6e3a;
+  --overlay:rgba(20,33,61,.48);
+  --permit:#0f6e3a; --transform:#a05010; --deny:#b7352a; --escalate:#2a3c8f;
+  --band-low:#0f6e3a; --band-med:#e8821b; --band-high:#b7352a; --glow:#e8821b;
+  --rail:#14213d; --rail-ink:#f7f0e1; --rail-dim:#c1c9d7;
+  --rail-line:rgba(255,255,255,.14); --rail-hover:rgba(255,255,255,.09);
+  --r-sm:8px; --r-md:14px; --r-lg:20px;
+  --sans:"DM Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --display:"Plus Jakarta Sans","DM Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --shadow-sm:0 1px 2px rgba(20,33,61,.04),0 4px 12px -8px rgba(20,33,61,.14);
+  --shadow-md:0 8px 24px -16px rgba(20,33,61,.24);
+}
+:root[data-theme="dark"] {
+  color-scheme:dark;
+  --bg:#101722; --card:#172231; --card-2:#1d2a3b;
+  --ink:#edf2f7; --ink-2:#c4ceda; --ink-3:#97a5b7;
+  --line:#314055; --line-2:#253347; --ring:#6cc38b;
+  --overlay:rgba(0,0,0,.66);
+  --permit:#6cc38b; --transform:#ffbd76; --deny:#ff8e86; --escalate:#a7b7ff;
+  --band-low:#6cc38b; --band-med:#ffbd76; --band-high:#ff8e86; --glow:#ffbd76;
+  --rail:#0b111a; --rail-ink:#edf2f7; --rail-dim:#9eacbf;
+  --rail-line:rgba(255,255,255,.12); --rail-hover:rgba(255,255,255,.08);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.16),0 4px 12px -8px rgba(0,0,0,.3);
+  --shadow-md:0 8px 24px -16px rgba(0,0,0,.45);
+}
+html { scroll-behavior:smooth; }
+body {
+  background:radial-gradient(ellipse at 85% 0%,rgba(232,130,27,.055),transparent 32rem),var(--bg);
+  color:var(--ink); font-family:var(--sans);
+}
+a { text-underline-offset:4px; }
+:focus-visible { outline:3px solid var(--ring); outline-offset:3px; }
+.rail { background:var(--rail); border-right:1px solid var(--rail-line); padding:22px 14px 18px; }
+.brand { font-family:var(--display); letter-spacing:-.025em; }
+.mark { border-radius:9px; background:linear-gradient(145deg,#0f6e3a,#0a4f29); box-shadow:0 3px 10px rgba(15,110,58,.25); }
+.mark::before { background:#fffbf3; }
+.mark::after { background:#e8821b; }
+.nav { gap:18px; }
+.nav-label { letter-spacing:.08em; text-transform:uppercase; font-size:10.5px; }
+.nav a { min-height:38px; border-radius:9px; transition:background .16s ease,color .16s ease; }
+.nav a[aria-current="page"] { background:#e3f1e6; color:#0a4f29; font-weight:700; }
+.nav a[aria-current="page"] .tag { color:#0f6e3a; }
+.who { border-top-color:var(--rail-line); }
+.topbar {
+  position:sticky; background:color-mix(in srgb,var(--bg) 92%,transparent);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-bottom-color:var(--line);
+}
+.topbar::before {
+  content:""; position:absolute; inset:0 0 auto; height:3px;
+  background:linear-gradient(90deg,#e8821b 0 18%,#fffbf3 18% 28%,#0f6e3a 28% 100%);
+  pointer-events:none;
+}
+.topbar .crumb { font-family:var(--display); letter-spacing:-.015em; }
+#view { max-width:1320px; padding-top:clamp(22px,3vw,38px); }
+h1,h2,h3,.card-title,.kpi .v,.verdict { font-family:var(--display); }
+h1 { font-size:clamp(25px,2.5vw,32px); letter-spacing:-.03em; }
+h2 { letter-spacing:-.02em; }
+.lede { line-height:1.7; }
+.card { border-radius:var(--r-md); border-color:var(--line); box-shadow:var(--shadow-sm); }
+.card.hero {
+  position:relative; isolation:isolate; overflow:hidden; padding:clamp(22px,3.2vw,38px);
+  border-radius:22px; border-color:var(--line);
+  background:linear-gradient(135deg,var(--card) 0%,var(--card-2) 100%); box-shadow:var(--shadow-md);
+}
+.card.hero::before {
+  content:""; position:absolute; z-index:-1; top:-150px; right:-90px;
+  width:min(52vw,540px); height:360px;
+  background:radial-gradient(ellipse,rgba(15,110,58,.12),rgba(232,130,27,.05) 42%,transparent 70%);
+  pointer-events:none;
+}
+.card.hero h1 { max-width:880px; font-size:clamp(30px,3.3vw,44px); line-height:1.08; letter-spacing:-.04em; }
+.card.hero .lede { max-width:78ch; font-size:15px; }
+.card-h { margin-bottom:14px; }
+.kpi { border-radius:14px; }
+.kpi .v { letter-spacing:-.035em; }
+.grid { gap:16px; }
+.badge { font-size:12px; }
+.pill { border:1px solid var(--line); }
+button,.btn {
+  border-radius:9px; background:var(--permit); border-color:var(--permit); color:#fff;
+  transition:transform .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+button:hover:not(:disabled):not(.ghost),.btn:hover:not(.ghost) {
+  background:color-mix(in srgb,var(--permit) 88%,var(--ink));
+  border-color:color-mix(in srgb,var(--permit) 88%,var(--ink));
+}
+button:active:not(:disabled),.btn:active { transform:translateY(1px); }
+button.ghost,.btn.ghost,.iconbtn { background:var(--card); color:var(--ink); border-color:var(--line); }
+button.ghost:hover:not(:disabled),.btn.ghost:hover,.iconbtn:hover {
+  background:var(--card-2); border-color:var(--ink-3);
+}
+input,select,textarea { border-radius:9px; border-color:var(--line); }
+input:focus-visible,select:focus-visible,textarea:focus-visible { border-color:var(--ring); }
+.notice { border-radius:10px; }
+.hash,.blk { border-radius:10px; }
+.empty,.empty-state { border-radius:14px; }
+.page-enter { animation:gg-page-enter .24s cubic-bezier(.22,1,.36,1) both; }
+@keyframes gg-page-enter { from { opacity:.55; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+@media (max-width:900px) {
+  .rail { border-right:0; }
+  #view { padding-bottom:calc(36px + env(safe-area-inset-bottom)); }
+  .card.hero { border-radius:18px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  html { scroll-behavior:auto; }
+  *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}
