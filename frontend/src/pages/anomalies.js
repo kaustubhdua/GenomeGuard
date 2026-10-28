@@ -36,9 +36,9 @@ function requesterRow(r, redraw) {
       r.frozen ? h("span", { class: "pill bad" }, "frozen") : h("span", { class: "pill good" }, "active"),
       last ? h("span", { class: "muted" }, `${tl.length} queries, latest cohort ${last.cohort_n}, action ${last.action}`) : h("span", { class: "muted" }, "No queries yet"),
       r.frozen ? h("button", { class: "ghost", onclick: () => act("unfreeze") }, "Unfreeze") : h("button", { class: "ghost", onclick: () => act("freeze") }, "Freeze")),
-    tl.length ? [lineChart({ series: [{ name: "score", color: "var(--ink)", points: pts("score") }, { name: "rate", color: "#2f6fe4", points: pts("rate"), dash: "4 3" }, { name: "similarity", color: "var(--glow)", points: pts("similarity"), dash: "2 3" }, { name: "differencing", color: "var(--deny)", points: pts("differencing") }],
+    tl.length > 1 ? [lineChart({ series: [{ name: "score", color: "var(--ink)", points: pts("score") }, { name: "rate", color: "#2f6fe4", points: pts("rate"), dash: "4 3" }, { name: "similarity", color: "var(--glow)", points: pts("similarity"), dash: "2 3" }, { name: "differencing", color: "var(--deny)", points: pts("differencing") }],
       xLabel: "query number", yLabel: "score (0 to 1)", yMax: 1, hlines: TH, fmtX: (v) => Math.round(v), fmtY: (v) => v.toFixed(2), height: 230, xTicks: queryTicks(tl.length) }),
-      legend([["total score", "var(--ink)"], ["query rate", "#2f6fe4"], ["near-duplicate similarity", "var(--glow)"], ["differencing guard", "var(--deny)"]])] : null);
+      legend([["total score", "var(--ink)"], ["query rate", "#2f6fe4"], ["near-duplicate similarity", "var(--glow)"], ["differencing guard", "var(--deny)"]])] : (tl.length === 1 ? h("p", { class: "muted" }, "The trend chart appears once this account has sent two queries.") : null));
 }
 
 // whole query numbers only: every one for short series, five spread evenly for long ones

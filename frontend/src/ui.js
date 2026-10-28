@@ -167,7 +167,7 @@ export function timeline(stages, { play = true } = {}) {
       h("span", { class: "dot", "aria-hidden": "true" }, String(i + 1)),
       h("div", { class: "who2" }, s.t, h("span", { class: "mode" }, s.kind === "agent" ? "advises" : "rule")),
       h("p", { class: "says" }, s.says),
-      s.note ? h("div", { class: "chips" }, h("span", { class: "pill" }, "Agent note: " + s.note)) : null)));
+      s.note ? h("div", { class: "chips" }, h("span", { class: "pill agentnote" }, "Agent note: " + s.note)) : null)));
 }
 
 export function card(title, aside, ...kids) {

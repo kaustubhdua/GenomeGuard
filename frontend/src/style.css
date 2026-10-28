@@ -123,6 +123,7 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
 .o-permit{color:var(--permit)}.o-permit_with_transform{color:var(--transform)}.o-deny{color:var(--deny)}.o-escalate{color:var(--escalate)}
 .pill{display:inline-block;padding:1px 9px;border-radius:999px;background:var(--line-2);font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.pill.agentnote{white-space:normal;border-radius:10px;padding:6px 11px;line-height:1.45}
 .pill.warn{background:color-mix(in srgb,var(--transform) 14%,transparent);color:var(--transform)}
 .pill.bad{background:color-mix(in srgb,var(--deny) 14%,transparent);color:var(--deny)}
 .pill.good{background:color-mix(in srgb,var(--permit) 14%,transparent);color:var(--permit)}
