@@ -158,6 +158,7 @@ def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tm
         def __init__(self):
             self.last_row = None
             self.statements = []
+            self.call_count_queries = 0
 
         def __enter__(self):
             return self
@@ -275,7 +276,8 @@ def test_interrupted_import_resumes_after_last_committed_batch(tmp_path, monkeyp
             elif "coalesce(max(variant_index),-1)" in sql:
                 self.last_row = (2, 1)
             elif "SELECT count(*) FROM genomeguard.dataset_genotype_calls" in sql:
-                self.last_row = (3 if "called_alleles>0" in sql else 5,)
+                self.call_count_queries += 1
+                self.last_row = (3 if self.call_count_queries == 1 else 5,)
             elif "SELECT count(*) FROM genomeguard.dataset_samples" in sql:
                 self.last_row = (2,)
             elif "SELECT count(*) FROM genomeguard.dataset_variants" in sql:
