@@ -33,7 +33,7 @@ def test_parse_gt_rejects_allele_not_present_in_record():
 def test_vcf_split_alt_records_have_unique_variant_indices(tmp_path):
     path = _vcf(tmp_path)
     _, samples = read_header(path, "GRCh37")
-    rows = list(iter_records(path, samples))
+    rows = list(iter_records(path, samples, "GRCh37"))
     assert samples == ["SAMPLE_A", "SAMPLE_B"]
     assert [row["variant_index"] for row in rows] == [0, 1, 2]
     assert [row["variant_key"] for row in rows] == [
