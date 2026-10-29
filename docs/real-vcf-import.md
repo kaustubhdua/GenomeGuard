@@ -2,7 +2,7 @@
 
 ## What this importer does
 
-`python -m app.data.vcf_import` validates an operator-supplied VCF and, when explicitly requested, writes normalized variant and genotype-call rows into private GenomeGuard tables. It records the exact artifact SHA-256 and source/reuse metadata in `genomeguard.variant_dataset_manifest`. It does not download data, infer consent, or create participant-consent records.
+`python -m app.data.vcf_import` validates an operator-supplied VCF and, when explicitly requested, writes normalized variant and genotype-call rows into private GenomeGuard tables. It records the exact artifact SHA-256 and import metadata in a pre-existing `genomeguard.variant_dataset_manifest` entry. The importer cannot approve its own source: a trusted steward must separately register and approve the exact source metadata before import. It does not download data, infer consent, or create participant-consent records.
 
 The normalized model is deliberately separate from the legacy `genomeguard.variants` / `genomeguard.genotypes` tables because the latter store a packed genotype blob with implicit variant ordering. Importing into those tables without an explicit encoding contract could silently mis-map calls.
 
@@ -38,15 +38,37 @@ python -m app.data.vcf_import \
   --expected-sha256 "<64 lowercase hex characters>" \
   --reuse-statement-url "https://official-source.example/reuse-terms" \
   --citation "Exact collection publication citation" \
-  --reviewed-public-research \
   --dry-run
 ```
 
 Replace all example values with the actual source metadata. The example domain is deliberately non-operational and must not be used as source provenance.
 
+## Register the reviewed manifest first
+
+The importer refuses to create or approve a manifest. A trusted data steward must review the exact source artifact and create a manifest entry using an administrative database session. Example only—replace every placeholder with independently verified values:
+
+```sql
+insert into genomeguard.variant_dataset_manifest
+  (dataset_key, source_name, source_url, source_release, reference_assembly,
+   file_sha256, data_use_review, consent_basis, import_status, metadata)
+values
+  ('<stable-release-key>', '<exact source collection>', '<exact HTTPS file URL>',
+   '<exact release>', 'GRCh37', '<verified lowercase SHA-256>',
+   'approved_public_research', 'dataset_policy', 'registered',
+   jsonb_build_object(
+     'reuse_statement_url', '<exact HTTPS reuse terms>',
+     'citation', '<publication citation>',
+     'reviewed_by', '<steward identity>',
+     'reviewed_at', '<timestamp>',
+     'review_notes', '<documented scope and restrictions>'
+   ));
+```
+
+Do not run the example as written. The review decision and exact checksum must be established independently before inserting the manifest row. The importer compares every source field and checksum with that row and fails closed on any mismatch.
+
 ## Actual import
 
-Only after the dry run succeeds and the source has been reviewed, configure `DATABASE_URL` in the trusted operator environment with a database role that has the narrowly required server-side privileges, then repeat the command without `--dry-run`. Never place the connection string in frontend variables, Git, shell history, screenshots or logs.
+Only after the dry run succeeds and the manifest is approved, configure `DATABASE_URL` in the trusted operator environment. The importer explicitly executes `SET ROLE genomeguard_importer`; that `NOLOGIN` role is provisioned by the importer-privileges migration and has only the required manifest-update, normalized-table, and sequence grants. The connection user must be authorized to assume that role. Never place the connection string in frontend variables, Git, shell history, screenshots or logs.
 
 The import writes no synthetic rows. It does not enable data release, create consent, or prove that a particular use is ethically or legally authorized. The participant-specific consent path and a governed release function must be completed and tested before private-cohort workflows are enabled.
 
