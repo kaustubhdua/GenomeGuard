@@ -47,7 +47,7 @@ def infer_assembly(headers: list[str]) -> str | None:
     return None
 
 
-def parse_gt(gt: str, alt_index: int) -> tuple[int | None, int, bool]:
+def parse_gt(gt: str, alt_index: int, max_allele_index: int) -> tuple[int | None, int, bool]:
     if not gt or gt == ".":
         return None, 0, False
     if "/" in gt and "|" in gt:
@@ -60,7 +60,7 @@ def parse_gt(gt: str, alt_index: int) -> tuple[int | None, int, bool]:
     for allele in alleles:
         if allele == ".":
             continue
-        if not allele.isdigit() or int(allele) > 32767:
+        if not allele.isdigit() or int(allele) > max_allele_index:
             raise ImportValidationError("invalid genotype allele index")
         called.append(int(allele))
     if not called:
@@ -133,7 +133,7 @@ def iter_records(path: Path, samples: list[str]):
                     raise ImportValidationError("sample has no GT value")
                 genotypes.append(values[gt_index])
             for alt_index, alt in enumerate(alts, start=1):
-                calls = [parse_gt(gt, alt_index) for gt in genotypes]
+                calls = [parse_gt(gt, alt_index, len(alts)) for gt in genotypes]
                 called_alleles = sum(called for _, called, _ in calls)
                 alt_copies = sum(dosage or 0 for dosage, called, _ in calls if called)
                 yield {
