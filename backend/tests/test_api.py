@@ -17,6 +17,8 @@ def test_health_and_docs_and_openapi():
     h = c.get("/health").json()
     assert h["synthetic_data_only"] is True and h["audit_chain_ok"] is True
     assert h["provenance"]["genotypes"] == "synthetic" and h["provenance"]["consent"] == "simulated"
+    assert h["participant_consent_records_verified"] is False
+    assert h["participant_consent_records_matched"] == 0
     assert c.get("/docs").status_code == 200
     eps = c.get("/openapi.json").json()["endpoints"]
     assert {"POST /requests", "GET /audit/verify"} <= {f"{e['method']} {e['path']}" for e in eps}
