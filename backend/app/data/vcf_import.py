@@ -239,6 +239,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                       AND genomeguard.variant_dataset_manifest.source_release=excluded.source_release
                       AND genomeguard.variant_dataset_manifest.reference_assembly=excluded.reference_assembly
                       AND genomeguard.variant_dataset_manifest.data_use_review='approved_public_research'
+                      AND genomeguard.variant_dataset_manifest.consent_basis='dataset_policy'
                       AND genomeguard.variant_dataset_manifest.import_status <> 'loaded'
                     RETURNING id""",
                     (args.dataset_key, args.source_name, args.source_url, args.source_release,
@@ -253,7 +254,8 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                            FROM genomeguard.variant_dataset_manifest
                            WHERE dataset_key=%s AND file_sha256=%s AND source_url=%s
                              AND source_release=%s AND reference_assembly=%s
-                             AND data_use_review='approved_public_research' AND import_status='loaded'""",
+                             AND data_use_review='approved_public_research'
+                             AND consent_basis='dataset_policy' AND import_status='loaded'""",
                         (args.dataset_key, digest, args.source_url, args.source_release, args.assembly),
                     )
                     existing = cur.fetchone()
