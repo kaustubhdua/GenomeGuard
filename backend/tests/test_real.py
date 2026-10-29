@@ -259,9 +259,13 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert meta["genotypes_real"] is True
         assert meta["consent_simulated"] is False
         assert meta["consent_basis"] == "dataset_policy"
-        assert meta["consent_records_matched"] == 44
+        assert meta["consent_records_matched"] == 0
+        assert meta["dataset_policy_samples_scoped"] == 44
         assert meta["consent_policy"]["not_individual_consent"] is True
-        assert len(meta["consent_records_sha256"]) == 64
+        assert meta["consent_records_sha256"] is None
+        assert meta["consent_source_file"] is None
+        assert meta["consent_policy_source_file"] == "policy.json"
+        assert len(meta["consent_policy_source_sha256"]) == 64
         assert all(d["consent"]["consent_basis"] == "dataset_policy" for d in cohort.donors)
         assert all(d["consent"]["consent_date"] is None for d in cohort.donors)
         assert all(d["consent"]["source_policy_id"] == "test-public-release-v1"
@@ -270,7 +274,7 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert real.read_meta(out)["consent_basis"] == "dataset_policy"
 
 
-def test_production_bootstrap_preserves_dataset_policy_provenance():
+def test_production_bootstrap_rejects_dataset_policy_as_individual_consent():
     with tempfile.TemporaryDirectory() as d:
         v, out, policy_path = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz", Path(d) / "policy.json"
         make_vcf(v)
@@ -284,27 +288,19 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
             "review_status": "source_documented_not_legal_review",
         }
         policy_path.write_text(__import__("json").dumps(policy), encoding="utf-8")
-        cohort, meta = real.build_cohort(
+        _, meta = real.build_cohort(
             v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=9,
             consent_policy=policy, consent_source_file=str(policy_path),
         )
-        real.save_cohort(cohort, meta, out)
+        real.save_cohort(_, meta, out)
         settings = Settings(
             db_path=":memory:", demo_mode=False, allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
             master_key=base64.b64encode(b"x" * 32).decode(),
             real_cohort_file=str(out), dataset_id="test-public-source-policy",
         )
-        svc = bootstrap(settings)
-        assert svc.provenance["genotypes"] == "real_vcf"
-        assert svc.provenance["consent"] == "source_policy"
-        assert svc.provenance["consent_records_matched"] == 44
-        assert svc.provenance["consent_policy"]["not_individual_consent"] is True
-        assert "not participant-specific" in svc.provenance["consent_label"]
-        assert len(svc.provenance["source_vcf_sha256"]) == 64
-        assert len(svc.provenance["source_sample_metadata_sha256"]) == 64
-        assert len(svc.provenance["consent_records_sha256"]) == 64
-        assert svc.provenance["dataset_id"] == "test-public-source-policy"
+        with pytest.raises(ValueError, match="explicit consent records for every selected sample"):
+            bootstrap(settings)
 
 
 # ---- the high-coverage release's pedigree: whitespace separated, different header names ----
