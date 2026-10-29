@@ -111,50 +111,51 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     routes: list = []
     ROUTES_DOC.clear()
 
-    @route("GET", "/health", "Liveness and dataset facts", "public")
-    async def health(request):
-        v = S().audit.verify()
-        prov = getattr(S(), "provenance", {})
-        return _j({"status": "ok", "synthetic_data_only": prov.get("genotypes") == "synthetic",
-                   "provenance_known": prov.get("genotypes") != "unknown",
-                   "consent_simulated": prov.get("consent") == "simulated",
-                   "donors": S().ds.n_donors, "variants": S().ds.n_variants,
-                   "k_min": S().p.k_min, "audit_chain_ok": v["ok"], "provenance": prov,
-                   "agents_use_llm": S().team.agents["explainer"].llm.available,
-                   "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo,
-                   "storage_backend": getattr(S().store, "backend", "sqlite")})
-
-    @route("GET", "/health/ready", "Production readiness gate; distinguishes liveness from safe real-data operation", "public")
-    async def readiness(request):
-        # A running process is not automatically safe for real genomic data. Keep this
-        # endpoint fail-closed until the loaded cohort and consent provenance are real,
-        # demo credentials are disabled, and durable storage plus independent audit
-        # anchoring have been explicitly verified by the operator.
-        svc = S()
+    def readiness_checks(svc: GenomeGuardService) -> dict[str, bool]:
         provenance = getattr(svc, "provenance", {})
-        checks = {
+        return {
             "demo_mode_disabled": not settings.demo_mode,
             "real_genotype_provenance": provenance.get("genotypes") == "real_vcf",
-            "dataset_policy_samples_scoped": int(provenance.get("dataset_policy_samples_scoped") or 0),
-            "participant_consent_records_matched": int(provenance.get("consent_records_matched") or 0),
             "participant_consent_records_verified": (
                 provenance.get("consent") == "source_records"
                 and int(provenance.get("consent_records_matched") or 0) == int(svc.ds.n_donors)
             ),
             "destructive_tamper_demo_disabled": not settings.allow_tamper_demo,
-            # The current Store is SQLite. A path alone cannot prove that the hosting
-            # volume is durable, backed up, or shared safely across instances.
             "postgres_storage_configured": getattr(svc.store, "backend", "sqlite") == "postgresql",
-            # Provider backups, retention, restart persistence, and a clean restore drill must be
-            # evidenced by the operator; selecting PostgreSQL alone is not enough.
             "durable_storage_verified": False,
-            # A local hash chain is tamper-evident, not immutable without an independently
-            # controlled anchor. No external anchor integration is configured in this build.
             "external_audit_anchor_verified": False,
-            # Requester API keys are machine credentials, not verified human/institutional
-            # identities. This code has no institutional OIDC/SSO integration.
             "institutional_identity_provider_verified": False,
         }
+
+    @route("GET", "/health", "Liveness and non-authoritative dataset/readiness facts", "public")
+    async def health(request):
+        svc = S()
+        audit = svc.audit.verify()
+        provenance = getattr(svc, "provenance", {})
+        checks = readiness_checks(svc)
+        participant_consent_verified = (
+            provenance.get("consent") == "source_records"
+            and int(provenance.get("consent_records_matched") or 0) == int(svc.ds.n_donors)
+        )
+        return _j({
+            "status": "ok",
+            "synthetic_data_only": provenance.get("genotypes") == "synthetic",
+            "provenance_known": provenance.get("genotypes") != "unknown",
+            "consent_simulated": provenance.get("consent") == "simulated",
+            "participant_consent_records_verified": participant_consent_verified,
+            "participant_consent_records_matched": int(provenance.get("consent_records_matched") or 0),
+            "dataset_policy_samples_scoped": int(provenance.get("dataset_policy_samples_scoped") or 0),
+            "donors": svc.ds.n_donors, "variants": svc.ds.n_variants,
+            "k_min": svc.p.k_min, "audit_chain_ok": audit["ok"], "provenance": provenance,
+            "agents_use_llm": svc.team.agents["explainer"].llm.available,
+            "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo,
+            "storage_backend": getattr(svc.store, "backend", "sqlite"),
+            "readiness": {"ready": all(checks.values()), "checks": checks},
+        })
+
+    @route("GET", "/health/ready", "Production readiness gate; distinguishes service availability from safe real-data operation", "public")
+    async def readiness(request):
+        checks = readiness_checks(S())
         ready = all(checks.values())
         return _j({"status": "ready" if ready else "not_ready", "ready": ready,
                    "checks": checks, "note": (
