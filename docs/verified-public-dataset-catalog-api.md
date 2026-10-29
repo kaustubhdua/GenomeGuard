@@ -42,3 +42,7 @@ The empty array is the correct response when no qualifying dataset exists. Do no
 The deployment-config workflow applies migrations to a clean PostgreSQL database and checks that the function returns no datasets on an empty manifest, is not executable by `anon` or `authenticated`, and is executable by `service_role`.
 
 The live catalogue remains empty until a source-reviewed import completes all required validation.
+
+## Browser gateway authentication
+
+The public read-only dataset and chromosome catalogue requests send the Supabase project's `sb_publishable_…` key in the `apikey` header. This key is designed for browser exposure and is not a service-role credential. All governed routes still require a verified Supabase user bearer token, and private schemas must remain inaccessible to browser roles. The repository's Gitleaks configuration narrowly allowlists this publishable-key format only in the public catalogue frontend paths; never add service-role keys, database URLs, or secret keys to the allowlist.
