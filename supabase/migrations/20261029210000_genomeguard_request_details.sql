@@ -39,7 +39,7 @@ begin
     raise exception 'request_not_found' using errcode = 'P0002';
   end if;
   select case when d.id is null then null else jsonb_build_object(
-    'id',d.id,'outcome',d.outcome,'reasons',coalesce(d.reasons_json,'[]'),
+    'id',d.id,'outcome',d.outcome,'reasons',coalesce(d.reasons_json,'[]')::jsonb,
     'explanation',d.explanation_text,'needs_human',coalesce(d.needs_human,1)=1,
     'reviewed_at',d.reviewed_at
   ) end into v_decision
