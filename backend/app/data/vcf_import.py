@@ -87,7 +87,7 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
                 ] or columns[8] != "FORMAT":
                     raise ImportValidationError("invalid VCF header; FORMAT and at least one sample are required")
                 samples = columns[9:]
-                if any(not s or s in {".", "0"} for s in samples) or len(samples) != len(set(samples)):
+                if any(not s or s in {".", "0"} or len(s) > 200 for s in samples) or len(samples) != len(set(samples)):
                     raise ImportValidationError("empty or duplicate sample identifiers")
                 return headers, samples
     raise ImportValidationError("VCF is missing a #CHROM header")
@@ -233,6 +233,9 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
             v, g = write_batch(conn, dataset_id, batch, sample_map)
             variant_count += v
             genotype_count += g
+
+        if sha256_file(args.vcf) != digest:
+            raise ImportValidationError("source file changed during import; manifest remains unpublished")
 
         with conn.transaction():
             with conn.cursor() as cur:
