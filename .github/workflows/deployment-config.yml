@@ -65,6 +65,7 @@ jobs:
           test -s supabase/migrations/20261029240000_genomeguard_consent_steward_role.sql
           test -s supabase/migrations/20261029250000_genomeguard_consent_steward_only.sql
           test -s supabase/migrations/20261029260000_genomeguard_api_events_constraints.sql
+          test -s supabase/migrations/20261029270000_genomeguard_request_review_history.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -103,11 +104,11 @@ jobs:
           PGPASSWORD: postgres
         run: |
           tables="$(psql -h localhost -U postgres -d genomeguard_migration_test -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='genomeguard' AND table_type='BASE TABLE'")"
-          test "$tables" = "22"
+          test "$tables" = "23"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_schema_privilege('anon', 'genomeguard', 'USAGE') AND NOT has_schema_privilege('authenticated', 'genomeguard', 'USAGE') AND NOT has_table_privilege('anon', 'public.genomeguard_deployment_status', 'SELECT') AND NOT has_table_privilege('authenticated', 'public.genomeguard_deployment_status', 'SELECT') AND has_table_privilege('service_role', 'public.genomeguard_deployment_status', 'SELECT')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 FROM public.genomeguard_deployment_status WHERE api_migration_complete = false AND genomic_dataset_loaded = false AND render_dependency_present = true AND release_gate_passed = false" | grep -q "(1 row)"
           rls_tables="$(psql -h localhost -U postgres -d genomeguard_migration_test -Atc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='genomeguard' AND c.relkind='r' AND c.relrowsecurity")"
-          test "$rls_tables" = "22"
+          test "$rls_tables" = "23"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT count(*) FROM pg_constraint WHERE conrelid='genomeguard.api_events'::regclass AND conname IN ('api_events_event_type_check','api_events_outcome_check','api_events_details_check')) = 3 AND NOT has_table_privilege('anon', 'genomeguard.api_events', 'SELECT') AND NOT has_table_privilege('authenticated', 'genomeguard.api_events', 'SELECT') AND NOT has_table_privilege('service_role', 'genomeguard.api_events', 'SELECT')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT count(*) FROM genomeguard.chromosome_reference) = 25 AND (SELECT count(*) FROM public.gg_list_chromosome_reference()) = 25 AND (SELECT count(*) FROM public.gg_list_chromosome_coverage()) = 25 AND NOT has_table_privilege('anon', 'genomeguard.chromosome_reference', 'SELECT') AND NOT has_function_privilege('anon', 'public.gg_list_chromosome_reference()', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_list_chromosome_coverage()', 'EXECUTE')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT count(*) FROM public.gg_list_verified_public_datasets()) = 0 AND NOT has_function_privilege('anon', 'public.gg_list_verified_public_datasets()', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_list_verified_public_datasets()', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_list_verified_public_datasets()', 'EXECUTE')" | grep -q "(1 row)"
@@ -190,6 +191,41 @@ jobs:
           $test$;
           SQL
 
+          # Multiple review transitions must remain visible after the current decision is updated.
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL'
+          DO $test$
+          DECLARE
+            v_org uuid;
+            v_researcher uuid := '00000000-0000-0000-0000-000000000095';
+            v_reviewer uuid := '00000000-0000-0000-0000-000000000096';
+            v_requester bigint;
+            v_request bigint;
+            v_history jsonb;
+          BEGIN
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-review-history','CI Review History','active') RETURNING id INTO v_org;
+            INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
+              VALUES (v_org,v_researcher,'researcher','active',now()),
+                     (v_org,v_reviewer,'reviewer','active',now());
+            INSERT INTO genomeguard.requesters(name,role,credential_level,institution,created_at,auth_user_id)
+              VALUES ('CI History Researcher','researcher','registered','CI Review History',now()::text,v_researcher)
+              RETURNING id INTO v_requester;
+            INSERT INTO genomeguard.requests(requester_id,ts,purpose,disease,is_commercial,data_level,cohort_filter_json,variant_filter_json,status,organization_id)
+              VALUES (v_requester,now()::text,'review history regression test',NULL,0,'aggregate','{}'::text,'{}'::text,'pending_review',v_org)
+              RETURNING id INTO v_request;
+            PERFORM public.gg_review_request(v_reviewer,v_request,'needs_more_information','Please clarify the study purpose.');
+            PERFORM public.gg_review_request(v_reviewer,v_request,'approved','Purpose clarified; approved for review only.');
+            v_history := public.gg_get_request_details(v_researcher,v_request)->'review_history';
+            IF jsonb_array_length(v_history) <> 2 OR
+               v_history->0->>'previous_status' <> 'pending_review' OR
+               v_history->0->>'outcome' <> 'needs_more_information' OR
+               v_history->1->>'previous_status' <> 'needs_more_information' OR
+               v_history->1->>'outcome' <> 'approved' THEN
+              RAISE EXCEPTION 'review history did not preserve both transitions: %',v_history;
+            END IF;
+          END
+          $test$;
+          SQL
           # The audit trigger must reject ordinary UPDATE/DELETE, and consent indexes
           # must exist after the full migration sequence on a clean PostgreSQL instance.
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE to_regclass('genomeguard.participant_consent_dataset_key_idx') IS NOT NULL AND to_regclass('genomeguard.participant_consent_organization_id_idx') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='genomeguard_audit_log_append_only' AND NOT tgisinternal)" | grep -q "(1 row)"
