@@ -559,6 +559,9 @@ class GenomeGuardService:
 
     def donor_profile(self, donor_id: int) -> dict:
         d = self._donor(donor_id)
+        if d.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(404, "not_found",
+                               "participant profiles are unavailable for dataset-policy cohorts")
         acc = self.store.donor_access(donor_id)
         c = d.consent
         return {
@@ -572,6 +575,9 @@ class GenomeGuardService:
     @transactional
     def donor_set_withdrawn(self, donor_id: int, withdrawn: bool) -> dict:
         d = self._donor(donor_id)
+        if d.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_withdrawal_unsupported",
+                               "the source policy does not support participant withdrawal; no individual consent is recorded")
         if d.withdrawn == withdrawn:
             return self.donor_profile(donor_id)
         self.ds.donors[donor_id - 1] = replace(d, withdrawn=withdrawn)
@@ -589,6 +595,9 @@ class GenomeGuardService:
         """The donor edits what they agree to. Only whitelisted DUO-style fields are accepted;
         the change applies to future requests and is audited without the donor's identity."""
         d = self._donor(donor_id)
+        if d.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_not_individual_consent",
+                               "dataset-level source terms cannot be edited as an individual's consent")
         use = str(change.get("use", "")).upper()
         if use not in self.CONSENT_USES:
             raise ServiceError(422, "invalid_consent", f"use must be one of {self.CONSENT_USES}")
@@ -625,6 +634,9 @@ class GenomeGuardService:
         project extension package. Structural conformance does not make simulated consent legally valid."""
         d = self._donor(donor_id)
         c = d.consent
+        if c.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_not_individual_consent",
+                               "no participant Consent resource exists for a dataset-policy cohort")
         ref = self._donor_ref(donor_id)
 
         def duo(code: str) -> dict:
