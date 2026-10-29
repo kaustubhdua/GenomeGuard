@@ -260,7 +260,8 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert meta["genotypes_real"] is True
         assert meta["consent_simulated"] is False
         assert meta["consent_basis"] == "dataset_policy"
-        assert meta["consent_records_matched"] == 44
+        assert meta["consent_records_matched"] == 0
+        assert meta["dataset_policy_samples_scoped"] == 44
         assert meta["consent_policy"]["not_individual_consent"] is True
         assert len(meta["consent_records_sha256"]) == 64
         assert all(d["consent"]["consent_basis"] == "dataset_policy" for d in cohort.donors)
@@ -300,7 +301,8 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
         svc = bootstrap(settings, store=Store(":memory:"))
         assert svc.provenance["genotypes"] == "real_vcf"
         assert svc.provenance["consent"] == "source_policy"
-        assert svc.provenance["consent_records_matched"] == 44
+        assert svc.provenance["consent_records_matched"] == 0
+        assert svc.provenance["dataset_policy_samples_scoped"] == 44
         assert svc.provenance["consent_policy"]["not_individual_consent"] is True
         assert "not participant-specific" in svc.provenance["consent_label"]
         assert len(svc.provenance["source_vcf_sha256"]) == 64
