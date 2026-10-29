@@ -38,10 +38,10 @@ export async function render() {
     api("/audit/verify"),
     state.demo ? api("/eval/results") : Promise.resolve({ ok: false }),
     isSteward() || !hasIdentity ? Promise.resolve({ ok: false }) : api("/me"),
-    api("/health/ready"),
   ]);
   const rows = reqs.ok ? reqs.data.requests || [] : [];
   const hl = state.health || {};
+  const readiness = hl.readiness ? { ok: true, data: hl.readiness } : { ok: false, data: null };
   const count = (o) => rows.filter((r) => r.outcome === o).length;
   const latest = rows[0];
   const root = h("div", { class: "stack" });

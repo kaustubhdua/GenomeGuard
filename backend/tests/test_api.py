@@ -30,6 +30,8 @@ def test_readiness_distinguishes_demo_liveness_from_production_readiness():
     assert ready.status_code == 503
     body = ready.json()
     assert body["status"] == "not_ready" and body["ready"] is False
+    assert live.json()["readiness"]["ready"] is False
+    assert live.json()["readiness"]["checks"] == body["checks"]
     assert body["checks"]["demo_mode_disabled"] is False
     assert body["checks"]["participant_consent_records_verified"] is False
     assert body["checks"]["durable_storage_verified"] is False
