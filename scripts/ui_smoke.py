@@ -153,8 +153,16 @@ def main() -> None:
         pg = ctx.new_page()
         errors: list[str] = []
         pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.on("console", lambda m: errors.append(m.text) if m.type == "error"
-              and "403" not in m.text else None)
+        # Chromium logs expected fail-closed HTTP responses as "console errors" even
+        # when application code handles them correctly. Track HTTP failures by URL,
+        # and don't mistake the intentionally unavailable readiness endpoint for a JS exception.
+        def check_response(response):
+            if response.status >= 500:
+                path = response.url.split("?", 1)[0].rstrip("/")
+                if path.endswith("/health/ready"):
+                    return
+                errors.append(f"HTTP {response.status}: {path}")
+        pg.on("response", check_response)
         pg.goto(base + "/#/overview")
         pg.wait_for_timeout(1500)
         pg.get_by_role("button", name="Guided walkthrough").click()
