@@ -79,11 +79,14 @@ def main() -> int:
           and policy.get("scope") == "dataset"
           and policy.get("review_status") == "source_documented_not_legal_review",
           str(policy))
-    check("source consent-policy file is hashed",
-          len(str(provenance.get("consent_records_sha256", ""))) == 64)
+    check("source dataset-policy file is hashed",
+          len(str(provenance.get("consent_policy_source_sha256", ""))) == 64)
+    check("dataset policy is not counted as participant consent",
+          int(provenance.get("consent_records_matched") or 0) == 0
+          and provenance.get("consent_records_sha256") is None)
+    check("dataset policy scope matches loaded cohort",
+          int(provenance.get("dataset_policy_samples_scoped") or 0) == int(health.get("donors") or -1))
     check("source genotype file is hashed", len(str(provenance.get("source_vcf_sha256", ""))) == 64)
-    check("sample coverage matches loaded cohort",
-          int(provenance.get("consent_records_matched") or 0) == int(health.get("donors") or -1))
     check("real cohort has usable variants",
           int(health.get("variants") or 0) > 0 and int(health.get("donors") or 0) > 0)
 
