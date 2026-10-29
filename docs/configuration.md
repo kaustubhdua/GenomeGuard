@@ -7,6 +7,7 @@ way).
 | Variable | Default | Meaning |
 |---|---|---|
 | `GG_DB_PATH` | `./genomeguard.sqlite3` | SQLite file (a fresh file is seeded on first start) |
+| `GG_DATABASE_URL` | unset | PostgreSQL URL; required when `GG_DEMO_MODE=false`. Non-demo startup refuses to fall back to SQLite. Keep it server-side only. |
 | `GG_DEMO_MODE` | `true` | Publish demo accounts and keys at `/demo/requesters`. Turn off for anything else |
 | `GG_ALLOW_TAMPER_DEMO` | `false` | Enable the audit tamper exercise (demo only) |
 | `GG_ADMIN_API_KEY` | `demo-admin-key` | Steward key. Outside demo mode it must be 32+ characters |
