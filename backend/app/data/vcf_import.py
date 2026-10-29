@@ -205,6 +205,28 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
     with psycopg.connect(database_url, autocommit=True) as conn:
         with conn.transaction():
             with conn.cursor() as cur:
+                # An exact repeat of an already published artifact is a no-op. Never
+                # reset counts, delete rows, or make a loaded manifest temporarily unpublished.
+                cur.execute(
+                    """SELECT id,sample_count,variant_count,genotype_call_count
+                       FROM genomeguard.variant_dataset_manifest
+                       WHERE dataset_key=%s AND file_sha256=%s AND source_url=%s
+                         AND source_release=%s AND reference_assembly=%s
+                         AND data_use_review='approved_public_research'
+                         AND consent_basis='dataset_policy' AND import_status='loaded'""",
+                    (args.dataset_key, digest, args.source_url, args.source_release, args.assembly),
+                )
+                loaded = cur.fetchone()
+                if loaded:
+                    dataset_id, sample_count, variant_count, genotype_count = loaded
+                    return {
+                        "dataset_id": str(dataset_id),
+                        "status": "loaded",
+                        "already_loaded": True,
+                        "sample_count": sample_count,
+                        "variant_count": variant_count,
+                        "genotype_call_count": genotype_count,
+                    }
                 cur.execute(
                     """INSERT INTO genomeguard.variant_dataset_manifest
                     (dataset_key,source_name,source_url,source_release,reference_assembly,file_sha256,
