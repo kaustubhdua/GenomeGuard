@@ -194,6 +194,10 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                       variant_count=0,genotype_call_count=0,sample_count=0,imported_at=NULL,
                       updated_at=now(),metadata=excluded.metadata
                     WHERE genomeguard.variant_dataset_manifest.file_sha256=excluded.file_sha256
+                      AND genomeguard.variant_dataset_manifest.source_url=excluded.source_url
+                      AND genomeguard.variant_dataset_manifest.source_release=excluded.source_release
+                      AND genomeguard.variant_dataset_manifest.reference_assembly=excluded.reference_assembly
+                      AND genomeguard.variant_dataset_manifest.data_use_review='approved_public_research'
                       AND genomeguard.variant_dataset_manifest.import_status <> 'loaded'
                     RETURNING id""",
                     (args.dataset_key, args.source_name, args.source_url, args.source_release,
