@@ -24,7 +24,7 @@ create table if not exists genomeguard.variant_dataset_manifest (
   ),
   constraint dataset_loaded_requires_review check (
     import_status <> 'loaded'
-    or data_use_review in ('approved_public_research', 'approved_controlled_access', 'rejected') 
+    or data_use_review in ('approved_public_research', 'approved_controlled_access')
   )
 );
 
