@@ -170,7 +170,9 @@ function formSection(out) {
     const total = c.considered || 1, out_ = Object.values(ex).reduce((a, b2) => a + b2, 0);
     preview.replaceChildren(
       h("div", { class: "bar", role: "img", "aria-label": `${c.eligible} of ${c.considered} donors eligible` }, h("i", { class: "seg-ok", style: `width:${(100 * c.eligible) / total}%` }), h("i", { class: "seg-ex", style: `width:${(100 * out_) / total}%` })),
-      h("div", { class: "legend" }, h("span", {}, h("b", {}, c.eligible), ` of ${c.considered} donors have consent that fits this request`),
+      h("div", { class: "legend" }, h("span", {}, h("b", {}, c.eligible), state.demo
+        ? ` of ${c.considered} synthetic donors pass simulated permission rules for this request`
+        : ` of ${c.considered} samples pass the dataset-level public-release policy mapping for this request`),
         Object.entries(ex).sort((a, b2) => b2[1] - a[1]).map(([k, v]) => h("span", {}, `${v} excluded: ${reasonText(k)}`))));
   }
   async function submit(b, btn) {
@@ -205,7 +207,8 @@ function formSection(out) {
       state.demo ? h("div", { class: "presets" }, PRESETS.map((p) => h("button", { class: "ghost", title: p.why, onclick: () => load(p.body) }, p.name))) : null, form,
       h("div", { style: "margin-top:12px;display:flex;gap:10px;flex-wrap:wrap" }, submitBtn, probeBtn,
         att && state.who !== att.api_key ? h("button", { class: "ghost", onclick: () => { setWho(att.api_key); location.reload(); } }, "Switch to the probe account") : null), msg),
-    row("Consent check", "Updates as you type", preview));
+    row(state.demo ? "Simulated consent check" : "Dataset policy check",
+      state.demo ? "Synthetic permissions; demonstration only" : "Dataset-level policy only, not participant-specific consent", preview));
   load(state.demo ? PRESETS[0].body : st);
   return wrap;
 }

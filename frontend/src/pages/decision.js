@@ -29,8 +29,13 @@ export async function render([id]) {
 
   if (considered != null) {
     const out_ = Object.values(ex).reduce((a, b) => a + b, 0);
-    ledger.append(row("Consent", "Who agreed to this use",
-      h("p", { style: "margin:0" }, h("b", {}, eligible), ` of ${considered} donors in the requested group have consent that fits.`),
+    ledger.append(row(state.demo ? "Simulated consent" : "Dataset policy", state.demo
+      ? "Synthetic permissions used only for the local demonstration"
+      : "Dataset-level public-release policy; not participant-specific consent",
+      h("p", { style: "margin:0" }, h("b", {}, eligible), state.demo
+        ? ` of ${considered} synthetic donors pass the simulated permission rules.`
+        : ` of ${considered} samples pass the documented dataset-level policy mapping.`),
+      !state.demo ? h("p", { class: "muted" }, "This public-dataset policy mapping is not evidence of individual consent, clinical authorization, or legal approval.") : null,
       h("div", { class: "bar", role: "img", "aria-label": `${eligible} eligible of ${considered}` }, h("i", { class: "seg-ok", style: `width:${(100 * eligible) / (considered || 1)}%` }), h("i", { class: "seg-ex", style: `width:${(100 * out_) / (considered || 1)}%` })),
       Object.keys(ex).length ? h("ul", { class: "plain" }, Object.entries(ex).sort((a, b) => b[1] - a[1]).map(([k, v]) => h("li", {}, `${v} excluded: ${reasonText(k)}`))) : null));
   }
@@ -115,7 +120,11 @@ function toolSummary(tool, r) {
       return `${OUTCOME_LABEL[r.outcome] || r.outcome}${(r.reasons || []).length ? ": " + r.reasons.map(reasonText).join("; ") : ""}.`;
     case "consent_counts": {
       const c = r.consent || {};
-      return c.considered != null ? `${c.eligible} of ${c.considered} donors have consent that fits.` : "No consent count was recorded.";
+      return c.considered != null
+        ? state.demo
+          ? `${c.eligible} of ${c.considered} synthetic donors pass simulated permission rules.`
+          : `${c.eligible} of ${c.considered} samples pass the dataset-level policy mapping; this is not participant-specific consent.`
+        : "No policy count was recorded.";
     }
     case "risk_profile": {
       const b = r.risk_before || {}, a = r.risk_after || {};
