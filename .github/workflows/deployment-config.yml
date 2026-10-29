@@ -110,7 +110,7 @@ jobs:
           # The audit trigger must reject ordinary UPDATE/DELETE, and consent indexes
           # must exist after the full migration sequence on a clean PostgreSQL instance.
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE to_regclass('genomeguard.participant_consent_dataset_key_idx') IS NOT NULL AND to_regclass('genomeguard.participant_consent_organization_id_idx') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='genomeguard_audit_log_append_only' AND NOT tgisinternal)" | grep -q "(1 row)"
-          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL'
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL' | grep -q "(1 row)"
           INSERT INTO genomeguard.audit_log(idx,ts,actor,action,payload_json,prev_hash,hash)
           VALUES (1,'2026-10-29T00:00:00Z','ci','migration_test','{}','genesis','ci-test-hash');
           DO $test$
