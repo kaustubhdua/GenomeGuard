@@ -59,9 +59,6 @@ jobs:
           test -s supabase/migrations/20261029180000_genomeguard_organization_consent_workflows.sql
           test -s supabase/migrations/20261029200000_genomeguard_normalized_genotype_storage.sql
           test -s supabase/migrations/20261029210000_genomeguard_request_details.sql
-          test -s supabase/migrations/20261029220000_genomeguard_importer_privileges.sql
-          grep -q 'SET ROLE genomeguard_importer' backend/app/data/vcf_import.py
-          ! grep -q 'INSERT INTO genomeguard.variant_dataset_manifest' backend/app/data/vcf_import.py
           test -s supabase/migrations/20261030200000_genomeguard_importer_privileges.sql
           grep -q 'SET ROLE genomeguard_importer' backend/app/data/vcf_import.py
           ! grep -q 'INSERT INTO genomeguard.variant_dataset_manifest' backend/app/data/vcf_import.py
