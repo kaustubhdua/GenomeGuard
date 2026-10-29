@@ -6,11 +6,6 @@ useDefault = true
 [[allowlists]]
 description = "Supabase publishable API keys are intentionally browser-visible; this does not allow service-role or secret keys."
 regexTarget = "secret"
-commits = [
-  "a9b195f7b7fac16f0911392d381aa8f72a91ff0f",
-  "4194c4891a557166fff712677e720ea3284e97a4",
-  "621ed60e7166f3be8b54f40ab143286fa9068262",
-]
 regexes = ['''sb_publishable_[A-Za-z0-9_-]+''']
 paths = [
   '''frontend/src/pages/datasets\.js''',
