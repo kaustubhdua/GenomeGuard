@@ -129,3 +129,86 @@ def test_vcf_rejects_unsorted_coordinates(tmp_path):
     _, samples = read_header(unsorted, "GRCh37")
     with pytest.raises(ImportValidationError, match="sorted by chromosome and position"):
         list(iter_records(unsorted, samples, "GRCh37"))
+
+
+
+def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app.data import vcf_import
+
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    args = SimpleNamespace(
+        dataset_key="test-release-chr22",
+        source_name="Test source",
+        source_url="https://data.example.org/test.vcf",
+        source_release="fixture-v1",
+        assembly="GRCh37",
+        vcf=path,
+        retrieved_at="2026-10-28T12:00:00Z",
+        reuse_statement_url="https://data.example.org/reuse",
+        citation="Test fixture citation",
+    )
+
+    class Cursor:
+        def __init__(self):
+            self.last_row = None
+            self.statements = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            self.statements.append(sql)
+            if "INSERT INTO genomeguard.variant_dataset_manifest" in sql:
+                self.last_row = None  # ON CONFLICT ... WHERE refuses to overwrite loaded manifests
+            elif "SELECT id,sample_count,variant_count,genotype_call_count" in sql:
+                self.last_row = (42, 2, 3, 5)
+            elif "DELETE FROM genomeguard." in sql:
+                raise AssertionError("idempotent import must not delete existing data")
+
+        def fetchone(self):
+            return self.last_row
+
+        def executemany(self, *_args, **_kwargs):
+            raise AssertionError("idempotent import must not insert samples again")
+
+    class Transaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def transaction(self):
+            return Transaction()
+
+        def cursor(self):
+            return self.cursor_instance
+
+    conn = Connection()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test-only")
+    monkeypatch.setattr(vcf_import.psycopg, "connect", lambda *_args, **_kwargs: conn)
+
+    result = vcf_import.import_to_database(args, digest, ["SAMPLE_A", "SAMPLE_B"])
+    assert result == {
+        "dataset_id": "42",
+        "status": "loaded",
+        "already_loaded": True,
+        "sample_count": 2,
+        "variant_count": 3,
+        "genotype_call_count": 5,
+    }
