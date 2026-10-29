@@ -96,7 +96,7 @@ def download(
                     f.write(chunk)
                     got += len(chunk)
                     if total:
-                        print(f"\\r  {got / 1e6:.0f}/{total / 1e6:.0f} MB", end="", file=sys.stderr)
+                        print(f"\r  {got / 1e6:.0f}/{total / 1e6:.0f} MB", end="", file=sys.stderr)
             if total and got != total:
                 raise ValueError(f"truncated download: received {got} bytes, expected {total}")
             if expected_size is not None and got != expected_size:
