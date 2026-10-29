@@ -69,6 +69,8 @@ For optional public-genotype research evaluation, see [Real-data evaluation](doc
 
 For the latest evidence-based status of hosting, Supabase RLS, persistence and release blockers, see the [production-readiness audit (28 October 2026)](docs/production-readiness-audit-2026-10-28.md).
 
+For the dataset source review, provenance ledger, and safe import acceptance criteria, see [Genomic dataset provenance and import gate](docs/genomic-dataset-provenance-import-gate.md).
+
 ## Architecture
 
 The service applies a deterministic request pipeline: request validation, policy checks, risk assessment, output transformation, anomaly monitoring, decision handling, and audit recording. Advisory agents receive sanitized summaries rather than raw genotypes and do not have authority to approve, deny, freeze, or release data.
