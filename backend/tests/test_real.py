@@ -1,5 +1,7 @@
 import base64
 import gzip
+import hashlib
+import io
 import tempfile
 from pathlib import Path
 
@@ -19,6 +21,43 @@ PED = "\n".join([
 ] + [f"U{i}\ts{i}\t0\t0\t{1 + i % 2}\t0\t{'GBR' if i % 2 else 'YRI'}" for i in range(40)]) + "\n"
 
 SAMPLES = ["dad", "mum", "kid1", "kid2"] + [f"s{i}" for i in range(40)]
+
+
+def test_download_retries_digest_mismatch_and_never_publishes_corrupt_bytes(tmp_path, monkeypatch):
+    good = b"verified official artifact"
+    bad = b"corrupt official artifact"
+    assert len(good) == len(bad)
+    expected = hashlib.sha256(good).hexdigest()
+
+    class Response:
+        def __init__(self, payload):
+            self.stream = io.BytesIO(payload)
+            self.headers = {"Content-Length": str(len(payload))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.stream.close()
+
+        def read(self, size=-1):
+            return self.stream.read(size)
+
+    responses = iter([Response(bad), Response(good)])
+    monkeypatch.setattr(real.urllib.request, "urlopen", lambda *_a, **_k: next(responses))
+    target = tmp_path / "official.vcf.gz"
+    result = real.download(
+        "https://example.org/official.vcf.gz",
+        target,
+        expected_sha256=expected,
+        expected_size=len(good),
+        attempts=2,
+        retry_delay=0,
+    )
+    assert result == target
+    assert target.read_bytes() == good
+    assert not target.with_suffix(target.suffix + ".part").exists()
+
 
 def test_high_coverage_population_pedigree_panel_format():
     text = "\n".join([
