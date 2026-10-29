@@ -61,6 +61,7 @@ jobs:
           test -s supabase/migrations/20261029210000_genomeguard_request_details.sql
           test -s supabase/migrations/20261029220000_genomeguard_audit_append_only_and_consent_indexes.sql
           test -s supabase/migrations/20261029230000_genomeguard_request_history_membership_gate.sql
+          test -s supabase/migrations/20261029240000_genomeguard_consent_steward_role.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -141,6 +142,42 @@ jobs:
           END
           $test$;
           SQL
+          # Consent withdrawal is a distinct permission: reviewer must fail; consent steward may withdraw.
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL'
+          DO $test$
+          DECLARE
+            v_org uuid;
+            v_reviewer uuid := '00000000-0000-0000-0000-000000000092';
+            v_steward uuid := '00000000-0000-0000-0000-000000000093';
+            v_consent uuid;
+            v_result jsonb;
+          BEGIN
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-consent-steward','CI Consent Steward','active') RETURNING id INTO v_org;
+            INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
+              VALUES (v_org,v_reviewer,'reviewer','active',now()),
+                     (v_org,v_steward,'consent_steward','active',now());
+            INSERT INTO genomeguard.donors(id,cohort_id,population,consent_json,family_id,withdrawn_at)
+              VALUES (999991,'ci-consent-test','test','{}',NULL,NULL);
+            INSERT INTO genomeguard.variant_dataset_manifest(dataset_key,source_name,source_url,source_release,reference_assembly,file_sha256,data_use_review,consent_basis)
+              VALUES ('ci-consent-test','CI consent fixture','https://data.example.org/fixture.vcf','fixture-v1','GRCh37',repeat('0',64),'approved_public_research','verified_participant_records');
+            INSERT INTO genomeguard.participant_consent_records(donor_id,dataset_key,organization_id,allowed_purposes,allowed_data_levels,status,evidence_reference,verified_by,verified_at,effective_at)
+              VALUES (999991,'ci-consent-test',v_org,ARRAY['GRU'],ARRAY['aggregate'],'active','CI-only test evidence',v_steward,now(),now()) RETURNING id INTO v_consent;
+            BEGIN
+              PERFORM public.gg_withdraw_consent(v_reviewer,v_consent,'reviewer must not withdraw');
+              RAISE EXCEPTION 'reviewer unexpectedly withdrew participant consent';
+            EXCEPTION WHEN insufficient_privilege THEN
+              NULL;
+            END;
+            v_result := public.gg_withdraw_consent(v_steward,v_consent,'CI verified withdrawal');
+            IF v_result->>'status' <> 'withdrawn' OR
+               (SELECT status FROM genomeguard.participant_consent_records WHERE id=v_consent) <> 'withdrawn' THEN
+              RAISE EXCEPTION 'consent steward withdrawal did not persist';
+            END IF;
+          END
+          $test$;
+          SQL
+
           # The audit trigger must reject ordinary UPDATE/DELETE, and consent indexes
           # must exist after the full migration sequence on a clean PostgreSQL instance.
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE to_regclass('genomeguard.participant_consent_dataset_key_idx') IS NOT NULL AND to_regclass('genomeguard.participant_consent_organization_id_idx') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='genomeguard_audit_log_append_only' AND NOT tgisinternal)" | grep -q "(1 row)"
