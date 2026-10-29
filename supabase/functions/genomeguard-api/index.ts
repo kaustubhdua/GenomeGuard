@@ -144,6 +144,21 @@ Deno.serve(async (request: Request) => {
         full_frontend_route_parity: false },
       note: "Fail-closed migration gate. No genomic data access is granted by this API yet." }, 503);
   }
+  const requestDetailMatch = path.match(/\/requests\/(\d+)$/);
+  if (requestDetailMatch && request.method === "GET") {
+    const user = await authenticatedUser(request, url, serviceKey);
+    if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
+    try {
+      const detail = await rpc(url, serviceKey, "gg_get_request_details", {
+        p_auth_user_id: user.id,
+        p_request_id: Number(requestDetailMatch[1]),
+      });
+      return json(detail);
+    } catch {
+      return error(404, "request_not_found_or_unavailable",
+        "The request is unavailable to this account or the request service is temporarily unavailable.");
+    }
+  }
   const consentWithdrawMatch = path.match(/\/consents\/([0-9a-f-]{36})\/withdraw$/i);
   if (consentWithdrawMatch && request.method === "POST") {
     const user = await authenticatedUser(request, url, serviceKey);
