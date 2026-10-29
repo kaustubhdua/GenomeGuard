@@ -920,7 +920,9 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                          "or the matching dataset ID")
     if s.real_cohort_file and not stored_meta.get("provenance_unknown"):
         for key in ("source_vcf_sha256", "source_sample_metadata_sha256",
-                    "consent_records_sha256", "source_vcf_file", "consent_source_file",
+                    "consent_records_sha256", "consent_policy_source_sha256",
+                    "source_vcf_file", "consent_source_file", "consent_policy_source_file",
+                    "consent_basis", "consent_policy", "dataset_policy_samples_scoped",
                     "genotypes_real", "consent_simulated", "consent_records_matched"):
             if stored_meta.get(key) != source_meta.get(key):
                 raise ValueError("configured real cohort does not match the cohort already stored in "
@@ -964,6 +966,9 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         "consent_records_matched": stored_meta.get("consent_records_matched", 0),
         "consent_source": stored_meta.get("consent_source_file"),
         "consent_records_sha256": stored_meta.get("consent_records_sha256"),
+        "consent_policy_source": stored_meta.get("consent_policy_source_file"),
+        "consent_policy_source_sha256": stored_meta.get("consent_policy_source_sha256"),
+        "dataset_policy_samples_scoped": stored_meta.get("dataset_policy_samples_scoped", 0),
         "genotype_source": stored_meta.get("source"),
         "source_vcf_file": stored_meta.get("source_vcf_file"),
         "source_vcf_sha256": stored_meta.get("source_vcf_sha256"),
