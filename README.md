@@ -67,7 +67,7 @@ The CI workflows also exercise API behavior, evaluation scenarios, browser route
 
 For optional public-genotype research evaluation, see [Real-data evaluation](docs/real-data.md). Review the data source, cohort build settings, and provenance before running it.
 
-For the latest evidence-based status of hosting, Supabase RLS, persistence and release blockers, see the [production-readiness audit (28 October 2026)](docs/production-readiness-audit-2026-10-28.md).
+For the latest evidence-based status of hosting, Supabase RLS, persistence and release blockers, see the [production-readiness audit (29 October 2026)](docs/production-readiness-audit-2026-10-29.md).
 
 For the dataset source review, provenance ledger, and safe import acceptance criteria, see [Genomic dataset provenance and import gate](docs/genomic-dataset-provenance-import-gate.md).
 

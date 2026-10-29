@@ -1,6 +1,6 @@
 # Supabase-only backend migration
 
-Status checked: 2026-10-28. This is an implementation plan and status ledger, not a claim that the migration is complete.
+Status checked: 2026-10-29. This is an implementation plan and status ledger, not a claim that the migration is complete.
 
 ## Target
 
@@ -96,3 +96,12 @@ The migration is complete only when:
 - deployment, backup, restore, and failure modes are tested.
 
 GenomeGuard remains a research prototype, not a clinical service. Public dataset-level policy mapping is not participant-specific consent, and passing software tests is not independent security, privacy, legal, or clinical approval.
+
+
+## Latest verified status (29 October 2026)
+
+- Full CI, browser/accessibility checks, clean PostgreSQL migration/privilege/backup-restore checks, security verification, real-data image provenance checks and Beacon schema validation passed on commit `9841d7687022b05e898f69f344061dd0b2a87e3b`.
+- The Vercel preview for that commit is READY, but it was not promoted to production. The currently hosted Render API is an older backend revision and does not expose the readiness snapshot added on the feature branch.
+- Subsequent branch changes clarify that public-dataset policy mapping is not participant-specific consent and scope review/consent authorization to the target organization. The corresponding Supabase migration is applied; the newest CI run must pass before these changes count as verified.
+- The release gate remains closed. The normalized manifest, sample, variant and genotype-call tables are empty; the legacy Render/SQLite API still serves traffic; API parity, the normalized-data-to-decision-engine path, institutional identity, independent audit anchoring and production recovery evidence remain incomplete.
+- See [production-readiness audit, 29 October 2026](production-readiness-audit-2026-10-29.md) for the current blockers and safe cutover sequence.
