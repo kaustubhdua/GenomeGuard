@@ -48,3 +48,14 @@ def test_vcf_assembly_mismatch_fails_closed(tmp_path):
     path = _vcf(tmp_path, "GRCh37")
     with pytest.raises(ImportValidationError, match="assembly mismatch"):
         read_header(path, "GRCh38")
+
+
+def test_vcf_rejects_coordinates_outside_declared_assembly(tmp_path):
+    path = _vcf(tmp_path).with_name("out-of-range.vcf")
+    path.write_text(
+        _vcf(tmp_path).read_text(encoding="utf-8").replace("22\\t200\\t", "22\\t51304567\\t"),
+        encoding="utf-8",
+    )
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="invalid position"):
+        list(iter_records(path, samples, "GRCh37"))
