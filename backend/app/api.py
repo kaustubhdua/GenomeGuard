@@ -134,9 +134,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         provenance = getattr(svc, "provenance", {})
         checks = readiness_checks(svc)
         ready = all(checks.values())
+        participant_consent_verified = (
+            provenance.get("consent") == "source_records"
+            and int(provenance.get("consent_records_matched") or 0) == int(svc.ds.n_donors)
+        )
         return _j({"status": "ok", "synthetic_data_only": provenance.get("genotypes") == "synthetic",
                    "provenance_known": provenance.get("genotypes") != "unknown",
                    "consent_simulated": provenance.get("consent") == "simulated",
+                   "participant_consent_records_verified": participant_consent_verified,
+                   "participant_consent_records_matched": int(provenance.get("consent_records_matched") or 0),
+                   "dataset_policy_samples_scoped": int(provenance.get("dataset_policy_samples_scoped") or 0),
                    "donors": svc.ds.n_donors, "variants": svc.ds.n_variants,
                    "k_min": svc.p.k_min, "audit_chain_ok": audit["ok"], "provenance": provenance,
                    "agents_use_llm": svc.team.agents["explainer"].llm.available,
