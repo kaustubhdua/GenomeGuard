@@ -221,7 +221,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         for record in iter_records(args.vcf, samples):
             batch.append(record)
             if len(batch) >= batch_size:
-                v, g = write_batch(conn, dataset_id, batch, sample_map)
+                v, g = write_batch(conn, dataset_id, batch, sample_map, samples)
                 variant_count += v
                 genotype_count += g
                 batch.clear()
@@ -256,7 +256,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                 "variant_count": measured_variants, "genotype_call_count": measured_calls}
 
 
-def write_batch(conn, dataset_id, records, sample_map):
+def write_batch(conn, dataset_id, records, sample_map, samples):
     variants_written = 0
     calls_written = 0
     with conn.transaction():
@@ -275,7 +275,7 @@ def write_batch(conn, dataset_id, records, sample_map):
                 variant_id = cur.fetchone()[0]
                 variants_written += 1
                 rows = []
-                for sample, (dosage, called, phased) in zip(sample_map, record["calls"], strict=True):
+                for sample, (dosage, called, phased) in zip(samples, record["calls"], strict=True):
                     rows.append((dataset_id, sample_map[sample], variant_id, dosage, called, phased,
                                  record["source_record_index"]))
                     if called > 0:
