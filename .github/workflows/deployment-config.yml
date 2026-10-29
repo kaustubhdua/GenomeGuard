@@ -60,6 +60,7 @@ jobs:
           test -s supabase/migrations/20261029200000_genomeguard_normalized_genotype_storage.sql
           test -s supabase/migrations/20261029210000_genomeguard_request_details.sql
           test -s supabase/migrations/20261029220000_genomeguard_audit_append_only_and_consent_indexes.sql
+          test -s supabase/migrations/20261029230000_genomeguard_request_history_membership_gate.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -107,6 +108,38 @@ jobs:
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT count(*) FROM public.gg_list_verified_public_datasets()) = 0 AND NOT has_function_privilege('anon', 'public.gg_list_verified_public_datasets()', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_list_verified_public_datasets()', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_list_verified_public_datasets()', 'EXECUTE')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_function_privilege('anon', 'public.gg_review_request(uuid,bigint,text,text)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_review_request(uuid,bigint,text,text)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_review_request(uuid,bigint,text,text)', 'EXECUTE') AND NOT has_function_privilege('anon', 'public.gg_get_request_details(uuid,bigint)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_get_request_details(uuid,bigint)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_get_request_details(uuid,bigint)', 'EXECUTE') AND NOT has_function_privilege('anon', 'public.gg_withdraw_consent(uuid,uuid,text)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_withdraw_consent(uuid,uuid,text)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_withdraw_consent(uuid,uuid,text)', 'EXECUTE') AND (SELECT count(*) FROM genomeguard.organizations)=0 AND (SELECT count(*) FROM genomeguard.organization_memberships)=0 AND (SELECT count(*) FROM genomeguard.participant_consent_records)=0 AND (SELECT count(*) FROM genomeguard.dataset_samples)=0 AND (SELECT count(*) FROM genomeguard.dataset_variants)=0 AND (SELECT count(*) FROM genomeguard.dataset_genotype_calls)=0 AND NOT has_table_privilege('anon', 'genomeguard.organization_memberships', 'SELECT') AND NOT has_table_privilege('authenticated', 'genomeguard.participant_consent_records', 'SELECT')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_schema_privilege('anon', 'genomeguard', 'USAGE') AND NOT has_schema_privilege('authenticated', 'genomeguard', 'USAGE') AND NOT has_table_privilege('anon', 'genomeguard.donors', 'SELECT') AND NOT has_table_privilege('authenticated', 'genomeguard.donors', 'SELECT') AND NOT has_table_privilege('service_role', 'genomeguard.donors', 'SELECT')" | grep -q "(1 row)"
+          # Request history must disappear after the authoritative organization membership is revoked.
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL'
+          DO $test$
+          DECLARE
+            v_user uuid := '00000000-0000-0000-0000-000000000091';
+            v_org uuid;
+            v_requester bigint;
+            v_count integer;
+          BEGIN
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-membership-gate','CI Membership Gate','active')
+              RETURNING id INTO v_org;
+            INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
+              VALUES (v_org,v_user,'researcher','active',now());
+            INSERT INTO genomeguard.requesters(name,role,credential_level,institution,created_at,auth_user_id)
+              VALUES ('CI Researcher','researcher','registered','CI Membership Gate',now()::text,v_user)
+              RETURNING id INTO v_requester;
+            INSERT INTO genomeguard.requests(requester_id,ts,purpose,disease,is_commercial,data_level,cohort_filter_json,variant_filter_json,status,organization_id)
+              VALUES (v_requester,now()::text,'ci membership authorization test',NULL,0,'aggregate','{}'::text,'{}'::text,'pending_review',v_org);
+            v_count := jsonb_array_length(public.gg_list_my_requests(v_user));
+            IF v_count <> 1 THEN
+              RAISE EXCEPTION 'active requester should see exactly one own request; got %',v_count;
+            END IF;
+            UPDATE genomeguard.organization_memberships SET status='revoked',revoked_at=now()
+              WHERE organization_id=v_org AND auth_user_id=v_user;
+            v_count := jsonb_array_length(public.gg_list_my_requests(v_user));
+            IF v_count <> 0 THEN
+              RAISE EXCEPTION 'revoked requester still sees request history; got % rows',v_count;
+            END IF;
+          END
+          $test$;
+          SQL
           # The audit trigger must reject ordinary UPDATE/DELETE, and consent indexes
           # must exist after the full migration sequence on a clean PostgreSQL instance.
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE to_regclass('genomeguard.participant_consent_dataset_key_idx') IS NOT NULL AND to_regclass('genomeguard.participant_consent_organization_id_idx') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='genomeguard_audit_log_append_only' AND NOT tgisinternal)" | grep -q "(1 row)"
