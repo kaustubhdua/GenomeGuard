@@ -25,7 +25,7 @@ SAMPLES = ["dad", "mum", "kid1", "kid2"] + [f"s{i}" for i in range(40)]
 
 def test_download_retries_digest_mismatch_and_never_publishes_corrupt_bytes(tmp_path, monkeypatch):
     good = b"verified official artifact"
-    bad = b"corrupt official artifact"
+    bad = b"badified official artifact"
     assert len(good) == len(bad)
     expected = hashlib.sha256(good).hexdigest()
 
