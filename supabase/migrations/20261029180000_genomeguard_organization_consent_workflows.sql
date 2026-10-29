@@ -36,7 +36,7 @@ create index if not exists requests_org_status_id
 create table if not exists genomeguard.participant_consent_records (
   id uuid primary key default gen_random_uuid(),
   donor_id integer not null references genomeguard.donors(id) on delete restrict,
-  dataset_key text not null,
+  dataset_key text not null references genomeguard.variant_dataset_manifest(dataset_key) on delete restrict,
   organization_id uuid not null references genomeguard.organizations(id) on delete restrict,
   allowed_purposes text[] not null default '{}',
   allowed_data_levels text[] not null default '{}',
