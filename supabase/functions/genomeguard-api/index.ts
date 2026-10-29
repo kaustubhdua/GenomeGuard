@@ -17,6 +17,39 @@ function error(status: number, code: string, message: string): Response {
 function objectBody(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+async function readJsonLimited(request: Request, maxBytes: number): Promise<{ ok: true; value: unknown } | { ok: false; status: 400 | 413 }> {
+  const declaredLength = Number(request.headers.get("content-length") || "0");
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return { ok: false, status: 413 };
+  if (!request.body) return { ok: false, status: 400 };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, status: 400 };
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder().decode(bytes)) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
 async function authenticatedUser(request: Request, url: string, serviceKey: string) {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return null;
@@ -76,15 +109,16 @@ Deno.serve(async (request: Request) => {
   if (path.endsWith("/requests") && request.method === "POST") {
     const user = await authenticatedUser(request, url, serviceKey);
     if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
-    let body: unknown;
-    try { body = await request.json(); } catch { return error(400, "bad_json", "Send a valid JSON object."); }
+    const parsed = await readJsonLimited(request, 16_384);
+    if (!parsed.ok) return error(parsed.status, parsed.status === 413 ? "payload_too_large" : "bad_json",
+      parsed.status === 413 ? "Request payload exceeds 16 KB." : "Send a valid JSON object.");
+    const body = parsed.value;
     if (!objectBody(body)) return error(400, "bad_json", "Send a valid JSON object.");
     const purpose = typeof body.purpose === "string" ? body.purpose.trim() : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const institution = typeof body.institution === "string" ? body.institution.trim() : "";
     const level = typeof body.data_level === "string" ? body.data_level : "aggregate";
     const disease = typeof body.disease === "string" ? body.disease.trim() : "";
-    if (new TextEncoder().encode(JSON.stringify(body)).length > 16_384) return error(413, "payload_too_large", "Request payload exceeds 16 KB.");
     if (purpose.length < 3 || purpose.length > 500 || name.length < 2 || name.length > 120 ||
         institution.length < 2 || institution.length > 200 ||
         !["aggregate", "frequency", "variant", "individual"].includes(level)) {
