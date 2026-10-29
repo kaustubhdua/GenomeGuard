@@ -110,6 +110,19 @@ Deno.serve(async (request: Request) => {
       return error(503, "chromosome_catalog_unavailable", "Chromosome reference metadata could not be loaded.");
     }
   }
+  if (path.endsWith("/datasets") && request.method === "GET") {
+    try {
+      const datasets = await rpc(url, serviceKey, "gg_list_verified_public_datasets", {});
+      const rows = Array.isArray(datasets) ? datasets : [];
+      return json({
+        datasets: rows,
+        dataset_count: rows.length,
+        provenance_note: "Only datasets reviewed for public research and marked loaded with verified non-zero counts are listed. Dataset-level reuse review is not participant-specific consent or clinical authorization.",
+      });
+    } catch {
+      return error(503, "dataset_catalog_unavailable", "The verified dataset catalogue could not be loaded.");
+    }
+  }
   if (path.endsWith("/health") && request.method === "GET") {
     try {
       const response = await fetch(`${url}/rest/v1/genomeguard_deployment_status?id=eq.1&select=api_migration_complete,genomic_dataset_loaded,render_dependency_present,release_gate_passed,updated_at`, {
