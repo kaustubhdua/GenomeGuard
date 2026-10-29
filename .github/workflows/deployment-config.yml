@@ -55,6 +55,7 @@ jobs:
           test -s supabase/migrations/20261027003000_deployment_status_policy.sql
           test -s supabase/migrations/20261027010000_private_schema_rls.sql
           test -s supabase/migrations/20261029120000_genomeguard_variant_dataset_manifest.sql
+          test -s supabase/migrations/20261029180000_genomeguard_organization_consent_workflows.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
