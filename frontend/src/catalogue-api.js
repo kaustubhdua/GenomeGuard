@@ -3,12 +3,15 @@
 const SUPABASE_URL = "https://hkyieaovolkethovyenb.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ZnV6zbGRzisNWOblNLgmYg_czCO4GXL";
 
-export async function loadPublicCatalogue(resource) {
+export async function loadPublicCatalogue(resource, options = {}) {
   if (!["datasets", "chromosomes"].includes(resource)) {
     throw new TypeError("Unsupported public catalogue resource");
   }
+  const assembly = resource === "chromosomes" && ["GRCh37", "GRCh38"].includes(options.assembly)
+    ? options.assembly : "GRCh38";
+  const query = resource === "chromosomes" ? `?assembly=${encodeURIComponent(assembly)}` : "";
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/genomeguard-api/${resource}`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/genomeguard-api/${resource}${query}`, {
       method: "GET",
       headers: { Accept: "application/json", apikey: SUPABASE_PUBLISHABLE_KEY },
       cache: "no-store",
