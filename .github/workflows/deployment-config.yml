@@ -67,6 +67,7 @@ jobs:
           test -s supabase/migrations/20261029260000_genomeguard_api_events_constraints.sql
           test -s supabase/migrations/20261029270000_genomeguard_request_review_history.sql
           test -s supabase/migrations/20261029280000_genomeguard_review_history_append_only.sql
+          test -s supabase/migrations/20261029290000_genomeguard_target_org_authorization.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -158,6 +159,7 @@ jobs:
             v_steward uuid := '00000000-0000-0000-0000-000000000093';
             v_admin uuid := '00000000-0000-0000-0000-000000000094';
             v_consent uuid;
+            v_other_org uuid;
             v_result jsonb;
           BEGIN
             INSERT INTO genomeguard.organizations(slug,display_name,status)
@@ -166,6 +168,10 @@ jobs:
               VALUES (v_org,v_reviewer,'reviewer','active',now()),
                      (v_org,v_steward,'consent_steward','active',now()),
                      (v_org,v_admin,'organization_admin','active',now());
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-consent-steward-other','CI Other Consent Steward Org','active') RETURNING id INTO v_other_org;
+            INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
+              VALUES (v_other_org,v_steward,'consent_steward','active',now());
             INSERT INTO genomeguard.donors(id,cohort_id,population,consent_json,family_id,withdrawn_at)
               VALUES (999991,'ci-consent-test','test','{}',NULL,NULL);
             INSERT INTO genomeguard.variant_dataset_manifest(dataset_key,source_name,source_url,source_release,reference_assembly,file_sha256,data_use_review,consent_basis)
@@ -203,12 +209,17 @@ jobs:
             v_requester bigint;
             v_request bigint;
             v_history jsonb;
+            v_other_org uuid;
           BEGIN
             INSERT INTO genomeguard.organizations(slug,display_name,status)
               VALUES ('ci-review-history','CI Review History','active') RETURNING id INTO v_org;
             INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
               VALUES (v_org,v_researcher,'researcher','active',now()),
                      (v_org,v_reviewer,'reviewer','active',now());
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-review-history-other','CI Other Review Org','active') RETURNING id INTO v_other_org;
+            INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
+              VALUES (v_other_org,v_reviewer,'reviewer','active',now());
             INSERT INTO genomeguard.requesters(name,role,credential_level,institution,created_at,auth_user_id)
               VALUES ('CI History Researcher','researcher','registered','CI Review History',now()::text,v_researcher)
               RETURNING id INTO v_requester;
