@@ -1,14 +1,17 @@
 # Supabase schema isolation
 
-The selected Supabase project is shared at the project level, so GenomeGuard application tables must not be created in `public` by default.
+The selected Supabase project is shared with BharatSim. GenomeGuard must not write to `public` or alter the `bharatsim` schema.
 
-- Application schema: `genomeguard`.
-- Backend access: server-side PostgreSQL connection using `GG_DATABASE_URL`.
-- Search path: `genomeguard, public`, set by `PostgresStore` before versioned migrations.
-- Supabase Data API access: no direct `anon` or `authenticated` grants to this private schema.
+- Governance/catalogue schema: `genomeguard` (normalized dataset, organization, consent, request RPC and deployment-status objects).
+- Python decision-engine persistence schema: `genomeguard_runtime` (the legacy Store contract: cohort metadata, encrypted genotype blobs, requesters, requests, decisions, epsilon ledger and audit chain).
+- Backend access: server-side PostgreSQL connection using `GG_DATABASE_URL`; the connection role must be provisioned by an operator with least-privilege grants on the runtime schema.
+- Runtime search path: `genomeguard_runtime, public`, set by `PostgresStore` before its versioned migration.
+- Browser roles must not receive direct access to either private schema.
 - Frontend: never receives `GG_DATABASE_URL`, database passwords, Supabase secret keys, master encryption key, or steward key.
 
-The `genomeguard` schema and 13 application tables are now present in project `common 1`; four schema/status migrations are recorded and the application tables are empty. The live Supabase security advisor reports RLS disabled on all 13 tables. A new defense-in-depth migration (`20261027010000_private_schema_rls.sql`) enables RLS and revokes browser-role privileges; it is committed for review but has **not** been applied to the live project. Direct SQL checks confirm `anon` and `authenticated` currently have no schema USAGE or table SELECT/INSERT privileges. The backend has not yet been connected to this database.
+**Important architecture boundary:** the normalized `genomeguard` genotype tables and the Python engine's `genomeguard_runtime` cohort store are not yet bridged. The runtime schema separation prevents the legacy Store's incompatible `CREATE TABLE` migration from colliding with existing normalized tables; it does not by itself complete dataset import or governance API parity. The manifest and normalized genotype tables must remain empty until a real, validated import has run.
+
+The live project has the normalized governance schema and its migrations. The live database has no `USAGE` grant on `genomeguard` for `service_role`; that API role must not be treated as a PostgreSQL login. The production API still reports SQLite and the required server-side connection is not configured. A dedicated database login and schema grants must be provisioned and verified before enabling the cutover.
 
 Verify after first successful startup:
 
