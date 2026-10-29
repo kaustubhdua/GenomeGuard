@@ -131,7 +131,7 @@ Deno.serve(async (request: Request) => {
         full_frontend_route_parity: false },
       note: "Fail-closed migration gate. No genomic data access is granted by this API yet." }, 503);
   }
-  const reviewMatch = path.match(/\\/requests\\/(\\d+)\\/review$/);
+  const reviewMatch = path.match(/\/requests\/(\d+)\/review$/);
   if (reviewMatch && request.method === "POST") {
     const user = await authenticatedUser(request, url, serviceKey);
     if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
