@@ -54,6 +54,8 @@ jobs:
           test -s supabase/migrations/20261027002000_deployment_status.sql
           test -s supabase/migrations/20261027003000_deployment_status_policy.sql
           test -s supabase/migrations/20261027010000_private_schema_rls.sql
+          test -s supabase/migrations/20261029101900_genomeguard_supabase_request_api.sql
+          test -s supabase/migrations/20261029113000_genomeguard_request_validation_hardening.sql
           test -s supabase/migrations/20261029120000_genomeguard_variant_dataset_manifest.sql
           test -s supabase/migrations/20261029150000_genomeguard_verified_public_dataset_catalog.sql
           test -s supabase/migrations/20261029180000_genomeguard_organization_consent_workflows.sql
