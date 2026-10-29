@@ -16,10 +16,11 @@ The VCF header must identify an assembly that exactly matches the command-line a
 
 - SHA-256 must exactly match the operator-provided expected checksum.
 - Source and reuse-statement URLs must be HTTPS.
+- The operator must supply the actual source retrieval timestamp as timezone-aware ISO-8601; the importer never infers retrieval time from import start time.
 - The VCF must include recognizable assembly metadata, unique sample IDs, GT fields, supported chromosome labels, valid coordinates and DNA alleles.
 - Only haploid and diploid genotype calls are supported. Symbolic/breakend alleles and unsupported ploidy fail closed.
 - Multi-allelic records are split into one normalized row per ALT allele; genotype calls store ALT dosage, called-allele count and phase flag.
-- Duplicate records and allele indices absent from a record are rejected.
+- Duplicate records and allele indices absent from a record are rejected. Input must be coordinate-sorted; duplicate detection retains only records at the current coordinate so memory use does not grow with total variant count.
 - The importer streams variants and commits bounded batches. The manifest remains `loading` until database counts reconcile.
 - The catalogue only lists manifests marked `loaded` with non-zero measured counts. An interrupted import remains unpublished and can be restarted from scratch with the same key/checksum; a completed dataset cannot be overwritten by this CLI.
 
@@ -34,6 +35,7 @@ python -m app.data.vcf_import \
   --source-name "Exact source collection name" \
   --source-url "https://official-source.example/path/to/file.vcf.gz" \
   --source-release "exact release identifier" \
+  --retrieved-at "2026-10-29T08:30:00Z" \
   --assembly GRCh37 \
   --expected-sha256 "<64 lowercase hex characters>" \
   --reuse-statement-url "https://official-source.example/reuse-terms" \
