@@ -131,3 +131,17 @@ jobs:
           $test$;
           SELECT 1 WHERE (SELECT count(*) FROM genomeguard.audit_log WHERE idx=1 AND action='migration_test')=1;
           SQL
+      - name: Verify a logical backup restores the migrated schema and fixtures
+        env:
+          PGPASSWORD: postgres
+        run: |
+          pg_dump -h localhost -U postgres -d genomeguard_migration_test --format=custom --file=/tmp/genomeguard-migration-test.dump
+          createdb -h localhost -U postgres genomeguard_restore_test
+          pg_restore -h localhost -U postgres --dbname=genomeguard_restore_test --no-owner --exit-on-error /tmp/genomeguard-migration-test.dump
+          source_tables="$(psql -h localhost -U postgres -d genomeguard_migration_test -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='genomeguard' AND table_type='BASE TABLE'")"
+          restored_tables="$(psql -h localhost -U postgres -d genomeguard_restore_test -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='genomeguard' AND table_type='BASE TABLE'")"
+          test "$source_tables" = "$restored_tables"
+          source_counts="$(psql -h localhost -U postgres -d genomeguard_migration_test -Atc "SELECT (SELECT count(*) FROM genomeguard.audit_log)::text || ':' || (SELECT count(*) FROM genomeguard.dataset_samples)::text || ':' || (SELECT count(*) FROM genomeguard.dataset_variants)::text || ':' || (SELECT count(*) FROM genomeguard.dataset_genotype_calls)::text")"
+          restored_counts="$(psql -h localhost -U postgres -d genomeguard_restore_test -Atc "SELECT (SELECT count(*) FROM genomeguard.audit_log)::text || ':' || (SELECT count(*) FROM genomeguard.dataset_samples)::text || ':' || (SELECT count(*) FROM genomeguard.dataset_variants)::text || ':' || (SELECT count(*) FROM genomeguard.dataset_genotype_calls)::text")"
+          test "$source_counts" = "$restored_counts"
+          psql -h localhost -U postgres -d genomeguard_restore_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE to_regclass('genomeguard.participant_consent_dataset_key_idx') IS NOT NULL AND to_regclass('genomeguard.participant_consent_organization_id_idx') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='genomeguard_audit_log_append_only' AND NOT tgisinternal) AND (SELECT release_gate_passed FROM public.genomeguard_deployment_status LIMIT 1)=false" | grep -q "(1 row)"
