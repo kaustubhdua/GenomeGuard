@@ -46,3 +46,8 @@ The Supabase Edge Function implements identity-aware request listing/submission,
 | Frontend | All route/API/keyboard/mobile/accessibility smoke checks pass on the exact production commit |
 
 Until this evidence exists, the supported status is **research prototype / release blocked**, not production-ready for private, controlled-access or clinical genomic data.
+
+
+## Current branch verification note (2026-10-29)
+
+The 1000 Genomes Phase 3 public-release policy is dataset-level evidence only. It is not an individual participant-consent ledger and does not establish clinical authorization or institutional ethics approval. For this source, participant consent matches must remain zero; policy scope is tracked separately. Individual-level outputs, participant consent mutations, withdrawal claims, donor profile actions, and FHIR Consent exports remain unavailable unless an authoritative participant-level evidence source is integrated and verified. Production readiness remains closed until normalized Supabase ingestion, identity/membership enforcement, API parity, deployment, backup/restore, and external audit anchoring are verified against the exact release commit.
