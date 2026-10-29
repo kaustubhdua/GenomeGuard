@@ -4,6 +4,7 @@ import { startTour, tourAvailable } from "./tour.js";
 
 const ROUTES = [
   { re: /^#\/chromosomes$/, load: () => import("./pages/chromosomes.js"), nav: "chromosomes", title: "Chromosomes" },
+  { re: /^#\/datasets$/, load: () => import("./pages/datasets.js"), nav: "datasets", title: "Datasets" },
   { re: /^#\/overview$/, load: () => import("./pages/overview.js"), nav: "overview", title: "Overview" },
   { re: /^#\/requests$/, load: () => import("./pages/requests.js"), nav: "requests", title: "Requests" },
   { re: /^#\/request\/(\d+)$/, load: () => import("./pages/decision.js"), nav: "requests", title: "Decision" },
@@ -22,7 +23,7 @@ function prefetchRoute(hash) {
 }
 
 const NAV = [
-  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"]]],
+  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["datasets", "Datasets", "#/datasets"]]],
   ["Researcher", [["requests", "Requests", "#/requests"]]],
   ["Steward", [["family", "Family exposure", "#/family/1", true], ["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true]]],
   ["Patient", [["donor", "My data", "#/donor"]]],
