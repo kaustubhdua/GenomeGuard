@@ -1,5 +1,5 @@
 -- Consent stewardship is a separate privilege from ordinary request review.
--- Organization administrators may act as delegated consent stewards; reviewers alone may not.
+-- Only a membership explicitly provisioned as consent_steward may withdraw consent.
 alter table genomeguard.organization_memberships
   drop constraint if exists organization_memberships_role_check;
 alter table genomeguard.organization_memberships
@@ -27,7 +27,7 @@ begin
   from genomeguard.organization_memberships m
   join genomeguard.organizations o on o.id=m.organization_id
   where m.auth_user_id=p_auth_user_id and m.status='active' and o.status='active'
-    and m.role in ('consent_steward','organization_admin')
+    and m.role = 'consent_steward'
   order by m.organization_id
   limit 1;
   if not found then
