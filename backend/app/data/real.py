@@ -470,7 +470,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                                        if consent_source_file else None),
             # Dataset-level source terms are not individual consent evidence. Keep the
             # participant-record count at zero unless a per-sample consent file was supplied.
-            "consent_records_matched": len(chosen) if consent_records is not None else 0,
+            "consent_records_matched": len(chosen) if consent_records is not None and consent_policy is None else 0,
             "dataset_policy_samples_scoped": len(chosen) if consent_policy is not None else 0,
             "genotypes_real": True,
             "family_enriched": bool(family_first and rels), "seed": seed,
