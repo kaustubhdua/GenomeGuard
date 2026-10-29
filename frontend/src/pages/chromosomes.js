@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { h, card, badge, notice } from "../ui.js";
+import { h, card, notice } from "../ui.js";
 
 const format = (value) => Number(value || 0).toLocaleString("en-US");
 const KIND = { autosome: "Autosome", sex: "Sex chromosome", mitochondrial: "Mitochondrial" };
@@ -56,7 +56,7 @@ export async function render() {
           h("td", { class: "mono" }, format(r.length_bp) + " bp"),
           h("td", { class: "mono" }, format(cov.variant_count)),
           h("td", { class: "mono" }, range),
-          h("td", {}, badge(hasData ? "permit" : "escalate"), h("span", { class: "muted" }, hasData ? " Data present" : " No variants loaded")));
+          h("td", {}, h("span", { class: "tag" }, hasData ? "Variants loaded" : "No variants loaded")));
       })));
     list.replaceChildren(table);
     if (!filtered.length) list.append(h("p", { class: "muted" }, "No chromosomes match this filter."));
