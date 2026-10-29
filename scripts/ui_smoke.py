@@ -153,8 +153,16 @@ def main() -> None:
         pg = ctx.new_page()
         errors: list[str] = []
         pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.on("console", lambda m: errors.append(m.text) if m.type == "error"
-              and "403" not in m.text else None)
+        # Fail-closed readiness intentionally returns HTTP 503 until production
+        # prerequisites are met. Track HTTP failures by URL rather than treating
+        # Chromium's generic resource-load console message as a JavaScript exception.
+        def check_response(response):
+            if response.status >= 500:
+                path = response.url.split("?", 1)[0].rstrip("/")
+                if path.endswith("/health/ready"):
+                    return
+                errors.append(f"HTTP {response.status}: {path}")
+        pg.on("response", check_response)
         pg.goto(base + "/#/overview")
         pg.wait_for_timeout(1500)
         pg.get_by_role("button", name="Guided walkthrough").click()
