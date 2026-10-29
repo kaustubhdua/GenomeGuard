@@ -134,6 +134,7 @@ def test_vcf_rejects_unsorted_coordinates(tmp_path):
 
 def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tmp_path, monkeypatch):
     from types import SimpleNamespace
+
     from app.data import vcf_import
 
     path = _vcf(tmp_path)
