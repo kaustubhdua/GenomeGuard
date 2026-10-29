@@ -224,6 +224,8 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         "model": "normalized per-sample/per-ALT genotype calls",
     }
     with psycopg.connect(database_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SET ROLE genomeguard_importer")
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute(
