@@ -9,7 +9,7 @@ Updated: 2026-10-29. Scope: GenomeGuard schema only in the shared Supabase proje
 - The Vercel/Render-backed `/health` endpoint reports `storage_backend=sqlite`.
 - `/health/ready` returns HTTP 503 and `ready=false`, as it should while storage, backup/restore, institutional identity and external audit anchoring remain unverified.
 - `genomeguard.variant_dataset_manifest` is empty. The Supabase Edge Function catalogue must therefore return no verified datasets; never insert a fake manifest to make the UI look complete.
-- The SQL migration `20261029100000_genomeguard_audit_append_only_and_consent_indexes.sql` is applied to the live GenomeGuard schema. The trigger definition and both consent lookup indexes were verified by read-only SQL queries.
+- The repository migration `20261029220000_genomeguard_audit_append_only_and_consent_indexes.sql` defines the append-only trigger and both consent lookup indexes. Supabase's live migration history records the applied migration under version `20261029090645` and name `genomeguard_audit_append_only_and_consent_indexes`; the trigger definition and both indexes were verified by read-only SQL queries. The CI workflow now explicitly tests the trigger's UPDATE/DELETE rejection and index presence on a clean PostgreSQL database.
 
 ## Why the API cutover is not complete
 
