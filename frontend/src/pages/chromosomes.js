@@ -1,26 +1,8 @@
 import { h, card, notice } from "../ui.js";
+import { loadPublicCatalogue } from "../catalogue-api.js";
 
 const format = (value) => Number(value || 0).toLocaleString("en-US");
 const KIND = { autosome: "Autosome", sex: "Sex chromosome", mitochondrial: "Mitochondrial" };
-
-const CATALOGUE_URL = "https://hkyieaovolkethovyenb.supabase.co/functions/v1/genomeguard-api/chromosomes";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ZnV6zbGRzisNWOblNLgmYg_czCO4GXL";
-
-async function loadChromosomes() {
-  try {
-    const result = await fetch(CATALOGUE_URL, {
-      method: "GET",
-      headers: { Accept: "application/json", apikey: SUPABASE_PUBLISHABLE_KEY },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
-    let data = null;
-    try { data = await result.json(); } catch { /* handled as unavailable below */ }
-    return { ok: result.ok, status: result.status, data };
-  } catch {
-    return { ok: false, status: 0, data: null };
-  }
-}
 
 export async function render() {
   const root = h("div", { class: "stack" });
@@ -29,7 +11,7 @@ export async function render() {
     h("h1", {}, "Chromosome explorer"),
     h("p", { class: "lede" }, "Browse the GRCh38 human reference chromosomes and see where verified variant records are actually available. Reference coordinates are not genotype data, and an empty chromosome is never treated as analysed.")));
 
-  const response = await loadChromosomes();
+  const response = await loadPublicCatalogue("chromosomes");
   if (!response.ok) {
     root.append(notice("warn",
       h("strong", {}, "Chromosome coverage service is not reachable from this deployment."),
