@@ -66,6 +66,7 @@ jobs:
           test -s supabase/migrations/20261029250000_genomeguard_consent_steward_only.sql
           test -s supabase/migrations/20261029260000_genomeguard_api_events_constraints.sql
           test -s supabase/migrations/20261029270000_genomeguard_request_review_history.sql
+          test -s supabase/migrations/20261029280000_genomeguard_review_history_append_only.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -109,6 +110,7 @@ jobs:
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 FROM public.genomeguard_deployment_status WHERE api_migration_complete = false AND genomic_dataset_loaded = false AND render_dependency_present = true AND release_gate_passed = false" | grep -q "(1 row)"
           rls_tables="$(psql -h localhost -U postgres -d genomeguard_migration_test -Atc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='genomeguard' AND c.relkind='r' AND c.relrowsecurity")"
           test "$rls_tables" = "23"
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='genomeguard.request_review_history'::regclass AND tgname='request_review_history_no_update_delete' AND NOT tgisinternal) AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='genomeguard.request_review_history'::regclass AND tgname='request_review_history_no_truncate' AND NOT tgisinternal)" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT count(*) FROM pg_constraint WHERE conrelid='genomeguard.api_events'::regclass AND conname IN ('api_events_event_type_check','api_events_outcome_check','api_events_details_check')) = 3 AND NOT has_table_privilege('anon', 'genomeguard.api_events', 'SELECT') AND NOT has_table_privilege('authenticated', 'genomeguard.api_events', 'SELECT') AND NOT has_table_privilege('service_role', 'genomeguard.api_events', 'SELECT')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT count(*) FROM genomeguard.chromosome_reference) = 25 AND (SELECT count(*) FROM public.gg_list_chromosome_reference()) = 25 AND (SELECT count(*) FROM public.gg_list_chromosome_coverage()) = 25 AND NOT has_table_privilege('anon', 'genomeguard.chromosome_reference', 'SELECT') AND NOT has_function_privilege('anon', 'public.gg_list_chromosome_reference()', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_list_chromosome_coverage()', 'EXECUTE')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT count(*) FROM public.gg_list_verified_public_datasets()) = 0 AND NOT has_function_privilege('anon', 'public.gg_list_verified_public_datasets()', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_list_verified_public_datasets()', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_list_verified_public_datasets()', 'EXECUTE')" | grep -q "(1 row)"
@@ -215,7 +217,25 @@ jobs:
               RETURNING id INTO v_request;
             PERFORM public.gg_review_request(v_reviewer,v_request,'needs_more_information','Please clarify the study purpose.');
             PERFORM public.gg_review_request(v_reviewer,v_request,'approved','Purpose clarified; approved for review only.');
-            v_history := public.gg_get_request_details(v_researcher,v_request)->'review_history';
+            BEGIN
+                          UPDATE genomeguard.request_review_history SET reason='tampered review' WHERE request_id=v_request;
+                          RAISE EXCEPTION 'review history update unexpectedly succeeded';
+                        EXCEPTION WHEN SQLSTATE '55000' THEN
+                          NULL;
+                        END;
+                        BEGIN
+                          DELETE FROM genomeguard.request_review_history WHERE request_id=v_request;
+                          RAISE EXCEPTION 'review history delete unexpectedly succeeded';
+                        EXCEPTION WHEN SQLSTATE '55000' THEN
+                          NULL;
+                        END;
+                        BEGIN
+                          EXECUTE 'TRUNCATE genomeguard.request_review_history';
+                          RAISE EXCEPTION 'review history truncate unexpectedly succeeded';
+                        EXCEPTION WHEN SQLSTATE '55000' THEN
+                          NULL;
+                        END;
+                        v_history := public.gg_get_request_details(v_researcher,v_request)->'review_history';
             IF jsonb_array_length(v_history) <> 2 OR
                v_history->0->>'previous_status' <> 'pending_review' OR
                v_history->0->>'outcome' <> 'needs_more_information' OR
