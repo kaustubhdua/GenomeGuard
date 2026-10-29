@@ -224,52 +224,56 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         "model": "normalized per-sample/per-ALT genotype calls",
     }
     with psycopg.connect(database_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SET ROLE genomeguard_importer")
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute(
-                    """INSERT INTO genomeguard.variant_dataset_manifest
-                    (dataset_key,source_name,source_url,source_release,reference_assembly,file_sha256,
-                     data_use_review,consent_basis,import_status,metadata)
-                    VALUES (%s,%s,%s,%s,%s,%s,'approved_public_research','dataset_policy','loading',%s)
-                    ON CONFLICT (dataset_key) DO UPDATE SET import_status='loading',
-                      updated_at=now(),metadata=excluded.metadata
-                    WHERE genomeguard.variant_dataset_manifest.file_sha256=excluded.file_sha256
-                      AND genomeguard.variant_dataset_manifest.source_url=excluded.source_url
-                      AND genomeguard.variant_dataset_manifest.source_release=excluded.source_release
-                      AND genomeguard.variant_dataset_manifest.reference_assembly=excluded.reference_assembly
-                      AND genomeguard.variant_dataset_manifest.data_use_review='approved_public_research'
-                      AND genomeguard.variant_dataset_manifest.consent_basis='dataset_policy'
-                      AND genomeguard.variant_dataset_manifest.import_status <> 'loaded'
-                    RETURNING id""",
-                    (args.dataset_key, args.source_name, args.source_url, args.source_release,
-                     args.assembly, digest, json.dumps(metadata)),
+                    """SELECT id, source_name, source_url, source_release, reference_assembly,
+                              file_sha256, data_use_review, consent_basis, import_status, metadata
+                       FROM genomeguard.variant_dataset_manifest
+                       WHERE dataset_key=%s FOR UPDATE""",
+                    (args.dataset_key,),
                 )
                 row = cur.fetchone()
                 if not row:
-                    # A fully loaded, byte-identical manifest is an idempotent no-op. Do not
-                    # reset counters or delete data on a repeat invocation.
-                    cur.execute(
-                        """SELECT id,sample_count,variant_count,genotype_call_count
-                           FROM genomeguard.variant_dataset_manifest
-                           WHERE dataset_key=%s AND file_sha256=%s AND source_url=%s
-                             AND source_release=%s AND reference_assembly=%s
-                             AND data_use_review='approved_public_research'
-                             AND consent_basis='dataset_policy' AND import_status='loaded'""",
-                        (args.dataset_key, digest, args.source_url, args.source_release, args.assembly),
+                    raise ImportValidationError(
+                        "dataset must be registered and approved by a trusted data steward before import"
                     )
-                    existing = cur.fetchone()
-                    if existing:
-                        dataset_id, sample_count, variant_count, genotype_count = existing
-                        return {
-                            "dataset_id": str(dataset_id),
-                            "status": "loaded",
-                            "already_loaded": True,
-                            "sample_count": sample_count,
-                            "variant_count": variant_count,
-                            "genotype_call_count": genotype_count,
-                        }
-                    raise ImportValidationError("dataset key already exists with another checksum or is already loaded")
-                dataset_id = row[0]
+                (dataset_id, source_name, source_url, source_release, assembly,
+                 registered_sha, review_status, consent_basis, import_status, reviewed_metadata) = row
+                if (source_name != args.source_name or source_url != args.source_url
+                        or source_release != args.source_release or assembly != args.assembly
+                        or registered_sha != digest):
+                    raise ImportValidationError("source metadata or checksum does not match the reviewed manifest")
+                if review_status != "approved_public_research" or consent_basis != "dataset_policy":
+                    raise ImportValidationError("manifest is not approved for dataset-policy public research")
+                if isinstance(reviewed_metadata, str):
+                    reviewed_metadata = json.loads(reviewed_metadata)
+                if (reviewed_metadata.get("reuse_statement_url") != args.reuse_statement_url
+                        or reviewed_metadata.get("citation") != args.citation):
+                    raise ImportValidationError("reuse statement or citation differs from the reviewed manifest")
+                if import_status == "loaded":
+                    cur.execute(
+                        """SELECT sample_count, variant_count, genotype_call_count
+                           FROM genomeguard.variant_dataset_manifest WHERE id=%s""",
+                        (dataset_id,),
+                    )
+                    counts = cur.fetchone()
+                    return {
+                        "dataset_id": str(dataset_id), "status": "loaded", "already_loaded": True,
+                        "sample_count": counts[0], "variant_count": counts[1],
+                        "genotype_call_count": counts[2],
+                    }
+                cur.execute(
+                    """UPDATE genomeguard.variant_dataset_manifest
+                       SET import_status='loading', updated_at=now(), metadata=metadata || %s::jsonb
+                       WHERE id=%s AND data_use_review='approved_public_research'
+                         AND consent_basis='dataset_policy' AND import_status <> 'loaded'""",
+                    (json.dumps(metadata), dataset_id),
+                )
+                if cur.rowcount != 1:
+                    raise ImportValidationError("manifest could not enter loading state")
                 cur.execute("SELECT source_sample_id FROM genomeguard.dataset_samples WHERE dataset_id=%s",
                             (dataset_id,))
                 existing_samples = [row[0] for row in cur.fetchall()]
