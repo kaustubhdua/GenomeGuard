@@ -15,7 +15,7 @@ export async function render() {
   if (!response.ok) {
     root.append(notice("warn",
       h("strong", {}, "Chromosome coverage service is not reachable from this deployment."),
-      h("p", { class: "muted" }, "The Supabase catalogue API must be routed to this page before live coverage can be displayed. No placeholder counts are shown."),
+      h("p", { class: "muted" }, "The live Supabase chromosome catalogue could not be loaded. Check the connection and try again; no placeholder counts are shown."),
       h("p", { class: "fine" }, "Technical status: HTTP " + (response.status || "network error"))));
     root.append(card("What this page will show", "No simulated records",
       h("ul", {},
