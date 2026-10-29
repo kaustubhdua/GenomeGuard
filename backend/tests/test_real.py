@@ -11,6 +11,7 @@ import pytest
 from app.config import Settings
 from app.data import real
 from app.service import bootstrap
+from app.store import Store
 
 PED = "\n".join([
     "Family ID\tIndividual ID\tPaternal ID\tMaternal ID\tGender\tPhenotype\tPopulation",
@@ -180,6 +181,7 @@ def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
         real.save_cohort(cohort, meta, out)
         settings = Settings(
             db_path=":memory:",
+            database_url="postgresql://test.invalid/genomeguard",
             demo_mode=False,
             allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
@@ -289,12 +291,13 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
         )
         real.save_cohort(cohort, meta, out)
         settings = Settings(
-            db_path=":memory:", demo_mode=False, allow_tamper_demo=False,
+            db_path=":memory:", database_url="postgresql://test.invalid/genomeguard",
+            demo_mode=False, allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
             master_key=base64.b64encode(b"x" * 32).decode(),
             real_cohort_file=str(out), dataset_id="test-public-source-policy",
         )
-        svc = bootstrap(settings)
+        svc = bootstrap(settings, store=Store(":memory:"))
         assert svc.provenance["genotypes"] == "real_vcf"
         assert svc.provenance["consent"] == "source_policy"
         assert svc.provenance["consent_records_matched"] == 44
