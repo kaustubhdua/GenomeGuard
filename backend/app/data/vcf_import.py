@@ -112,7 +112,12 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
 
 
 def iter_records(path: Path, samples: list[str], assembly: str):
-    seen: set[tuple[str, int, str, str]] = set()
+    # Keep duplicate-detection memory bounded: require coordinate-sorted VCF input and
+    # retain only keys at the current chromosome/position, not every variant in the file.
+    chrom_order = {str(i): i for i in range(1, 23)} | {"X": 23, "Y": 24, "MT": 25}
+    last_coordinate: tuple[str, int] | None = None
+    last_order: tuple[int, int] | None = None
+    seen_at_coordinate: set[tuple[str, str]] = set()
     source_index = 0
     variant_index = 0
     with open_vcf(path) as stream:
@@ -138,10 +143,18 @@ def iter_records(path: Path, samples: list[str], assembly: str):
             alts = alt_text.split(",")
             if not alts or any(not ALLELE_RE.fullmatch(a) or a == ref for a in alts) or len(set(alts)) != len(alts):
                 raise ImportValidationError("invalid, duplicate, symbolic, or reference-equal ALT allele")
-            key = (chrom, pos, ref, alt_text)
-            if key in seen:
+            order = (chrom_order[chrom], pos)
+            coordinate = (chrom, pos)
+            if last_order is not None and order < last_order:
+                raise ImportValidationError("VCF records must be sorted by chromosome and position")
+            if coordinate != last_coordinate:
+                seen_at_coordinate.clear()
+                last_coordinate = coordinate
+                last_order = order
+            key = (ref, alt_text)
+            if key in seen_at_coordinate:
                 raise ImportValidationError("duplicate VCF record")
-            seen.add(key)
+            seen_at_coordinate.add(key)
             formats = fmt.split(":")
             if "GT" not in formats:
                 raise ImportValidationError("GT is missing from FORMAT")
@@ -175,6 +188,8 @@ def iter_records(path: Path, samples: list[str], assembly: str):
 
 
 def validate_args(args) -> None:
+    if not args.reviewed_public_research:
+        raise ImportValidationError("explicit source reuse review is required")
     if not args.vcf.is_file() or args.vcf.stat().st_size == 0:
         raise ImportValidationError("VCF file is missing or empty")
     if not re.fullmatch(r"[0-9a-f]{64}", args.expected_sha256):
@@ -183,8 +198,16 @@ def validate_args(args) -> None:
         parsed = urlparse(url)
         if parsed.scheme != "https" or not parsed.netloc:
             raise ImportValidationError("source and reuse-statement URLs must be HTTPS")
-    if not args.dataset_key.strip() or not args.source_name.strip() or not args.source_release.strip() or not args.citation.strip():
+    if not args.dataset_key.strip() or not args.source_name.strip() or not args.source_release.strip():
         raise ImportValidationError("dataset key, source name, and release are required")
+    try:
+        retrieved_at = datetime.fromisoformat(args.retrieved_at.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise ImportValidationError("retrieval timestamp must be an ISO-8601 datetime with timezone") from exc
+    if retrieved_at.tzinfo is None or retrieved_at.utcoffset() is None:
+        raise ImportValidationError("retrieval timestamp must include an explicit timezone")
+    if retrieved_at > datetime.now(UTC).replace(microsecond=0):
+        raise ImportValidationError("retrieval timestamp cannot be in the future")
 
 
 def import_to_database(args, digest: str, samples: list[str]) -> dict:
@@ -196,20 +219,16 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         "citation": args.citation,
         "source_file_name": args.vcf.name,
         "source_file_bytes": args.vcf.stat().st_size,
-        "retrieved_at": datetime.now(UTC).isoformat(),
+        "retrieved_at": datetime.fromisoformat(args.retrieved_at.replace("Z", "+00:00")).astimezone(UTC).isoformat(),
         "importer_version": "1.0",
         "model": "normalized per-sample/per-ALT genotype calls",
     }
     with psycopg.connect(database_url, autocommit=True) as conn:
-        # Even when DATABASE_URL authenticates as a privileged operator, import statements run
-        # under a dedicated NOLOGIN role with only the required table/sequence grants.
-        with conn.cursor() as cur:
-            cur.execute("SET ROLE genomeguard_importer")
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute(
                     """SELECT id, source_name, source_url, source_release, reference_assembly,
-                              file_sha256, data_use_review, import_status, metadata
+                              file_sha256, data_use_review, consent_basis, import_status, metadata
                        FROM genomeguard.variant_dataset_manifest
                        WHERE dataset_key=%s FOR UPDATE""",
                     (args.dataset_key,),
@@ -220,47 +239,73 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                         "dataset must be registered and approved by a trusted data steward before import"
                     )
                 (dataset_id, source_name, source_url, source_release, assembly,
-                 registered_sha, review_status, import_status, reviewed_metadata) = row
+                 registered_sha, review_status, consent_basis, import_status, reviewed_metadata) = row
                 if (source_name != args.source_name or source_url != args.source_url
                         or source_release != args.source_release or assembly != args.assembly
                         or registered_sha != digest):
                     raise ImportValidationError("source metadata or checksum does not match the reviewed manifest")
-                if review_status != "approved_public_research":
-                    raise ImportValidationError("manifest is not approved for public research")
+                if review_status != "approved_public_research" or consent_basis != "dataset_policy":
+                    raise ImportValidationError("manifest is not approved for dataset-policy public research")
                 if isinstance(reviewed_metadata, str):
                     reviewed_metadata = json.loads(reviewed_metadata)
                 if (reviewed_metadata.get("reuse_statement_url") != args.reuse_statement_url
                         or reviewed_metadata.get("citation") != args.citation):
                     raise ImportValidationError("reuse statement or citation differs from the reviewed manifest")
                 if import_status == "loaded":
-                    raise ImportValidationError("dataset is already loaded; use a new reviewed release key")
+                    cur.execute(
+                        """SELECT sample_count, variant_count, genotype_call_count
+                           FROM genomeguard.variant_dataset_manifest WHERE id=%s""",
+                        (dataset_id,),
+                    )
+                    counts = cur.fetchone()
+                    return {
+                        "dataset_id": str(dataset_id), "status": "loaded", "already_loaded": True,
+                        "sample_count": counts[0], "variant_count": counts[1],
+                        "genotype_call_count": counts[2],
+                    }
                 cur.execute(
                     """UPDATE genomeguard.variant_dataset_manifest
-                       SET import_status='loading', variant_count=0, genotype_call_count=0,
-                           sample_count=0, imported_at=NULL, updated_at=now(),
-                           metadata=metadata || %s::jsonb
+                       SET import_status='loading', updated_at=now(), metadata=metadata || %s::jsonb
                        WHERE id=%s AND data_use_review='approved_public_research'
-                         AND import_status <> 'loaded'""",
+                         AND consent_basis='dataset_policy' AND import_status <> 'loaded'""",
                     (json.dumps(metadata), dataset_id),
                 )
                 if cur.rowcount != 1:
                     raise ImportValidationError("manifest could not enter loading state")
-                cur.execute("DELETE FROM genomeguard.dataset_genotype_calls WHERE dataset_id=%s", (dataset_id,))
-                cur.execute("DELETE FROM genomeguard.dataset_variants WHERE dataset_id=%s", (dataset_id,))
-                cur.execute("DELETE FROM genomeguard.dataset_samples WHERE dataset_id=%s", (dataset_id,))
-                cur.executemany(
-                    "INSERT INTO genomeguard.dataset_samples(dataset_id,source_sample_id) VALUES (%s,%s)",
-                    [(dataset_id, sample) for sample in samples],
-                )
+                dataset_id = row[0]
+                cur.execute("SELECT source_sample_id FROM genomeguard.dataset_samples WHERE dataset_id=%s",
+                            (dataset_id,))
+                existing_samples = [row[0] for row in cur.fetchall()]
+                if existing_samples and set(existing_samples) != set(samples):
+                    raise ImportValidationError("resumed import sample identifiers do not match the source VCF")
+                if not existing_samples:
+                    cur.executemany(
+                        "INSERT INTO genomeguard.dataset_samples(dataset_id,source_sample_id) VALUES (%s,%s)",
+                        [(dataset_id, sample) for sample in samples],
+                    )
                 cur.execute("SELECT id,source_sample_id FROM genomeguard.dataset_samples WHERE dataset_id=%s",
                             (dataset_id,))
                 sample_map = {sample: sid for sid, sample in cur.fetchall()}
+                if set(sample_map) != set(samples) or len(sample_map) != len(samples):
+                    raise ImportValidationError("database sample set does not reconcile with source VCF")
+                cur.execute("SELECT count(*),coalesce(max(variant_index),-1) FROM genomeguard.dataset_variants WHERE dataset_id=%s",
+                            (dataset_id,))
+                existing_variant_count, last_variant_index = cur.fetchone()
+                if existing_variant_count != last_variant_index + 1:
+                    raise ImportValidationError("existing variant checkpoint is not contiguous; manual recovery required")
+                cur.execute("SELECT count(*) FROM genomeguard.dataset_genotype_calls WHERE dataset_id=%s AND called_alleles>0",
+                            (dataset_id,))
+                existing_call_count = cur.fetchone()[0]
 
-        variant_count = 0
-        genotype_count = 0
+        # Each committed batch is a durable checkpoint. A retry starts after the last
+        # committed variant index instead of deleting/reloading the whole cohort.
+        variant_count = existing_variant_count
+        genotype_count = existing_call_count
         batch_size = 100
         batch = []
         for record in iter_records(args.vcf, samples, args.assembly):
+            if record["variant_index"] <= last_variant_index:
+                continue
             batch.append(record)
             if len(batch) >= batch_size:
                 v, g = write_batch(conn, dataset_id, batch, sample_map, samples)
@@ -340,10 +385,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-name", required=True)
     parser.add_argument("--source-url", required=True)
     parser.add_argument("--source-release", required=True)
+    parser.add_argument("--retrieved-at", required=True, help="ISO-8601 retrieval timestamp including timezone, e.g. 2026-10-29T08:30:00Z")
     parser.add_argument("--assembly", required=True, choices=sorted(ASSEMBLIES))
     parser.add_argument("--expected-sha256", required=True)
     parser.add_argument("--reuse-statement-url", required=True)
     parser.add_argument("--citation", required=True)
+    parser.add_argument("--reviewed-public-research", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -352,7 +399,7 @@ def main(argv: list[str] | None = None) -> int:
         if digest != args.expected_sha256:
             raise ImportValidationError("SHA-256 mismatch")
         _, samples = read_header(args.vcf, args.assembly)
-        variants = sum(1 for _ in iter_records(args.vcf, samples))
+        variants = sum(1 for _ in iter_records(args.vcf, samples, args.assembly))
         if args.dry_run:
             print(json.dumps({"status": "validated_not_imported", "sha256": digest,
                               "sample_count": len(samples), "variant_count": variants,
