@@ -96,6 +96,7 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
 def iter_records(path: Path, samples: list[str]):
     seen: set[tuple[str, int, str, str]] = set()
     source_index = 0
+    variant_index = 0
     with open_vcf(path) as stream:
         for raw in stream:
             line = raw.rstrip("\r\n")
@@ -137,6 +138,7 @@ def iter_records(path: Path, samples: list[str]):
                 alt_copies = sum(dosage or 0 for dosage, called, _ in calls if called)
                 yield {
                     "source_record_index": source_index,
+                    "variant_index": variant_index,
                     "chromosome": chrom,
                     "position": pos,
                     "reference_allele": ref,
@@ -146,6 +148,7 @@ def iter_records(path: Path, samples: list[str]):
                     "called_allele_count": called_alleles,
                     "calls": calls,
                 }
+                variant_index += 1
             source_index += 1
     if source_index == 0:
         raise ImportValidationError("VCF contains no variant records")
@@ -264,7 +267,7 @@ def write_batch(conn, dataset_id, records, sample_map):
                     (dataset_id,variant_index,variant_key,chromosome,position,reference_allele,
                      alternate_allele,alt_allele_frequency,called_allele_count)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-                    (dataset_id, record["source_record_index"], record["variant_key"],
+                    (dataset_id, record["variant_index"], record["variant_key"],
                      record["chromosome"], record["position"], record["reference_allele"],
                      record["alternate_allele"], record["alt_allele_frequency"],
                      record["called_allele_count"]),
