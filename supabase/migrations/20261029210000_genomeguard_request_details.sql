@@ -18,18 +18,18 @@ begin
   if p_auth_user_id is null or p_request_id is null then
     raise exception 'invalid_request_lookup' using errcode = '22023';
   end if;
+  select * into v_request
+  from genomeguard.requests
+  where id=p_request_id;
+  if not found then
+    raise exception 'request_not_found' using errcode = 'P0002';
+  end if;
   select m.* into v_membership
   from genomeguard.organization_memberships m
   join genomeguard.organizations o on o.id=m.organization_id
-  where m.auth_user_id=p_auth_user_id and m.status='active' and o.status='active'
-  order by m.organization_id
+  where m.auth_user_id=p_auth_user_id and m.organization_id=v_request.organization_id
+    and m.status='active' and o.status='active'
   limit 1;
-  if not found then
-    raise exception 'active_organization_membership_required' using errcode = '42501';
-  end if;
-  select * into v_request
-  from genomeguard.requests
-  where id=p_request_id and organization_id=v_membership.organization_id;
   if not found then
     raise exception 'request_not_found' using errcode = 'P0002';
   end if;
