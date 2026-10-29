@@ -45,6 +45,14 @@ BASE = "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp"
 RELEASE_DIR = f"{BASE}/release/20130502/"
 PED_URL = f"{RELEASE_DIR}integrated_call_samples_v3.20130502.ALL.panel"
 VCF_NAME_RE = r"ALL\.chr{chrom}\.phase3_shapeit2_mvncall_integrated_v5[a-z]\.20130502\.genotypes\.vcf\.gz"
+# Independently recorded digest/size for the exact official chr22 Phase 3 v5b artifact.
+KNOWN_DOWNLOADS = {
+    "ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz": {
+        "sha256": "a90c16c4ff2b3196476d506ae13cb3047fae8670163c7c932c4b0239aef3daf5",
+        "size": 205_612_353,
+    },
+}
+
 
 
 # ------------------------------------------------------------------------------ downloading
