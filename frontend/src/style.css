@@ -163,7 +163,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--in
 .chk input{min-height:auto;width:17px;height:17px}
 .presets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
 .notice{padding:10px 14px;border:1px solid var(--line);border-left:3px solid var(--ink-3);background:var(--card);border-radius:var(--r-sm);margin:10px 0}
-.notice.err{border-left-color:var(--deny)}.notice.warn{border-left-color:var(--transform)}.notice.ok{border-left-color:var(--permit)}.release-gate-banner{margin:0 0 16px}.release-gate-banner p{margin:6px 0 0}.release-gate-banner strong{display:block}
+.notice.err{border-left-color:var(--deny)}.notice.warn{border-left-color:var(--transform)}.notice.ok{border-left-color:var(--permit)}.notice .fine{color:var(--ink-2)}.release-gate-banner{margin:0 0 16px}.release-gate-banner p{margin:6px 0 0}.release-gate-banner strong{display:block}
 
 /* ---------- bars, risk lane ---------- */
 .bar{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--line-2);margin:8px 0}
