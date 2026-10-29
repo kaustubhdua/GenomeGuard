@@ -54,3 +54,10 @@ Request JSON:
 ```
 
 The route requires a valid Supabase bearer token and an active reviewer/organization-admin membership for the organization owning the consent record. The database marks the record withdrawn and appends a governance event. Repeated withdrawal is idempotent. This records a governance state change; the data-release policy must still check consent status on every relevant request before any participant-specific release can be enabled.
+
+
+## Request detail and history API
+
+`GET /requests/{request_id}` requires a valid Supabase bearer token and an active membership in the request's organization. Researchers can retrieve their own requests; reviewers and organization administrators can inspect requests in their organization. A cross-organization or otherwise unauthorized request returns the same not-found response as an unavailable request.
+
+The response includes the persisted request fields, current decision, and recorded API event history. It does not include genotype calls or raw participant rows. The endpoint reports that it did not release data; a review approval remains a governance decision only.
