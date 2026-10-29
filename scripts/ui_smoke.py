@@ -152,9 +152,35 @@ def main() -> None:
         ctx = browser.new_context(viewport={"width": 1280, "height": 900})
         pg = ctx.new_page()
         errors: list[str] = []
+        expected_readiness_503 = {"count": 0}
+
+        def record_response(response):
+            # Readiness is intentionally HTTP 503 until production controls are verified.
+            # Suppress only the exact machine-readable fail-closed response.
+            if response.status != 503 or urlparse(response.url).path != "/health/ready":
+                return
+            if "application/json" not in response.headers.get("content-type", ""):
+                return
+            try:
+                body = response.json()
+            except Exception:
+                return
+            if body.get("ready") is False and body.get("status") in ("not_ready", "migration_incomplete"):
+                expected_readiness_503["count"] += 1
+
+        def record_console(message):
+            if message.type != "error" or "403" in message.text:
+                return
+            if ("Failed to load resource:" in message.text
+                    and "503 (Service Unavailable)" in message.text
+                    and expected_readiness_503["count"] > 0):
+                expected_readiness_503["count"] -= 1
+                return
+            errors.append(message.text)
+
         pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.on("console", lambda m: errors.append(m.text) if m.type == "error"
-              and "403" not in m.text else None)
+        pg.on("response", record_response)
+        pg.on("console", record_console)
         pg.goto(base + "/#/overview")
         pg.wait_for_timeout(1500)
         pg.get_by_role("button", name="Guided walkthrough").click()
