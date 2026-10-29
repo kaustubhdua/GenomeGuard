@@ -71,6 +71,8 @@ For the latest evidence-based status of hosting, Supabase RLS, persistence and r
 
 For the dataset source review, provenance ledger, and safe import acceptance criteria, see [Genomic dataset provenance and import gate](docs/genomic-dataset-provenance-import-gate.md).
 
+For the normalized VCF importer, checksum/assembly validation, genotype-call mapping, and bounded import workflow, see [Real VCF import pipeline](docs/real-vcf-import.md). For server-verified organization membership, human review, and consent-ledger limitations, see [Organization authorization and review](docs/organization-authorization-and-review.md).
+
 ## Architecture
 
 The service applies a deterministic request pipeline: request validation, policy checks, risk assessment, output transformation, anomaly monitoring, decision handling, and audit recording. Advisory agents receive sanitized summaries rather than raw genotypes and do not have authority to approve, deny, freeze, or release data.
