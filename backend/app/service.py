@@ -559,6 +559,9 @@ class GenomeGuardService:
 
     def donor_profile(self, donor_id: int) -> dict:
         d = self._donor(donor_id)
+        if d.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(404, "not_found",
+                               "participant profiles are unavailable for dataset-policy cohorts")
         acc = self.store.donor_access(donor_id)
         c = d.consent
         return {
@@ -572,6 +575,9 @@ class GenomeGuardService:
     @transactional
     def donor_set_withdrawn(self, donor_id: int, withdrawn: bool) -> dict:
         d = self._donor(donor_id)
+        if d.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_withdrawal_unsupported",
+                               "the source policy does not support participant withdrawal; no individual consent is recorded")
         if d.withdrawn == withdrawn:
             return self.donor_profile(donor_id)
         self.ds.donors[donor_id - 1] = replace(d, withdrawn=withdrawn)
@@ -589,6 +595,9 @@ class GenomeGuardService:
         """The donor edits what they agree to. Only whitelisted DUO-style fields are accepted;
         the change applies to future requests and is audited without the donor's identity."""
         d = self._donor(donor_id)
+        if d.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_not_individual_consent",
+                               "dataset-level source terms cannot be edited as an individual's consent")
         use = str(change.get("use", "")).upper()
         if use not in self.CONSENT_USES:
             raise ServiceError(422, "invalid_consent", f"use must be one of {self.CONSENT_USES}")
@@ -625,6 +634,9 @@ class GenomeGuardService:
         project extension package. Structural conformance does not make simulated consent legally valid."""
         d = self._donor(donor_id)
         c = d.consent
+        if c.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_not_individual_consent",
+                               "no participant Consent resource exists for a dataset-policy cohort")
         ref = self._donor_ref(donor_id)
 
         def duo(code: str) -> dict:
@@ -877,12 +889,34 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         if not source_meta or source_meta.get("genotypes_real") is not True:
             raise ValueError("non-demo mode refuses cohorts without verified real-genotype provenance")
         if source_meta.get("consent_simulated") is not False:
-            raise ValueError("non-demo mode refuses simulated or missing consent records; rebuild the "
-                             "cohort with an authorized --consent-json file")
-        if not source_meta.get("consent_records_matched"):
-            raise ValueError("non-demo mode requires explicit consent records for every selected sample")
-        if not source_meta.get("consent_source_file") or not source_meta.get("consent_records_sha256"):
-            raise ValueError("non-demo mode requires consent-source provenance from --consent-json")
+            raise ValueError("non-demo mode refuses simulated or missing data-use authorization")
+
+        # Dataset-level public-release terms can support aggregate public-data research,
+        # but they are not participant consent and never authorize individual-level output.
+        basis = source_meta.get("consent_basis")
+        if basis == "dataset_policy":
+            policy = source_meta.get("consent_policy") or {}
+            if (policy.get("not_individual_consent") is not True
+                    or policy.get("scope") != "dataset"
+                    or policy.get("review_status") != "source_documented_not_legal_review"
+                    or policy.get("withdrawal_supported") is not False
+                    or not isinstance(policy.get("source_url"), str)
+                    or not policy.get("source_url", "").startswith("https://")
+                    or int(source_meta.get("dataset_policy_samples_scoped") or 0)
+                       != int(source_meta.get("samples") or 0)
+                    or not source_meta.get("consent_policy_source_file")
+                    or not re.fullmatch(r"[0-9a-f]{64}",
+                                        str(source_meta.get("consent_policy_source_sha256") or ""))
+                    or int(source_meta.get("consent_records_matched") or 0) != 0):
+                raise ValueError("non-demo dataset-policy mode requires verified dataset-scoped source terms "
+                                 "and must not claim participant-consent records")
+        elif basis == "participant_records":
+            if int(source_meta.get("consent_records_matched") or 0) != int(source_meta.get("samples") or 0):
+                raise ValueError("non-demo mode requires explicit consent records for every selected sample")
+            if not source_meta.get("consent_source_file") or not source_meta.get("consent_records_sha256"):
+                raise ValueError("non-demo mode requires consent-source provenance from --consent-json")
+        else:
+            raise ValueError("non-demo mode requires participant consent records or a documented dataset policy")
 
     if store is None:
         if s.database_url:
@@ -920,7 +954,9 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                          "or the matching dataset ID")
     if s.real_cohort_file and not stored_meta.get("provenance_unknown"):
         for key in ("source_vcf_sha256", "source_sample_metadata_sha256",
-                    "consent_records_sha256", "source_vcf_file", "consent_source_file",
+                    "consent_records_sha256", "consent_policy_source_sha256",
+                    "source_vcf_file", "consent_source_file", "consent_policy_source_file",
+                    "consent_basis", "consent_policy", "dataset_policy_samples_scoped",
                     "genotypes_real", "consent_simulated", "consent_records_matched"):
             if stored_meta.get(key) != source_meta.get(key):
                 raise ValueError("configured real cohort does not match the cohort already stored in "
@@ -964,6 +1000,9 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         "consent_records_matched": stored_meta.get("consent_records_matched", 0),
         "consent_source": stored_meta.get("consent_source_file"),
         "consent_records_sha256": stored_meta.get("consent_records_sha256"),
+        "consent_policy_source": stored_meta.get("consent_policy_source_file"),
+        "consent_policy_source_sha256": stored_meta.get("consent_policy_source_sha256"),
+        "dataset_policy_samples_scoped": stored_meta.get("dataset_policy_samples_scoped", 0),
         "genotype_source": stored_meta.get("source"),
         "source_vcf_file": stored_meta.get("source_vcf_file"),
         "source_vcf_sha256": stored_meta.get("source_vcf_sha256"),

@@ -63,6 +63,7 @@ REASON_TEXT = {
     "controls_blocked": "consent forbids use as a control set (NCTRL)",
     "population_restricted": "consent is restricted to a different population",
     "unknown_consent": "consent record is malformed",
+    "dataset_policy_individual_access_blocked": "dataset-level terms do not authorize individual-level record access",
 }
 
 
@@ -111,6 +112,23 @@ def permitted(consent: dict, request: ConsentRequest, withdrawn: bool = False) -
     reason_code is "ok" when allowed."""
     if withdrawn:
         return False, "withdrawn"
+
+    # Dataset-level public-release terms are not participant consent. They may support
+    # aggregate research under documented source terms, but never individual-level output.
+    basis = consent.get("consent_basis", "participant_record")
+    if basis == "dataset_policy":
+        if (consent.get("consent_date") is not None
+                or not isinstance(consent.get("source_policy_id"), str)
+                or not consent.get("source_policy_id", "").strip()
+                or not isinstance(consent.get("source_policy_url"), str)
+                or not consent.get("source_policy_url", "").startswith("https://")
+                or consent.get("withdrawal_supported") is not False):
+            return False, "unknown_consent"
+        if request.data_level == "record":
+            return False, "dataset_policy_individual_access_blocked"
+    elif basis != "participant_record":
+        return False, "unknown_consent"
+
     use = consent.get("use")
     if use not in ("GRU", "HMB", "DS"):
         return False, "unknown_consent"

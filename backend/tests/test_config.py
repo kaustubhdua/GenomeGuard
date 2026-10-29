@@ -9,6 +9,7 @@ from app.config import Settings, validate_settings
 def secure_settings(**overrides):
     base = Settings(
         demo_mode=False,
+        database_url="postgresql://genomeguard:test@localhost:5432/genomeguard",
         admin_api_key="a-unique-admin-secret-with-more-than-32-chars",
         master_key=base64.b64encode(b"x" * 32).decode(),
         allow_tamper_demo=False,
@@ -18,13 +19,15 @@ def secure_settings(**overrides):
     return replace(base, **overrides)
 
 
-def test_non_demo_settings_accept_unique_admin_key_and_32_byte_master_key():
+def test_non_demo_settings_accept_postgresql_and_secure_keys():
     validate_settings(secure_settings())
 
 
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
+        ({"database_url": ""}, "GG_DATABASE_URL"),
+        ({"database_url": "sqlite:///genomeguard.sqlite3"}, "GG_DATABASE_URL"),
         ({"admin_api_key": "demo-admin-key"}, "GG_ADMIN_API_KEY"),
         ({"admin_api_key": ""}, "GG_ADMIN_API_KEY"),
         ({"admin_api_key": "short-secret"}, "GG_ADMIN_API_KEY"),

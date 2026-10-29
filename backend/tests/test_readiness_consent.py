@@ -10,7 +10,8 @@ def test_dataset_policy_is_not_misreported_as_participant_consent():
     svc.provenance = {
         "genotypes": "real_vcf",
         "consent": "source_policy",
-        "consent_records_matched": svc.ds.n_donors,
+        "consent_records_matched": 0,
+        "dataset_policy_samples_scoped": svc.ds.n_donors,
     }
 
     response = client.get("/health/ready")

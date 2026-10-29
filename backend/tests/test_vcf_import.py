@@ -1,8 +1,11 @@
+import ast
+import hashlib
 from pathlib import Path
 
 import pytest
 
-from app.data.vcf_import import ImportValidationError, iter_records, parse_gt, read_header
+from app.data import vcf_import
+from app.data.vcf_import import ImportValidationError, iter_records, main, parse_gt, read_header
 
 
 def _vcf(tmp_path: Path, reference: str = "GRCh37") -> Path:
@@ -42,6 +45,11 @@ def test_vcf_split_alt_records_have_unique_variant_indices(tmp_path):
     assert rows[0]["calls"] == [(1, 2, False), (2, 2, False)]
     assert rows[1]["calls"] == [(1, 2, True), (0, 2, False)]
     assert rows[2]["calls"] == [(1, 2, True), (1, 2, False)]
+    # Independent hand calculation: 3 alternate copies / 4 called alleles = 0.75.
+    assert rows[0]["alt_allele_frequency"] == pytest.approx(0.75)
+    # For C>A,T, the A ALT has 1/4 copies and T has 2/4 copies.
+    assert rows[1]["alt_allele_frequency"] == pytest.approx(0.25)
+    assert rows[2]["alt_allele_frequency"] == pytest.approx(0.5)
 
 
 def test_vcf_assembly_mismatch_fails_closed(tmp_path):
@@ -61,28 +69,96 @@ def test_vcf_rejects_coordinates_outside_declared_assembly(tmp_path):
         list(iter_records(path, samples, "GRCh37"))
 
 
+def test_vcf_dry_run_validates_and_reports_real_counts(tmp_path, capsys):
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    result = main([
+        "--vcf", str(path),
+        "--dataset-key", "test-release-chr22",
+        "--source-name", "Test fixture only",
+        "--source-url", "https://data.example.org/test.vcf",
+        "--source-release", "fixture-v1",
+        "--retrieved-at", "2026-10-28T12:00:00Z",
+        "--assembly", "GRCh37",
+        "--expected-sha256", digest,
+        "--reuse-statement-url", "https://data.example.org/reuse",
+        "--citation", "Test fixture citation",
+        "--reviewed-public-research",
+        "--dry-run",
+    ])
+    assert result == 0
+    output = capsys.readouterr().out
+    assert '"status": "validated_not_imported"' in output
+    assert '"sample_count": 2' in output
+    assert '"variant_count": 3' in output
+    assert digest in output
 
-def test_reimport_of_identical_loaded_dataset_is_idempotent(tmp_path, monkeypatch):
+
+def test_vcf_import_requires_timezone_aware_retrieval_timestamp(tmp_path, capsys):
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    result = main([
+        "--vcf", str(path),
+        "--dataset-key", "test-release-chr22",
+        "--source-name", "Test fixture only",
+        "--source-url", "https://data.example.org/test.vcf",
+        "--source-release", "fixture-v1",
+        "--retrieved-at", "2026-10-28T12:00:00",
+        "--assembly", "GRCh37",
+        "--expected-sha256", digest,
+        "--reuse-statement-url", "https://data.example.org/reuse",
+        "--citation", "Test fixture citation",
+        "--reviewed-public-research",
+        "--dry-run",
+    ])
+    assert result == 2
+    assert "retrieval timestamp must include an explicit timezone" in capsys.readouterr().err
+
+
+def test_vcf_duplicate_detection_is_bounded_and_rejects_duplicate_records(tmp_path):
+    original = _vcf(tmp_path).read_text(encoding="utf-8").splitlines()
+    duplicate = tmp_path / "duplicate.vcf"
+    duplicate.write_text("\n".join(original[:3] + [original[3], original[3], original[4]]) + "\n", encoding="utf-8")
+    _, samples = read_header(duplicate, "GRCh37")
+    with pytest.raises(ImportValidationError, match="duplicate VCF record"):
+        list(iter_records(duplicate, samples, "GRCh37"))
+
+
+def test_vcf_rejects_unsorted_coordinates(tmp_path):
+    original = _vcf(tmp_path).read_text(encoding="utf-8").splitlines()
+    unsorted = tmp_path / "unsorted.vcf"
+    unsorted.write_text("\n".join(original[:3] + [original[4], original[3]]) + "\n", encoding="utf-8")
+    _, samples = read_header(unsorted, "GRCh37")
+    with pytest.raises(ImportValidationError, match="sorted by chromosome and position"):
+        list(iter_records(unsorted, samples, "GRCh37"))
+
+
+
+# A repeat of an already-loaded, byte-identical dataset must be a no-op.
+def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     from app.data import vcf_import
 
-    vcf = _vcf(tmp_path)
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
     args = SimpleNamespace(
-        vcf=vcf,
-        dataset_key="public-phase3-chr22",
-        source_name="1000 Genomes Project",
-        source_url="https://example.org/source.vcf.gz",
-        source_release="phase3-v5b",
+        dataset_key="test-release-chr22",
+        source_name="Test source",
+        source_url="https://data.example.org/test.vcf",
+        source_release="fixture-v1",
         assembly="GRCh37",
-        reuse_statement_url="https://example.org/reuse",
-        citation="1000 Genomes Project",
+        vcf=path,
+        retrieved_at="2026-10-28T12:00:00Z",
+        reuse_statement_url="https://data.example.org/reuse",
+        citation="Test fixture citation",
     )
 
     class Cursor:
         def __init__(self):
+            self.last_row = None
             self.statements = []
-            self.result = None
+            self.call_count_queries = 0
 
         def __enter__(self):
             return self
@@ -92,13 +168,20 @@ def test_reimport_of_identical_loaded_dataset_is_idempotent(tmp_path, monkeypatc
 
         def execute(self, sql, params=None):
             self.statements.append(sql)
-            if "SELECT id,sample_count,variant_count,genotype_call_count" in sql:
-                self.result = (77, 2, 3, 5)
-            elif "INSERT INTO genomeguard.variant_dataset_manifest" in sql or "DELETE FROM genomeguard." in sql:
-                raise AssertionError("identical loaded artifact must not be reset or rewritten")
+            if "INSERT INTO genomeguard.variant_dataset_manifest" in sql:
+                assert "consent_basis='dataset_policy'" in sql
+                self.last_row = None  # ON CONFLICT ... WHERE refuses to overwrite loaded manifests
+            elif "SELECT id,sample_count,variant_count,genotype_call_count" in sql:
+                assert "consent_basis='dataset_policy'" in sql
+                self.last_row = (42, 2, 3, 5)
+            elif "DELETE FROM genomeguard." in sql:
+                raise AssertionError("idempotent import must not delete existing data")
 
         def fetchone(self):
-            return self.result
+            return self.last_row
+
+        def executemany(self, *_args, **_kwargs):
+            raise AssertionError("idempotent import must not insert samples again")
 
     class Transaction:
         def __enter__(self):
@@ -123,17 +206,139 @@ def test_reimport_of_identical_loaded_dataset_is_idempotent(tmp_path, monkeypatc
         def cursor(self):
             return self.cursor_instance
 
-    connection = Connection()
+    conn = Connection()
     monkeypatch.setenv("DATABASE_URL", "postgresql://test-only")
-    monkeypatch.setattr(vcf_import.psycopg, "connect", lambda *_args, **_kwargs: connection)
+    monkeypatch.setattr(vcf_import.psycopg, "connect", lambda *_args, **_kwargs: conn)
 
-    result = vcf_import.import_to_database(args, "a" * 64, ["SAMPLE_A", "SAMPLE_B"])
+    result = vcf_import.import_to_database(args, digest, ["SAMPLE_A", "SAMPLE_B"])
     assert result == {
-        "dataset_id": "77",
+        "dataset_id": "42",
         "status": "loaded",
         "already_loaded": True,
         "sample_count": 2,
         "variant_count": 3,
         "genotype_call_count": 5,
     }
-    assert len(connection.cursor_instance.statements) == 1
+
+
+
+def test_every_vcf_import_batch_passes_source_sample_order():
+    tree = ast.parse(Path(vcf_import.__file__).read_text(encoding="utf-8"))
+    calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "write_batch"
+    ]
+    assert calls
+    assert all(len(node.args) == 5 for node in calls)
+
+
+
+def test_interrupted_import_resumes_after_last_committed_batch(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    args = SimpleNamespace(
+        dataset_key="test-release-chr22",
+        source_name="Test source",
+        source_url="https://data.example.org/test.vcf",
+        source_release="fixture-v1",
+        assembly="GRCh37",
+        vcf=path,
+        retrieved_at="2026-10-28T12:00:00Z",
+        reuse_statement_url="https://data.example.org/reuse",
+        citation="Test fixture citation",
+    )
+
+    class Cursor:
+        def __init__(self):
+            self.last_row = None
+            self.rows = []
+            self.rowcount = -1
+            self.statements = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            self.statements.append(sql)
+            if "INSERT INTO genomeguard.variant_dataset_manifest" in sql:
+                self.last_row = (42,)
+            elif "SELECT source_sample_id FROM genomeguard.dataset_samples" in sql:
+                self.rows = [("SAMPLE_A",), ("SAMPLE_B",)]
+            elif "SELECT id,source_sample_id FROM genomeguard.dataset_samples" in sql:
+                self.rows = [(1, "SAMPLE_A"), (2, "SAMPLE_B")]
+            elif "coalesce(max(variant_index),-1)" in sql:
+                self.last_row = (2, 1)
+            elif "SELECT count(*) FROM genomeguard.dataset_genotype_calls" in sql:
+                self.call_count_queries += 1
+                self.last_row = (3 if self.call_count_queries == 1 else 5,)
+            elif "SELECT count(*) FROM genomeguard.dataset_samples" in sql:
+                self.last_row = (2,)
+            elif "SELECT count(*) FROM genomeguard.dataset_variants" in sql:
+                self.last_row = (3,)
+            elif "UPDATE genomeguard.variant_dataset_manifest" in sql:
+                self.rowcount = 1
+            elif "DELETE FROM genomeguard." in sql:
+                raise AssertionError("resume must preserve committed batches")
+
+        def fetchone(self):
+            return self.last_row
+
+        def fetchall(self):
+            return self.rows
+
+        def executemany(self, *_args, **_kwargs):
+            raise AssertionError("resume must not reinsert existing samples")
+
+    class Transaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Connection:
+        def __init__(self):
+            self.cur = Cursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def transaction(self):
+            return Transaction()
+
+        def cursor(self):
+            return self.cur
+
+    conn = Connection()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test-only")
+    monkeypatch.setattr(vcf_import.psycopg, "connect", lambda *_args, **_kwargs: conn)
+    records = [
+        {"variant_index": 0, "source_record_index": 0},
+        {"variant_index": 1, "source_record_index": 1},
+        {"variant_index": 2, "source_record_index": 2},
+    ]
+    monkeypatch.setattr(vcf_import, "iter_records", lambda *_args: iter(records))
+    written = []
+
+    def write_batch(_conn, _dataset_id, batch, _sample_map, _samples):
+        written.extend(record["variant_index"] for record in batch)
+        return len(batch), 2
+
+    monkeypatch.setattr(vcf_import, "write_batch", write_batch)
+    result = vcf_import.import_to_database(args, digest, ["SAMPLE_A", "SAMPLE_B"])
+
+    assert written == [2]
+    assert result["status"] == "loaded"
+    assert result["variant_count"] == 3
+    assert result["genotype_call_count"] == 5
+    assert not any("DELETE FROM genomeguard." in sql for sql in conn.cur.statements)

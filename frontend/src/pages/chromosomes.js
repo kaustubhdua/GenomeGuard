@@ -1,21 +1,25 @@
-import { api } from "../api.js";
 import { h, card, notice } from "../ui.js";
+import { loadPublicCatalogue } from "../catalogue-api.js";
 
 const format = (value) => Number(value || 0).toLocaleString("en-US");
 const KIND = { autosome: "Autosome", sex: "Sex chromosome", mitochondrial: "Mitochondrial" };
 
 export async function render() {
+  return renderAssembly("GRCh38");
+}
+
+async function renderAssembly(assembly) {
   const root = h("div", { class: "stack" });
   root.append(h("section", { class: "card hero" },
     h("p", { class: "eyebrow" }, "REFERENCE & DATA COVERAGE"),
     h("h1", {}, "Chromosome explorer"),
-    h("p", { class: "lede" }, "Browse the GRCh38 human reference chromosomes and see where verified variant records are actually available. Reference coordinates are not genotype data, and an empty chromosome is never treated as analysed.")));
+    h("p", { class: "lede" }, `Browse the ${assembly} human reference chromosomes and see where verified variant records are actually available. Reference coordinates are not genotype data, and an empty chromosome is never treated as analysed.`)));
 
-  const response = await api("/chromosomes");
+  const response = await loadPublicCatalogue("chromosomes", { assembly });
   if (!response.ok) {
     root.append(notice("warn",
       h("strong", {}, "Chromosome coverage service is not reachable from this deployment."),
-      h("p", { class: "muted" }, "The Supabase catalogue API must be routed to this page before live coverage can be displayed. No placeholder counts are shown."),
+      h("p", { class: "muted" }, "The live Supabase chromosome catalogue could not be loaded. Check the connection and try again; no placeholder counts are shown."),
       h("p", { class: "fine" }, "Technical status: HTTP " + (response.status || "network error"))));
     root.append(card("What this page will show", "No simulated records",
       h("ul", {},
@@ -34,6 +38,14 @@ export async function render() {
     card("With variant records", format(loaded), h("p", { class: "muted" }, "Only non-empty coverage counts as loaded"))));
 
   if (data.provenance_note) root.append(notice("info", data.provenance_note));
+  const assemblySelect = h("select", { id: "assembly-filter", "aria-label": "Reference assembly" },
+    h("option", { value: "GRCh38" }, "GRCh38"),
+    h("option", { value: "GRCh37" }, "GRCh37"));
+  assemblySelect.value = assembly;
+  assemblySelect.addEventListener("change", async () => {
+    const next = await renderAssembly(assemblySelect.value);
+    root.replaceWith(next);
+  });
   const search = h("input", { type: "search", placeholder: "Filter chromosomes (e.g. 22, X, MT)", "aria-label": "Filter chromosomes" });
   const onlyLoaded = h("input", { type: "checkbox", id: "only-loaded" });
   const list = h("div", { class: "table-wrap" });
@@ -65,6 +77,7 @@ export async function render() {
   onlyLoaded.addEventListener("change", paint);
   root.append(card("Chromosome coverage", "Live database counts — not inferred from the reference catalogue",
     h("div", { class: "form-row", style: "display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px" },
+      h("label", { for: "assembly-filter", style: "display:flex;align-items:center;gap:8px" }, "Reference assembly", assemblySelect),
       search,
       h("label", { for: "only-loaded", style: "display:flex;align-items:center;gap:8px" }, onlyLoaded, "Only chromosomes with variants")),
     list));

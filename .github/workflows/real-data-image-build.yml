@@ -31,13 +31,16 @@ jobs:
           assert m.get("consent_simulated") is False, m
           assert m.get("consent_basis") == "dataset_policy", m
           assert m.get("consent_policy", {}).get("not_individual_consent") is True, m
-          assert m.get("consent_records_matched") == m.get("samples"), m
+          assert m.get("consent_records_matched") == 0, m
+          assert m.get("dataset_policy_samples_scoped") == m.get("samples"), m
+          assert m.get("consent_source_file") is None, m
+          assert m.get("consent_records_sha256") is None, m
           assert len(m.get("source_vcf_sha256", "")) == 64, m
-          assert len(m.get("consent_records_sha256", "")) == 64, m
-          print(json.dumps({k:m[k] for k in ("source", "samples", "variants",
+          assert len(m.get("consent_policy_source_sha256", "")) == 64, m
+          print(json.dumps({k:m.get(k) for k in ("source", "samples", "variants",
             "genotypes_real", "consent_simulated", "consent_basis",
-            "consent_records_matched", "source_vcf_sha256",
-            "consent_records_sha256")}, indent=2))
+            "consent_records_matched", "dataset_policy_samples_scoped",
+            "source_vcf_sha256", "consent_policy_source_sha256")}, indent=2))
           '
       - name: Confirm raw downloaded genotype files were not retained in the image
         run: |

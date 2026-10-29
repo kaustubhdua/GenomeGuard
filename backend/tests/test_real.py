@@ -11,6 +11,7 @@ import pytest
 from app.config import Settings
 from app.data import real
 from app.service import bootstrap
+from app.store import Store
 
 PED = "\n".join([
     "Family ID\tIndividual ID\tPaternal ID\tMaternal ID\tGender\tPhenotype\tPopulation",
@@ -57,7 +58,6 @@ def test_download_retries_digest_mismatch_and_never_publishes_corrupt_bytes(tmp_
     assert result == target
     assert target.read_bytes() == good
     assert not target.with_suffix(target.suffix + ".part").exists()
-
 
 
 def test_high_coverage_population_pedigree_panel_format():
@@ -181,6 +181,7 @@ def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
         real.save_cohort(cohort, meta, out)
         settings = Settings(
             db_path=":memory:",
+            database_url="postgresql://test.invalid/genomeguard",
             demo_mode=False,
             allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
@@ -259,9 +260,13 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert meta["genotypes_real"] is True
         assert meta["consent_simulated"] is False
         assert meta["consent_basis"] == "dataset_policy"
-        assert meta["consent_records_matched"] == 44
+        assert meta["consent_records_matched"] == 0
+        assert meta["dataset_policy_samples_scoped"] == 44
         assert meta["consent_policy"]["not_individual_consent"] is True
-        assert len(meta["consent_records_sha256"]) == 64
+        assert meta["consent_records_sha256"] is None
+        assert meta["consent_source_file"] is None
+        assert meta["consent_policy_source_file"] == "policy.json"
+        assert len(meta["consent_policy_source_sha256"]) == 64
         assert all(d["consent"]["consent_basis"] == "dataset_policy" for d in cohort.donors)
         assert all(d["consent"]["consent_date"] is None for d in cohort.donors)
         assert all(d["consent"]["source_policy_id"] == "test-public-release-v1"
@@ -270,7 +275,7 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert real.read_meta(out)["consent_basis"] == "dataset_policy"
 
 
-def test_production_bootstrap_preserves_dataset_policy_provenance():
+def test_production_bootstrap_preserves_dataset_policy_without_claiming_participant_consent():
     with tempfile.TemporaryDirectory() as d:
         v, out, policy_path = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz", Path(d) / "policy.json"
         make_vcf(v)
@@ -290,20 +295,23 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
         )
         real.save_cohort(cohort, meta, out)
         settings = Settings(
-            db_path=":memory:", demo_mode=False, allow_tamper_demo=False,
+            db_path=":memory:", database_url="postgresql://test.invalid/genomeguard",
+            demo_mode=False, allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
             master_key=base64.b64encode(b"x" * 32).decode(),
             real_cohort_file=str(out), dataset_id="test-public-source-policy",
         )
-        svc = bootstrap(settings)
+        svc = bootstrap(settings, store=Store(":memory:"))
         assert svc.provenance["genotypes"] == "real_vcf"
         assert svc.provenance["consent"] == "source_policy"
-        assert svc.provenance["consent_records_matched"] == 44
+        assert svc.provenance["consent_records_matched"] == 0
+        assert svc.provenance["dataset_policy_samples_scoped"] == 44
         assert svc.provenance["consent_policy"]["not_individual_consent"] is True
         assert "not participant-specific" in svc.provenance["consent_label"]
         assert len(svc.provenance["source_vcf_sha256"]) == 64
         assert len(svc.provenance["source_sample_metadata_sha256"]) == 64
-        assert len(svc.provenance["consent_records_sha256"]) == 64
+        assert svc.provenance["consent_records_sha256"] is None
+        assert len(svc.provenance["consent_policy_source_sha256"]) == 64
         assert svc.provenance["dataset_id"] == "test-public-source-policy"
 
 

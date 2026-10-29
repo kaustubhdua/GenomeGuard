@@ -53,6 +53,10 @@ def validate_settings(s: Settings) -> None:
         return
 
     problems: list[str] = []
+    # A production-looking configuration must never silently fall back to local SQLite.
+    # SQLite on an ephemeral hosting filesystem cannot satisfy the persistence contract.
+    if not s.database_url.strip().startswith(("postgres://", "postgresql://")):
+        problems.append("GG_DATABASE_URL must be a PostgreSQL connection URL in non-demo mode")
     if s.admin_api_key == "demo-admin-key" or len(s.admin_api_key.strip()) < 32:
         problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:

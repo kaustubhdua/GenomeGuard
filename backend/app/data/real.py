@@ -46,13 +46,13 @@ RELEASE_DIR = f"{BASE}/release/20130502/"
 PED_URL = f"{RELEASE_DIR}integrated_call_samples_v3.20130502.ALL.panel"
 VCF_NAME_RE = r"ALL\.chr{chrom}\.phase3_shapeit2_mvncall_integrated_v5[a-z]\.20130502\.genotypes\.vcf\.gz"
 # Independently recorded digest/size for the exact official chr22 Phase 3 v5b artifact.
+# Pinning this artifact prevents a truncated or corrupt mirror response from being baked into images.
 KNOWN_DOWNLOADS = {
     "ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz": {
         "sha256": "a90c16c4ff2b3196476d506ae13cb3047fae8670163c7c932c4b0239aef3daf5",
         "size": 205_612_353,
     },
 }
-
 
 
 # ------------------------------------------------------------------------------ downloading
@@ -465,10 +465,18 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
                 "withdrawal_supported": consent_policy["withdrawal_supported"],
                 "not_individual_consent": True,
             } if consent_policy is not None else None),
-            "consent_source_file": Path(consent_source_file).name if consent_source_file else None,
+            "consent_source_file": (Path(consent_source_file).name
+                                    if consent_policy is None and consent_records is not None and consent_source_file else None),
             "consent_records_sha256": (sha256_file(Path(consent_source_file))
-                                       if consent_source_file else None),
-            "consent_records_matched": 0 if consent_records is None and consent_policy is None else len(chosen),
+                                       if consent_policy is None and consent_records is not None and consent_source_file else None),
+            "consent_policy_source_file": (Path(consent_source_file).name
+                                           if consent_policy is not None and consent_source_file else None),
+            "consent_policy_source_sha256": (sha256_file(Path(consent_source_file))
+                                             if consent_policy is not None and consent_source_file else None),
+            # Dataset-level source terms are not individual consent evidence. Keep the
+            # participant-record count at zero unless a per-sample consent file was supplied.
+            "consent_records_matched": len(chosen) if consent_records is not None and consent_policy is None else 0,
+            "dataset_policy_samples_scoped": len(chosen) if consent_policy is not None else 0,
             "genotypes_real": True,
             "family_enriched": bool(family_first and rels), "seed": seed,
             "build_parameters": {"requested_samples": n_samples, "max_variants": max_variants,
