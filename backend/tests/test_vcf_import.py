@@ -258,6 +258,7 @@ def test_interrupted_import_resumes_after_last_committed_batch(tmp_path, monkeyp
             self.rows = []
             self.rowcount = -1
             self.statements = []
+            self.call_count_queries = 0
 
         def __enter__(self):
             return self
