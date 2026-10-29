@@ -81,8 +81,16 @@ class PostgresStore(Store):
         # The database URL is a server-side secret; never put it in frontend/Vercel public env vars.
         try:
             with self.connection.transaction():
-                self.connection.execute("CREATE SCHEMA IF NOT EXISTS genomeguard")
-                self.connection.execute("SET search_path TO genomeguard, public")
+                # The Supabase project already contains a separate normalized governance
+                # schema named genomeguard. The legacy Python Store has a different table
+                # contract (notably donors/variants/cohort_metadata), so never run its
+                # CREATE TABLE migration into that schema. Use an isolated runtime schema.
+                schema_exists = self.connection.execute(
+                    "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'genomeguard_runtime') AS present"
+                ).fetchone()["present"]
+                if not schema_exists:
+                    self.connection.execute("CREATE SCHEMA genomeguard_runtime")
+                self.connection.execute("SET search_path TO genomeguard_runtime, public")
         except Exception:
             self.connection.close()
             raise
