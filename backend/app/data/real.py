@@ -30,6 +30,8 @@ import io
 import json
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -47,24 +49,63 @@ VCF_NAME_RE = r"ALL\.chr{chrom}\.phase3_shapeit2_mvncall_integrated_v5[a-z]\.201
 
 # ------------------------------------------------------------------------------ downloading
 
-def download(url: str, dest: Path) -> Path:
+def download(
+    url: str,
+    dest: Path,
+    *,
+    expected_sha256: str | None = None,
+    expected_size: int | None = None,
+    attempts: int = 3,
+    retry_delay: float = 2.0,
+) -> Path:
+    """Download atomically; reject truncated responses and any pinned-artifact digest mismatch.
+
+    A cached file is reused only after its pinned size/digest passes. Failed partial downloads
+    are removed before retrying, so a broken cache can never become the published cohort input.
+    """
+    def valid(path: Path) -> bool:
+        if expected_size is not None and path.stat().st_size != expected_size:
+            return False
+        if expected_sha256 is not None and sha256_file(path).lower() != expected_sha256.lower():
+            return False
+        return True
+
     if dest.exists():
-        print(f"using cached {dest}")
-        return dest
+        if valid(dest):
+            print(f"using verified cached {dest}")
+            return dest
+        print(f"discarding cached file that failed integrity checks: {dest}", file=sys.stderr)
+        dest.unlink()
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    print(f"downloading {url}")
-    with urllib.request.urlopen(url, timeout=120) as r, open(tmp, "wb") as f:
-        total, got = int(r.headers.get("Content-Length") or 0), 0
-        while chunk := r.read(1 << 20):
-            f.write(chunk)
-            got += len(chunk)
-            if total:
-                print(f"\r  {got / 1e6:.0f}/{total / 1e6:.0f} MB", end="", file=sys.stderr)
-    tmp.rename(dest)
-    print()
-    return dest
-
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            print(f"downloading {url} (attempt {attempt}/{attempts})")
+            with urllib.request.urlopen(url, timeout=120) as r, open(tmp, "wb") as f:
+                total, got = int(r.headers.get("Content-Length") or 0), 0
+                while chunk := r.read(1 << 20):
+                    f.write(chunk)
+                    got += len(chunk)
+                    if total:
+                        print(f"\r  {got / 1e6:.0f}/{total / 1e6:.0f} MB", end="", file=sys.stderr)
+            if total and got != total:
+                raise ValueError(f"truncated download: received {got} bytes, expected {total}")
+            if expected_size is not None and got != expected_size:
+                raise ValueError(f"artifact size mismatch: received {got}, expected {expected_size}")
+            if expected_sha256 is not None:
+                digest = sha256_file(tmp)
+                if digest.lower() != expected_sha256.lower():
+                    raise ValueError(f"artifact SHA-256 mismatch: received {digest}")
+            tmp.replace(dest)
+            print()
+            return dest
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            last_error = exc
+            tmp.unlink(missing_ok=True)
+            if attempt < attempts:
+                time.sleep(max(0.0, retry_delay) * attempt)
+    raise RuntimeError(f"download failed integrity/transport validation after {attempts} attempts: {url}") from last_error
 
 def resolve_vcf_url(chrom: str = "22") -> str:
     """Find the exact chromosome file name from the release directory listing instead of
@@ -485,7 +526,10 @@ def main(argv: list[str] | None = None) -> None:
     else:
         vcf_url = resolve_vcf_url(a.chrom)
         source_vcf_name = a.source_vcf_name or vcf_url.rsplit("/", 1)[-1]
-        vcf = download(vcf_url, cache / f"chr{a.chrom}.vcf.gz")
+        integrity = KNOWN_DOWNLOADS.get(Path(vcf_url).name, {})
+        vcf = download(vcf_url, cache / f"chr{a.chrom}.vcf.gz",
+                       expected_sha256=integrity.get("sha256"),
+                       expected_size=integrity.get("size"))
     if a.ped and Path(a.ped).exists():
         ped_path = Path(a.ped)
         ped_text = ped_path.read_text()
