@@ -63,6 +63,7 @@ jobs:
           test -s supabase/migrations/20261029230000_genomeguard_request_history_membership_gate.sql
           test -s supabase/migrations/20261029235000_genomeguard_api_events.sql
           test -s supabase/migrations/20261029240000_genomeguard_consent_steward_role.sql
+          test -s supabase/migrations/20261029250000_genomeguard_consent_steward_only.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -150,6 +151,7 @@ jobs:
             v_org uuid;
             v_reviewer uuid := '00000000-0000-0000-0000-000000000092';
             v_steward uuid := '00000000-0000-0000-0000-000000000093';
+            v_admin uuid := '00000000-0000-0000-0000-000000000094';
             v_consent uuid;
             v_result jsonb;
           BEGIN
@@ -157,7 +159,8 @@ jobs:
               VALUES ('ci-consent-steward','CI Consent Steward','active') RETURNING id INTO v_org;
             INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
               VALUES (v_org,v_reviewer,'reviewer','active',now()),
-                     (v_org,v_steward,'consent_steward','active',now());
+                     (v_org,v_steward,'consent_steward','active',now()),
+                     (v_org,v_admin,'organization_admin','active',now());
             INSERT INTO genomeguard.donors(id,cohort_id,population,consent_json,family_id,withdrawn_at)
               VALUES (999991,'ci-consent-test','test','{}',NULL,NULL);
             INSERT INTO genomeguard.variant_dataset_manifest(dataset_key,source_name,source_url,source_release,reference_assembly,file_sha256,data_use_review,consent_basis)
@@ -167,6 +170,12 @@ jobs:
             BEGIN
               PERFORM public.gg_withdraw_consent(v_reviewer,v_consent,'reviewer must not withdraw');
               RAISE EXCEPTION 'reviewer unexpectedly withdrew participant consent';
+            EXCEPTION WHEN insufficient_privilege THEN
+              NULL;
+            END;
+            BEGIN
+              PERFORM public.gg_withdraw_consent(v_admin,v_consent,'admin must not inherit consent authority');
+              RAISE EXCEPTION 'organization admin unexpectedly withdrew participant consent';
             EXCEPTION WHEN insufficient_privilege THEN
               NULL;
             END;
