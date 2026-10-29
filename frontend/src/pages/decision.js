@@ -120,7 +120,7 @@ function toolSummary(tool, r) {
       return `${OUTCOME_LABEL[r.outcome] || r.outcome}${(r.reasons || []).length ? ": " + r.reasons.map(reasonText).join("; ") : ""}.`;
     case "consent_counts": {
       const c = r.consent || {};
-      return c.considered != null ? `${c.eligible} of ${c.considered} donors have consent that fits.` : "No consent count was recorded.";
+      return c.considered != null ? `${c.eligible} of ${c.considered} records pass the applicable policy check; this does not establish individual consent.` : "No policy-check count was recorded.";
     }
     case "risk_profile": {
       const b = r.risk_before || {}, a = r.risk_after || {};
