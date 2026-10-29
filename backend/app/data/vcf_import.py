@@ -183,7 +183,7 @@ def validate_args(args) -> None:
         parsed = urlparse(url)
         if parsed.scheme != "https" or not parsed.netloc:
             raise ImportValidationError("source and reuse-statement URLs must be HTTPS")
-    if not args.dataset_key.strip() or not args.source_name.strip() or not args.source_release.strip():
+    if not args.dataset_key.strip() or not args.source_name.strip() or not args.source_release.strip() or not args.citation.strip():
         raise ImportValidationError("dataset key, source name, and release are required")
 
 
