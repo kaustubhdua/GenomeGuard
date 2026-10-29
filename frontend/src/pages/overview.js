@@ -33,15 +33,22 @@ const RESEARCH_ROSTER = [
 
 export async function render() {
   const hasIdentity = !!(state.demo || state.who || state.adminKey);
-  const [reqs, verify, ev, me] = await Promise.all([
+  const healthAtStart = state.health || {};
+  // Prefer the liveness snapshot when available. Older hosted API revisions may not
+  // include it yet; the strict readiness endpoint returns useful JSON with HTTP 503.
+  const readyRequest = healthAtStart.readiness
+    ? Promise.resolve({ ok: true, status: 200, data: healthAtStart.readiness })
+    : api("/health/ready");
+  const [reqs, verify, ev, me, readyResult] = await Promise.all([
     hasIdentity ? api("/requests") : Promise.resolve({ ok: false, status: 401, data: null }),
     api("/audit/verify"),
     state.demo ? api("/eval/results") : Promise.resolve({ ok: false }),
     isSteward() || !hasIdentity ? Promise.resolve({ ok: false }) : api("/me"),
+    readyRequest,
   ]);
   const rows = reqs.ok ? reqs.data.requests || [] : [];
   const hl = state.health || {};
-  const readiness = hl.readiness ? { ok: true, data: hl.readiness } : { ok: false, data: null };
+  const readiness = hl.readiness ? { ok: true, data: hl.readiness } : readyResult;
   const count = (o) => rows.filter((r) => r.outcome === o).length;
   const latest = rows[0];
   const root = h("div", { class: "stack" });
