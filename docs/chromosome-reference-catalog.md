@@ -21,3 +21,7 @@ The legacy public research build currently samples chromosome 22 only. Importing
 - Direct SQL returned 25 reference rows: 22 autosomes, X, Y and MT.
 - Direct coverage RPC returned one row per chromosome and zero variants when the variant table is empty.
 - The API function was deployed to Supabase as version 4; a live HTTP endpoint check should be recorded separately from SQL-level verification.
+
+## Frontend chromosome explorer
+
+The frontend now includes a dedicated `#/chromosomes` explorer with a responsive coverage table, chromosome filtering, a loaded-only filter, reference lengths, actual variant counts, observed coordinate ranges, and a fail-closed unavailable state. It calls the same-origin `/chromosomes` API path through the existing API client. **Do not consider this route production-connected until the user's planned Vercel-to-Supabase routing change is applied and browser-tested.** Until then the page explicitly reports the service as unavailable rather than substituting mock counts.
