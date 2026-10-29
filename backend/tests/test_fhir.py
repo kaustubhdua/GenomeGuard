@@ -1,7 +1,11 @@
 """FHIR R4 Consent export of a donor's consent (pseudonymous, tagged as simulated)."""
 
 import json
+from dataclasses import replace
 
+import pytest
+
+from app.service import ServiceError
 from tests.helpers import ADMIN, make_client, make_service
 
 
@@ -81,3 +85,37 @@ def test_endpoint_needs_the_donors_own_key_and_is_audited_without_identity():
     assert last["payload"] == {"donor_ref": svc._donor_ref(a.id), "format": "fhir_r4"}
     assert last["actor"] == "donor:" + svc._donor_ref(a.id)
     assert svc.audit.verify()["ok"]
+
+
+
+def test_dataset_policy_does_not_expose_or_mutate_fake_participant_consent():
+    svc = make_service()
+    donor = svc.ds.donors[0]
+    policy_consent = {
+        **donor.consent,
+        "consent_basis": "dataset_policy",
+        "consent_date": None,
+        "source_policy_id": "public-terms-v1",
+        "source_policy_url": "https://example.org/terms",
+        "withdrawal_supported": False,
+    }
+    svc.ds.donors[donor.id - 1] = replace(donor, consent=policy_consent)
+
+    with pytest.raises(ServiceError) as profile_error:
+        svc.donor_profile(donor.id)
+    assert profile_error.value.status == 404
+
+    with pytest.raises(ServiceError) as consent_error:
+        svc.donor_set_consent(donor.id, {"use": "GRU", "modifiers": []})
+    assert consent_error.value.status == 409
+    assert consent_error.value.code == "dataset_policy_not_individual_consent"
+
+    with pytest.raises(ServiceError) as withdrawal_error:
+        svc.donor_set_withdrawn(donor.id, True)
+    assert withdrawal_error.value.status == 409
+    assert withdrawal_error.value.code == "dataset_policy_withdrawal_unsupported"
+
+    with pytest.raises(ServiceError) as fhir_error:
+        svc.donor_consent_fhir(donor.id)
+    assert fhir_error.value.status == 409
+    assert fhir_error.value.code == "dataset_policy_not_individual_consent"
