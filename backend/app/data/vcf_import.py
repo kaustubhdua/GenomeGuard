@@ -187,6 +187,14 @@ def validate_args(args) -> None:
             raise ImportValidationError("source and reuse-statement URLs must be HTTPS")
     if not args.dataset_key.strip() or not args.source_name.strip() or not args.source_release.strip():
         raise ImportValidationError("dataset key, source name, and release are required")
+    try:
+        retrieved_at = datetime.fromisoformat(args.retrieved_at.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise ImportValidationError("retrieval timestamp must be an ISO-8601 datetime with timezone") from exc
+    if retrieved_at.tzinfo is None or retrieved_at.utcoffset() is None:
+        raise ImportValidationError("retrieval timestamp must include an explicit timezone")
+    if retrieved_at > datetime.now(UTC).replace(microsecond=0):
+        raise ImportValidationError("retrieval timestamp cannot be in the future")
 
 
 def import_to_database(args, digest: str, samples: list[str]) -> dict:
@@ -198,7 +206,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         "citation": args.citation,
         "source_file_name": args.vcf.name,
         "source_file_bytes": args.vcf.stat().st_size,
-        "retrieved_at": datetime.now(UTC).isoformat(),
+        "retrieved_at": datetime.fromisoformat(args.retrieved_at.replace("Z", "+00:00")).astimezone(UTC).isoformat(),
         "importer_version": "1.0",
         "model": "normalized per-sample/per-ALT genotype calls",
     }
@@ -322,6 +330,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-name", required=True)
     parser.add_argument("--source-url", required=True)
     parser.add_argument("--source-release", required=True)
+    parser.add_argument("--retrieved-at", required=True, help="ISO-8601 retrieval timestamp including timezone, e.g. 2026-10-29T08:30:00Z")
     parser.add_argument("--assembly", required=True, choices=sorted(ASSEMBLIES))
     parser.add_argument("--expected-sha256", required=True)
     parser.add_argument("--reuse-statement-url", required=True)
