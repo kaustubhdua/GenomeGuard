@@ -349,3 +349,71 @@ def test_interrupted_import_resumes_after_last_committed_batch(tmp_path, monkeyp
     assert result["variant_count"] == 3
     assert result["genotype_call_count"] == 5
     assert not any("DELETE FROM genomeguard." in sql for sql in conn.cur.statements)
+
+def test_import_refuses_to_create_or_self_approve_a_manifest(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    args = SimpleNamespace(
+        dataset_key="unreviewed-release",
+        source_name="Unreviewed source",
+        source_url="https://data.example.org/unreviewed.vcf",
+        source_release="fixture-v1",
+        assembly="GRCh37",
+        vcf=path,
+        retrieved_at="2026-10-28T12:00:00Z",
+        reuse_statement_url="https://data.example.org/reuse",
+        citation="Test fixture citation",
+    )
+
+    class Cursor:
+        def __init__(self):
+            self.statements = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            self.statements.append(sql)
+            if "INSERT INTO genomeguard.variant_dataset_manifest" in sql:
+                raise AssertionError("importer must never create or self-approve its manifest")
+
+        def fetchone(self):
+            return None
+
+    class Transaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Connection:
+        def __init__(self):
+            self.cur = Cursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def transaction(self):
+            return Transaction()
+
+        def cursor(self):
+            return self.cur
+
+    conn = Connection()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test-only")
+    monkeypatch.setattr(vcf_import.psycopg, "connect", lambda *_args, **_kwargs: conn)
+
+    with pytest.raises(ImportValidationError, match="trusted data steward"):
+        vcf_import.import_to_database(args, digest, ["SAMPLE_A", "SAMPLE_B"])
+    assert any("SELECT id, source_name, source_url" in sql for sql in conn.cur.statements)
+    assert not any("INSERT INTO genomeguard.variant_dataset_manifest" in sql for sql in conn.cur.statements)
+
