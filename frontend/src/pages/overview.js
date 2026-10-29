@@ -38,7 +38,12 @@ export async function render() {
   // include it yet; the strict readiness endpoint returns useful JSON with HTTP 503.
   const readyRequest = healthAtStart.readiness
     ? Promise.resolve({ ok: true, status: 200, data: healthAtStart.readiness })
-    : api("/health/ready");
+    : state.demo
+      // Demo mode is explicitly not a production readiness signal. Avoid calling the
+      // intentionally fail-closed 503 endpoint from the public demo UI.
+      ? Promise.resolve({ ok: false, status: 503, data: { ready: false, checks: {},
+          message: "Demo mode cannot establish production readiness." } })
+      : api("/health/ready");
   const [reqs, verify, ev, me, readyResult] = await Promise.all([
     hasIdentity ? api("/requests") : Promise.resolve({ ok: false, status: 401, data: null }),
     api("/audit/verify"),
