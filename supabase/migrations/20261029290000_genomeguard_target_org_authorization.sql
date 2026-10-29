@@ -73,7 +73,7 @@ begin
     'outcome',p_outcome,'status',v_status,
     'message','Review decision recorded. Approval does not itself release genomic data.');
 end;
-$function$
+$function$;
 
 revoke all on function public.gg_review_request(uuid,bigint,text,text) from public, anon, authenticated;
 grant execute on function public.gg_review_request(uuid,bigint,text,text) to service_role;
@@ -130,7 +130,7 @@ begin
   return jsonb_build_object('consent_id',p_consent_id,'status','withdrawn',
     'message','Withdrawal recorded. Downstream release controls must enforce this status.');
 end;
-$function$
+$function$;
 
 revoke all on function public.gg_withdraw_consent(uuid,uuid,text) from public, anon, authenticated;
 grant execute on function public.gg_withdraw_consent(uuid,uuid,text) to service_role;
