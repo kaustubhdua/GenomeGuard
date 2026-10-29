@@ -182,7 +182,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         "importer_version": "1.0",
         "model": "normalized per-sample/per-ALT genotype calls",
     }
-    with psycopg.connect(database_url) as conn:
+    with psycopg.connect(database_url, autocommit=True) as conn:
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute(
