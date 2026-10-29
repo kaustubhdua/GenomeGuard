@@ -44,6 +44,14 @@ jobs:
       - run: make eval
       - run: make demo
       - run: for f in $(find frontend -name '*.js'); do node --check "$f" || exit 1; done
+      - name: Guard against overstating dataset policy as participant consent
+        run: |
+          if grep -R -F "donors have consent that fits" frontend/src; then
+            echo "Misleading participant-consent claim found in frontend copy" >&2
+            exit 1
+          fi
+          grep -F "this is not participant-specific consent" frontend/src/pages/decision.js
+          grep -F "Dataset-level policy only, not participant-specific consent" frontend/src/pages/requests.js
       - name: Compile all Python application and script files
         run: .venv/bin/python -m compileall -q backend scripts
       - name: Install browser smoke-test dependencies
