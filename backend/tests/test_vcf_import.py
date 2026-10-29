@@ -166,8 +166,10 @@ def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tm
         def execute(self, sql, params=None):
             self.statements.append(sql)
             if "INSERT INTO genomeguard.variant_dataset_manifest" in sql:
+                assert "consent_basis='dataset_policy'" in sql
                 self.last_row = None  # ON CONFLICT ... WHERE refuses to overwrite loaded manifests
             elif "SELECT id,sample_count,variant_count,genotype_call_count" in sql:
+                assert "consent_basis='dataset_policy'" in sql
                 self.last_row = (42, 2, 3, 5)
             elif "DELETE FROM genomeguard." in sql:
                 raise AssertionError("idempotent import must not delete existing data")
