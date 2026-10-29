@@ -83,6 +83,24 @@ CASES = [
      r("general_research", is_commercial=True), False, False, "purpose_not_health"),
     ("all_modifiers_clean_request", c("GRU", mods=["NCU", "NPU", "NMDS", "NAGR", "NCTRL"]),
      r("general_research", data_level="record"), False, True, "ok"),
+    # --- dataset-level source terms are not participant consent ---
+    ("dataset_policy_aggregate_allowed", {
+        "use": "GRU", "disease": None, "modifiers": [], "population": None,
+        "consent_date": None, "consent_basis": "dataset_policy",
+        "source_policy_id": "public-terms-v1", "source_policy_url": "https://example.org/terms",
+        "withdrawal_supported": False,
+    }, r(data_level="frequency"), False, True, "ok"),
+    ("dataset_policy_record_blocked", {
+        "use": "GRU", "disease": None, "modifiers": [], "population": None,
+        "consent_date": None, "consent_basis": "dataset_policy",
+        "source_policy_id": "public-terms-v1", "source_policy_url": "https://example.org/terms",
+        "withdrawal_supported": False,
+    }, r(data_level="record"), False, False, "dataset_policy_individual_access_blocked"),
+    ("dataset_policy_missing_source_blocked", {
+        "use": "GRU", "disease": None, "modifiers": [], "population": None,
+        "consent_date": None, "consent_basis": "dataset_policy",
+        "source_policy_url": "https://example.org/terms", "withdrawal_supported": False,
+    }, r(), False, False, "unknown_consent"),
     # --- malformed ---
     ("unknown_use_code", {"use": "XYZ", "modifiers": []}, r(), False, False, "unknown_consent"),
     ("missing_modifiers_key", {"use": "GRU"}, r(), False, True, "ok"),
