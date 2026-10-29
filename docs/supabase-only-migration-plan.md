@@ -40,6 +40,37 @@ Port in small, testable slices; the route list below is from `backend/app/api.py
 6. **Interoperability / research demos:** `GET /beacon/g_variants`, `GET /federated/he`, `GET /federated/demo`.
 7. **Demo-only destructive controls:** `POST /admin/tamper/{idx}`, `POST /admin/untamper`. These must remain disabled outside explicitly isolated demo mode.
 
+## Verified endpoint parity snapshot (2026-10-29)
+
+This is an explicit cutover blocker list. It describes the checked-in Edge Function implementation, not a promise that an endpoint is production-ready. The public catalogue routes are the only browser pages intentionally switched to Supabase in the current integration branch.
+
+| API contract group | Edge Function state | Release consequence |
+|---|---|---|
+| `GET /health` | Implemented as a liveness/status-store check | Does not prove readiness |
+| `GET /health/ready` | Implemented and deliberately returns HTTP 503 / not-ready | Keep release blocked |
+| `GET /datasets`, `GET /chromosomes` | Implemented as public, read-only catalogues using verified manifest/reference RPCs | Can display empty/unavailable truthfully; no dataset is currently loaded |
+| `POST /requests`, `GET /requests`, `GET /requests/{id}` | Implemented with verified Supabase Auth identity and organization-scoped RPCs | Request creation is queued for review; it is not a completed policy-evaluation or data-release workflow |
+| `POST /requests/{id}/review` | Implemented for an active reviewer/organization-admin membership and request organization | Records a human review outcome; approval explicitly does not release genomic data |
+| `POST /consents/{id}/withdraw` | Implemented for an active consent-steward role | Updates the consent ledger; downstream release paths still need to enforce the withdrawal |
+| `GET /me`, `POST /admin/requesters`, `GET /eval/results`, `GET /openapi.json`, `GET /docs` | Not ported to the Edge Function contract | Do not route these paths to Supabase as if parity existed |
+| `GET /beacon/g_variants`, `GET /consent/summary` | Not ported | No Beacon or consent summary parity |
+| `GET /requests/{id}/exposure`, `POST /requests/{id}/copilot` | Not ported | Exposure graph and advisory copilot remain legacy-only |
+| `GET /audit`, `GET /audit/verify`, `GET /audit/head` | Not ported as a complete Edge API | Append-only SQL trigger is not a complete audit API or external anchor |
+| `GET /anomalies`, freeze/unfreeze, compliance report | Not ported | Monitoring and steward operations are not migrated |
+| Donor consent, withdrawal, restoration, FHIR export and concierge routes | Not ported | Demo donor flows are not equivalent to authoritative participant consent |
+| Federated analysis and homomorphic-encryption routes | Not ported as a governed production contract | Treat as demos/experiments only |
+| Demo keys and destructive tamper controls | Must remain unavailable outside isolated demo mode | Never expose demo credentials or tamper operations in production |
+
+### Frontend routing facts
+
+- The legacy shared API client still calls relative API paths through the existing deployment rewrite, and sends the legacy `X-API-Key`, `X-Admin-Key`, and `X-Donor-Key` headers for its current product workflows.
+- Dataset and chromosome catalogue pages now call the public Supabase Edge Function directly through `frontend/src/catalogue-api.js`; this is limited to read-only catalogue information.
+- No broad Vercel rewrite change has been made. This is intentional: most legacy endpoints do not yet have contract parity, and switching the rewrite now would break core pages or bypass the Python policy engine.
+- The publishable Supabase key in the catalogue client is designed for browser use. It is not a service-role key. All governed Edge routes require a verified bearer token and server-side membership checks.
+- The current Edge Function uses a server-side service key to call tightly scoped RPCs. Review the grants, SECURITY DEFINER functions, input validation, transaction behavior and negative tests before expanding the API surface.
+
+The checked-in Edge Function therefore is a **partial backend migration**, not a complete Supabase replacement. A route is complete only when its input/output contract, authorization rules, persistence semantics, failure codes and side effects are tested against the legacy reference behavior where that behavior is intended to remain.
+
 ## Required implementation order
 
 1. Add TypeScript domain modules and tests for validation, consent policy, risk/transform rules, epsilon budget, audit hash chain, anomaly rules, and requester/admin authorization. Keep the Python implementation as the reference oracle while porting.
