@@ -246,6 +246,27 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                 )
                 row = cur.fetchone()
                 if not row:
+                    # A fully loaded, byte-identical manifest is an idempotent no-op. Do not
+                    # reset counters or delete data on a repeat invocation.
+                    cur.execute(
+                        """SELECT id,sample_count,variant_count,genotype_call_count
+                           FROM genomeguard.variant_dataset_manifest
+                           WHERE dataset_key=%s AND file_sha256=%s AND source_url=%s
+                             AND source_release=%s AND reference_assembly=%s
+                             AND data_use_review='approved_public_research' AND import_status='loaded'""",
+                        (args.dataset_key, digest, args.source_url, args.source_release, args.assembly),
+                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        dataset_id, sample_count, variant_count, genotype_count = existing
+                        return {
+                            "dataset_id": str(dataset_id),
+                            "status": "loaded",
+                            "already_loaded": True,
+                            "sample_count": sample_count,
+                            "variant_count": variant_count,
+                            "genotype_call_count": genotype_count,
+                        }
                     raise ImportValidationError("dataset key already exists with another checksum or is already loaded")
                 dataset_id = row[0]
                 cur.execute("DELETE FROM genomeguard.dataset_genotype_calls WHERE dataset_id=%s", (dataset_id,))
