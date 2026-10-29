@@ -190,7 +190,7 @@ def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
             dataset_id="test-approved-cohort",
         )
         from app.store import Store
-        with pytest.raises(ValueError, match="simulated or missing data-use authorization"):
+        with pytest.raises(ValueError, match="simulated or missing consent/data-use authorization"):
             bootstrap(settings, store=Store(":memory:"))
 
 
