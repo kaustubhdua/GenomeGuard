@@ -188,7 +188,7 @@ def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
             real_cohort_file=str(out),
             dataset_id="test-approved-cohort",
         )
-        with pytest.raises(ValueError, match="simulated or missing consent"):
+        with pytest.raises(ValueError, match="simulated or missing data-use authorization"):
             bootstrap(settings)
 
 
