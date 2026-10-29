@@ -71,6 +71,7 @@ def test_vcf_dry_run_validates_and_reports_real_counts(tmp_path, capsys):
         "--source-name", "Test fixture only",
         "--source-url", "https://data.example.org/test.vcf",
         "--source-release", "fixture-v1",
+        "--retrieved-at", "2026-10-28T12:00:00Z",
         "--assembly", "GRCh37",
         "--expected-sha256", digest,
         "--reuse-statement-url", "https://data.example.org/reuse",
@@ -84,3 +85,24 @@ def test_vcf_dry_run_validates_and_reports_real_counts(tmp_path, capsys):
     assert '"sample_count": 2' in output
     assert '"variant_count": 3' in output
     assert digest in output
+
+
+def test_vcf_import_requires_timezone_aware_retrieval_timestamp(tmp_path, capsys):
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    result = main([
+        "--vcf", str(path),
+        "--dataset-key", "test-release-chr22",
+        "--source-name", "Test fixture only",
+        "--source-url", "https://data.example.org/test.vcf",
+        "--source-release", "fixture-v1",
+        "--retrieved-at", "2026-10-28T12:00:00",
+        "--assembly", "GRCh37",
+        "--expected-sha256", digest,
+        "--reuse-statement-url", "https://data.example.org/reuse",
+        "--citation", "Test fixture citation",
+        "--reviewed-public-research",
+        "--dry-run",
+    ])
+    assert result == 2
+    assert "retrieval timestamp must include an explicit timezone" in capsys.readouterr().err
