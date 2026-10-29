@@ -59,3 +59,81 @@ def test_vcf_rejects_coordinates_outside_declared_assembly(tmp_path):
     _, samples = read_header(path, "GRCh37")
     with pytest.raises(ImportValidationError, match="invalid position"):
         list(iter_records(path, samples, "GRCh37"))
+
+
+
+def test_reimport_of_identical_loaded_dataset_is_idempotent(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.data import vcf_import
+
+    vcf = _vcf(tmp_path)
+    args = SimpleNamespace(
+        vcf=vcf,
+        dataset_key="public-phase3-chr22",
+        source_name="1000 Genomes Project",
+        source_url="https://example.org/source.vcf.gz",
+        source_release="phase3-v5b",
+        assembly="GRCh37",
+        reuse_statement_url="https://example.org/reuse",
+        citation="1000 Genomes Project",
+    )
+
+    class Cursor:
+        def __init__(self):
+            self.statements = []
+            self.result = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            self.statements.append(sql)
+            if "SELECT id,sample_count,variant_count,genotype_call_count" in sql:
+                self.result = (77, 2, 3, 5)
+            elif "INSERT INTO genomeguard.variant_dataset_manifest" in sql or "DELETE FROM genomeguard." in sql:
+                raise AssertionError("identical loaded artifact must not be reset or rewritten")
+
+        def fetchone(self):
+            return self.result
+
+    class Transaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def transaction(self):
+            return Transaction()
+
+        def cursor(self):
+            return self.cursor_instance
+
+    connection = Connection()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test-only")
+    monkeypatch.setattr(vcf_import.psycopg, "connect", lambda *_args, **_kwargs: connection)
+
+    result = vcf_import.import_to_database(args, "a" * 64, ["SAMPLE_A", "SAMPLE_B"])
+    assert result == {
+        "dataset_id": "77",
+        "status": "loaded",
+        "already_loaded": True,
+        "sample_count": 2,
+        "variant_count": 3,
+        "genotype_call_count": 5,
+    }
+    assert len(connection.cursor_instance.statements) == 1
