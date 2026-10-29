@@ -1,3 +1,11 @@
+-- The legacy requesters table predates Supabase Auth. Add the nullable mapping
+-- explicitly in migration history so clean databases match the live schema.
+alter table genomeguard.requesters
+  add column if not exists auth_user_id uuid;
+create unique index if not exists requesters_auth_user_id_unique
+  on genomeguard.requesters(auth_user_id)
+  where auth_user_id is not null;
+
 -- A revoked or suspended organization member must not retain request-history access.
 -- The RPC is called only by the server-side Edge Function after Supabase Auth verifies
 -- the bearer token. Membership is rechecked inside the database on every invocation.
