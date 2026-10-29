@@ -335,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
         if digest != args.expected_sha256:
             raise ImportValidationError("SHA-256 mismatch")
         _, samples = read_header(args.vcf, args.assembly)
-        variants = sum(1 for _ in iter_records(args.vcf, samples))
+        variants = sum(1 for _ in iter_records(args.vcf, samples, args.assembly))
         if args.dry_run:
             print(json.dumps({"status": "validated_not_imported", "sha256": digest,
                               "sample_count": len(samples), "variant_count": variants,
