@@ -1,8 +1,9 @@
+import hashlib
 from pathlib import Path
 
 import pytest
 
-from app.data.vcf_import import ImportValidationError, iter_records, parse_gt, read_header
+from app.data.vcf_import import ImportValidationError, iter_records, main, parse_gt, read_header
 
 
 def _vcf(tmp_path: Path, reference: str = "GRCh37") -> Path:
@@ -59,3 +60,27 @@ def test_vcf_rejects_coordinates_outside_declared_assembly(tmp_path):
     _, samples = read_header(path, "GRCh37")
     with pytest.raises(ImportValidationError, match="invalid position"):
         list(iter_records(path, samples, "GRCh37"))
+
+
+def test_vcf_dry_run_validates_and_reports_real_counts(tmp_path, capsys):
+    path = _vcf(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    result = main([
+        "--vcf", str(path),
+        "--dataset-key", "test-release-chr22",
+        "--source-name", "Test fixture only",
+        "--source-url", "https://data.example.org/test.vcf",
+        "--source-release", "fixture-v1",
+        "--assembly", "GRCh37",
+        "--expected-sha256", digest,
+        "--reuse-statement-url", "https://data.example.org/reuse",
+        "--citation", "Test fixture citation",
+        "--reviewed-public-research",
+        "--dry-run",
+    ])
+    assert result == 0
+    output = capsys.readouterr().out
+    assert '"status": "validated_not_imported"' in output
+    assert '"sample_count": 2' in output
+    assert '"variant_count": 3' in output
+    assert digest in output
