@@ -144,6 +144,57 @@ Deno.serve(async (request: Request) => {
         full_frontend_route_parity: false },
       note: "Fail-closed migration gate. No genomic data access is granted by this API yet." }, 503);
   }
+  const consentWithdrawMatch = path.match(/\/consents\/([0-9a-f-]{36})\/withdraw$/i);
+  if (consentWithdrawMatch && request.method === "POST") {
+    const user = await authenticatedUser(request, url, serviceKey);
+    if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
+    const parsed = await readJsonLimited(request, 4_096);
+    if (!parsed.ok) return error(parsed.status, parsed.status === 413 ? "payload_too_large" : "bad_json",
+      parsed.status === 413 ? "Withdrawal payload exceeds 4 KB." : "Send a valid JSON object.");
+    if (!objectBody(parsed.value)) return error(400, "bad_json", "Send a valid JSON object.");
+    const reason = typeof parsed.value.reason === "string" ? parsed.value.reason.trim() : "";
+    if (reason.length < 3 || reason.length > 1_000) {
+      return error(422, "invalid_withdrawal", "Provide a 3–1000 character reason.");
+    }
+    try {
+      const result = await rpc(url, serviceKey, "gg_withdraw_consent", {
+        p_auth_user_id: user.id,
+        p_consent_id: consentWithdrawMatch[1],
+        p_reason: reason,
+      });
+      return json(result);
+    } catch {
+      return error(403, "withdrawal_not_authorized_or_unavailable",
+        "The withdrawal was not recorded. Confirm active steward membership and consent-record ownership.");
+    }
+  }
+  const reviewMatch = path.match(/\/requests\/(\d+)\/review$/);
+  if (reviewMatch && request.method === "POST") {
+    const user = await authenticatedUser(request, url, serviceKey);
+    if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
+    const parsed = await readJsonLimited(request, 8_192);
+    if (!parsed.ok) return error(parsed.status, parsed.status === 413 ? "payload_too_large" : "bad_json",
+      parsed.status === 413 ? "Review payload exceeds 8 KB." : "Send a valid JSON object.");
+    if (!objectBody(parsed.value)) return error(400, "bad_json", "Send a valid JSON object.");
+    const outcome = typeof parsed.value.outcome === "string" ? parsed.value.outcome : "";
+    const reason = typeof parsed.value.reason === "string" ? parsed.value.reason.trim() : "";
+    if (!["approved", "denied", "needs_more_information"].includes(outcome) ||
+        reason.length < 3 || reason.length > 2_000) {
+      return error(422, "invalid_review", "Provide a valid outcome and a 3–2000 character reason.");
+    }
+    try {
+      const result = await rpc(url, serviceKey, "gg_review_request", {
+        p_auth_user_id: user.id,
+        p_request_id: Number(reviewMatch[1]),
+        p_outcome: outcome,
+        p_reason: reason,
+      });
+      return json(result);
+    } catch {
+      return error(403, "review_not_authorized_or_unavailable",
+        "The review was not recorded. Confirm active reviewer membership and request ownership.");
+    }
+  }
   if (path.endsWith("/requests") && request.method === "GET") {
     const user = await authenticatedUser(request, url, serviceKey);
     if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
