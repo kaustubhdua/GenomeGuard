@@ -168,12 +168,14 @@ def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tm
 
         def execute(self, sql, params=None):
             self.statements.append(sql)
-            if "INSERT INTO genomeguard.variant_dataset_manifest" in sql:
-                assert "consent_basis='dataset_policy'" in sql
-                self.last_row = None  # ON CONFLICT ... WHERE refuses to overwrite loaded manifests
-            elif "SELECT id,sample_count,variant_count,genotype_call_count" in sql:
-                assert "consent_basis='dataset_policy'" in sql
-                self.last_row = (42, 2, 3, 5)
+            if "SELECT id, source_name, source_url, source_release, reference_assembly" in sql:
+                self.last_row = (
+                    42, args.source_name, args.source_url, args.source_release, args.assembly,
+                    digest, "approved_public_research", "dataset_policy", "loaded",
+                    {"reuse_statement_url": args.reuse_statement_url, "citation": args.citation},
+                )
+            elif "SELECT sample_count, variant_count, genotype_call_count" in sql:
+                self.last_row = (2, 3, 5)
             elif "DELETE FROM genomeguard." in sql:
                 raise AssertionError("idempotent import must not delete existing data")
 
@@ -268,8 +270,12 @@ def test_interrupted_import_resumes_after_last_committed_batch(tmp_path, monkeyp
 
         def execute(self, sql, params=None):
             self.statements.append(sql)
-            if "INSERT INTO genomeguard.variant_dataset_manifest" in sql:
-                self.last_row = (42,)
+            if "SELECT id, source_name, source_url, source_release, reference_assembly" in sql:
+                self.last_row = (
+                    42, args.source_name, args.source_url, args.source_release, args.assembly,
+                    digest, "approved_public_research", "dataset_policy", "loading",
+                    {"reuse_statement_url": args.reuse_statement_url, "citation": args.citation},
+                )
             elif "SELECT source_sample_id FROM genomeguard.dataset_samples" in sql:
                 self.rows = [("SAMPLE_A",), ("SAMPLE_B",)]
             elif "SELECT id,source_sample_id FROM genomeguard.dataset_samples" in sql:
