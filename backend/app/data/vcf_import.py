@@ -232,7 +232,6 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                      data_use_review,consent_basis,import_status,metadata)
                     VALUES (%s,%s,%s,%s,%s,%s,'approved_public_research','dataset_policy','loading',%s)
                     ON CONFLICT (dataset_key) DO UPDATE SET import_status='loading',
-                      variant_count=0,genotype_call_count=0,sample_count=0,imported_at=NULL,
                       updated_at=now(),metadata=excluded.metadata
                     WHERE genomeguard.variant_dataset_manifest.file_sha256=excluded.file_sha256
                       AND genomeguard.variant_dataset_manifest.source_url=excluded.source_url
@@ -271,22 +270,39 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                         }
                     raise ImportValidationError("dataset key already exists with another checksum or is already loaded")
                 dataset_id = row[0]
-                cur.execute("DELETE FROM genomeguard.dataset_genotype_calls WHERE dataset_id=%s", (dataset_id,))
-                cur.execute("DELETE FROM genomeguard.dataset_variants WHERE dataset_id=%s", (dataset_id,))
-                cur.execute("DELETE FROM genomeguard.dataset_samples WHERE dataset_id=%s", (dataset_id,))
-                cur.executemany(
-                    "INSERT INTO genomeguard.dataset_samples(dataset_id,source_sample_id) VALUES (%s,%s)",
-                    [(dataset_id, sample) for sample in samples],
-                )
+                cur.execute("SELECT source_sample_id FROM genomeguard.dataset_samples WHERE dataset_id=%s",
+                            (dataset_id,))
+                existing_samples = [row[0] for row in cur.fetchall()]
+                if existing_samples and set(existing_samples) != set(samples):
+                    raise ImportValidationError("resumed import sample identifiers do not match the source VCF")
+                if not existing_samples:
+                    cur.executemany(
+                        "INSERT INTO genomeguard.dataset_samples(dataset_id,source_sample_id) VALUES (%s,%s)",
+                        [(dataset_id, sample) for sample in samples],
+                    )
                 cur.execute("SELECT id,source_sample_id FROM genomeguard.dataset_samples WHERE dataset_id=%s",
                             (dataset_id,))
                 sample_map = {sample: sid for sid, sample in cur.fetchall()}
+                if set(sample_map) != set(samples) or len(sample_map) != len(samples):
+                    raise ImportValidationError("database sample set does not reconcile with source VCF")
+                cur.execute("SELECT count(*),coalesce(max(variant_index),-1) FROM genomeguard.dataset_variants WHERE dataset_id=%s",
+                            (dataset_id,))
+                existing_variant_count, last_variant_index = cur.fetchone()
+                if existing_variant_count != last_variant_index + 1:
+                    raise ImportValidationError("existing variant checkpoint is not contiguous; manual recovery required")
+                cur.execute("SELECT count(*) FROM genomeguard.dataset_genotype_calls WHERE dataset_id=%s AND called_alleles>0",
+                            (dataset_id,))
+                existing_call_count = cur.fetchone()[0]
 
-        variant_count = 0
-        genotype_count = 0
+        # Each committed batch is a durable checkpoint. A retry starts after the last
+        # committed variant index instead of deleting/reloading the whole cohort.
+        variant_count = existing_variant_count
+        genotype_count = existing_call_count
         batch_size = 100
         batch = []
         for record in iter_records(args.vcf, samples, args.assembly):
+            if record["variant_index"] <= last_variant_index:
+                continue
             batch.append(record)
             if len(batch) >= batch_size:
                 v, g = write_batch(conn, dataset_id, batch, sample_map, samples)
