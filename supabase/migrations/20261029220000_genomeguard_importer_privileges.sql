@@ -19,7 +19,6 @@ grant select, insert, delete on genomeguard.dataset_genotype_calls to genomeguar
 grant usage, select on sequence genomeguard.dataset_samples_id_seq to genomeguard_importer;
 grant usage, select on sequence genomeguard.dataset_variants_id_seq to genomeguard_importer;
 
-revoke all on schema genomeguard from public, anon, authenticated, service_role;
 revoke all on genomeguard.variant_dataset_manifest from public, anon, authenticated, service_role;
 revoke all on genomeguard.dataset_samples from public, anon, authenticated, service_role;
 revoke all on genomeguard.dataset_variants from public, anon, authenticated, service_role;
