@@ -157,6 +157,7 @@ def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
     master_key = base64.b64encode(b"m" * 32).decode()
     svc = make_service(admin_api_key=admin_key)
     monkeypatch.setenv("GG_DEMO_MODE", "false")
+    monkeypatch.setenv("GG_DATABASE_URL", "postgresql://test.invalid/genomeguard")
     monkeypatch.setenv("GG_ALLOW_TAMPER_DEMO", "false")
     monkeypatch.setenv("GG_ADMIN_API_KEY", admin_key)
     monkeypatch.setenv("GG_MASTER_KEY", master_key)
