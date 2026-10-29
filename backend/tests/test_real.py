@@ -181,6 +181,7 @@ def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
         real.save_cohort(cohort, meta, out)
         settings = Settings(
             db_path=":memory:",
+            database_url="postgresql://test-only",
             demo_mode=False,
             allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
@@ -188,8 +189,9 @@ def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
             real_cohort_file=str(out),
             dataset_id="test-approved-cohort",
         )
-        with pytest.raises(ValueError, match="simulated or missing consent"):
-            bootstrap(settings)
+        from app.store import Store
+        with pytest.raises(ValueError, match="simulated or missing data-use authorization"):
+            bootstrap(settings, store=Store(":memory:"))
 
 
 def test_build_cohort_uses_explicit_source_matched_consent_records():
@@ -292,12 +294,14 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
         )
         real.save_cohort(cohort, meta, out)
         settings = Settings(
-            db_path=":memory:", demo_mode=False, allow_tamper_demo=False,
+            db_path=":memory:", database_url="postgresql://test-only",
+            demo_mode=False, allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
             master_key=base64.b64encode(b"x" * 32).decode(),
             real_cohort_file=str(out), dataset_id="test-public-source-policy",
         )
-        svc = bootstrap(settings)
+        from app.store import Store
+        svc = bootstrap(settings, store=Store(":memory:"))
         assert svc.provenance["genotypes"] == "real_vcf"
         assert svc.provenance["consent"] == "source_policy"
         assert svc.provenance["consent_records_matched"] == 0
