@@ -294,7 +294,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                 genotype_count += g
                 batch.clear()
         if batch:
-            v, g = write_batch(conn, dataset_id, batch, sample_map)
+            v, g = write_batch(conn, dataset_id, batch, sample_map, samples)
             variant_count += v
             genotype_count += g
 
