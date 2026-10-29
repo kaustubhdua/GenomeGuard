@@ -1,12 +1,13 @@
 import { h, card, notice } from "../ui.js";
 
 const CATALOGUE_URL = "https://hkyieaovolkethovyenb.supabase.co/functions/v1/genomeguard-api/datasets";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ZnV6zbGRzisNWOblNLgmYg_czCO4GXL";
 async function loadCatalogue() {
   try {
     // Public, read-only endpoint: do not attach the Render API key or any user credential.
     const result = await fetch(CATALOGUE_URL, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      // Supabase Edge Functions require the public publishable key at the gateway. This is not a service-role secret; governed routes still require a verified user bearer token.\n      headers: { Accept: "application/json", apikey: SUPABASE_PUBLISHABLE_KEY },
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
     });
