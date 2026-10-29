@@ -1,0 +1,5 @@
+# Exact Gitleaks fingerprints for the public Supabase publishable key mistakenly flagged as a generic API secret.
+# These are not service-role keys. Do not add other fingerprints without reviewing the credential and exposure scope.
+a9b195f7b7fac16f0911392d381aa8f72a91ff0f:frontend/src/pages/datasets.js:generic-api-key:4
+4194c4891a557166fff712677e720ea3284e97a4:frontend/src/pages/chromosomes.js:generic-api-key:7
+621ed60e7166f3be8b54f40ab143286fa9068262:frontend/src/catalogue-api.js:generic-api-key:4
