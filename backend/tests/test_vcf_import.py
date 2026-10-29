@@ -111,3 +111,21 @@ def test_vcf_import_requires_timezone_aware_retrieval_timestamp(tmp_path, capsys
     ])
     assert result == 2
     assert "retrieval timestamp must include an explicit timezone" in capsys.readouterr().err
+
+
+def test_vcf_duplicate_detection_is_bounded_and_rejects_duplicate_records(tmp_path):
+    original = _vcf(tmp_path).read_text(encoding="utf-8").splitlines()
+    duplicate = tmp_path / "duplicate.vcf"
+    duplicate.write_text("\n".join(original[:3] + [original[3], original[3], original[4]]) + "\n", encoding="utf-8")
+    _, samples = read_header(duplicate, "GRCh37")
+    with pytest.raises(ImportValidationError, match="duplicate VCF record"):
+        list(iter_records(duplicate, samples, "GRCh37"))
+
+
+def test_vcf_rejects_unsorted_coordinates(tmp_path):
+    original = _vcf(tmp_path).read_text(encoding="utf-8").splitlines()
+    unsorted = tmp_path / "unsorted.vcf"
+    unsorted.write_text("\n".join(original[:3] + [original[4], original[3]]) + "\n", encoding="utf-8")
+    _, samples = read_header(unsorted, "GRCh37")
+    with pytest.raises(ImportValidationError, match="sorted by chromosome and position"):
+        list(iter_records(unsorted, samples, "GRCh37"))
