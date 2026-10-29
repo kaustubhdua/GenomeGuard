@@ -62,7 +62,7 @@ def validate_settings(s: Settings) -> None:
     if s.allow_tamper_demo:
         problems.append("GG_ALLOW_TAMPER_DEMO must be false")
     if not (s.real_cohort_file or "").strip():
-        problems.append("GG_REAL_COHORT_FILE must point to a real cohort with explicit consent records")
+        problems.append("GG_REAL_COHORT_FILE must point to a real cohort with verified participant-consent records or documented dataset-policy authorization")
     if s.dataset_id == "synthetic-cohort-1" or not s.dataset_id.strip():
         problems.append("GG_DATASET_ID must be a unique identifier for the approved real cohort")
     if not s.master_key:
