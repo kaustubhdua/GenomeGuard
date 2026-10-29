@@ -1,23 +1,6 @@
 import { h, card, notice } from "../ui.js";
+import { loadPublicCatalogue } from "../catalogue-api.js";
 
-const CATALOGUE_URL = "https://hkyieaovolkethovyenb.supabase.co/functions/v1/genomeguard-api/datasets";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ZnV6zbGRzisNWOblNLgmYg_czCO4GXL";
-async function loadCatalogue() {
-  try {
-    // Public, read-only endpoint: do not attach the Render API key or any user credential.
-    const result = await fetch(CATALOGUE_URL, {
-      method: "GET",
-      // Supabase Edge Functions require the public publishable key at the gateway. This is not a service-role secret; governed routes still require a verified user bearer token.\n      headers: { Accept: "application/json", apikey: SUPABASE_PUBLISHABLE_KEY },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
-    let data = null;
-    try { data = await result.json(); } catch { /* non-JSON gateway errors are handled below */ }
-    return { ok: result.ok, status: result.status, data };
-  } catch {
-    return { ok: false, status: 0, data: null };
-  }
-}
 const fmt = (value) => Number(value || 0).toLocaleString("en-US");
 const shortHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
   ? value.slice(0, 12) + "…" + value.slice(-8) : "Unavailable";
@@ -63,7 +46,7 @@ export async function render() {
         h("span", { class: "status-dot" }, "Verified records only"),
         h("span", { class: "muted" }, "Public research · Not clinical use")))));
 
-  const response = await loadCatalogue();
+  const response = await loadPublicCatalogue("datasets");
   if (!response.ok) {
     const retry = h("button", { class: "btn", onclick: async () => {
       retry.disabled = true;
