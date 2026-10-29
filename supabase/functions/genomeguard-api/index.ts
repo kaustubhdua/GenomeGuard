@@ -131,6 +131,30 @@ Deno.serve(async (request: Request) => {
         full_frontend_route_parity: false },
       note: "Fail-closed migration gate. No genomic data access is granted by this API yet." }, 503);
   }
+  const consentWithdrawMatch = path.match(/\/consents\/([0-9a-f-]{36})\/withdraw$/i);
+  if (consentWithdrawMatch && request.method === "POST") {
+    const user = await authenticatedUser(request, url, serviceKey);
+    if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
+    const parsed = await readJsonLimited(request, 4_096);
+    if (!parsed.ok) return error(parsed.status, parsed.status === 413 ? "payload_too_large" : "bad_json",
+      parsed.status === 413 ? "Withdrawal payload exceeds 4 KB." : "Send a valid JSON object.");
+    if (!objectBody(parsed.value)) return error(400, "bad_json", "Send a valid JSON object.");
+    const reason = typeof parsed.value.reason === "string" ? parsed.value.reason.trim() : "";
+    if (reason.length < 3 || reason.length > 1_000) {
+      return error(422, "invalid_withdrawal", "Provide a 3–1000 character reason.");
+    }
+    try {
+      const result = await rpc(url, serviceKey, "gg_withdraw_consent", {
+        p_auth_user_id: user.id,
+        p_consent_id: consentWithdrawMatch[1],
+        p_reason: reason,
+      });
+      return json(result);
+    } catch {
+      return error(403, "withdrawal_not_authorized_or_unavailable",
+        "The withdrawal was not recorded. Confirm active steward membership and consent-record ownership.");
+    }
+  }
   const reviewMatch = path.match(/\/requests\/(\d+)\/review$/);
   if (reviewMatch && request.method === "POST") {
     const user = await authenticatedUser(request, url, serviceKey);
