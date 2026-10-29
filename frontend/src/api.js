@@ -79,12 +79,14 @@ export function disconnectKey() {
 }
 
 export async function boot() {
-  const [h, readiness] = await Promise.all([call("/health"), call("/health/ready")]);
+  const h = await call("/health");
   state.health = h.data;
-  state.readiness = readiness.data || { ready: false, checks: {} };
+  state.readiness = null;
   state.demo = null;
   state.donors = [];
   if (!h.ok || !h.data?.demo_mode) {
+    const readiness = await call("/health/ready");
+    state.readiness = readiness.data || { ready: false, checks: {} };
     // Never call demo-only endpoints or reuse a demo key in real-data mode.
     state.who = "";
     state.adminKey = "";
