@@ -6,13 +6,13 @@ const DISEASES = ["", "diabetes", "cancer", "cardiovascular", "asthma"];
 const LEVELS = ["frequency", "count", "boolean", "record"];
 
 const PRESETS = [
-  { name: "Diabetes frequency study", why: "A normal study: some donors are excluded by consent, rare variants are dropped.",
+  { name: "Diabetes frequency study", why: "Demo-only: some synthetic donors are excluded by simulated permissions; rare demo variants are dropped.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "frequency", is_commercial: false, cohort_filter: {}, variant_filter: { min_maf: 0.1, limit: 20, include_planted: 2 } } },
-  { name: "Same study, commercial use", why: "Donors whose consent forbids commercial use drop out.",
+  { name: "Same study, commercial use", why: "Synthetic donors whose simulated permissions forbid commercial use are excluded.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "frequency", is_commercial: true, cohort_filter: {}, variant_filter: { min_maf: 0.1, limit: 20 } } },
   { name: "Narrow cohort", why: "One cohort and one population: small, so closer to the minimum size.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "frequency", is_commercial: false, cohort_filter: { cohort_id: "DIABETES-STUDY", population: "POP_A" }, variant_filter: { min_maf: 0.1, limit: 20 } } },
-  { name: "Individual rows (record level)", why: "Registered accounts are refused; controlled access always needs a human.",
+  { name: "Individual rows (record level)", why: "Demo-only: registered personas are refused; controlled access is held for human review.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "record", is_commercial: false, cohort_filter: {}, variant_filter: { min_maf: 0.1, limit: 10 } } },
 ];
 
