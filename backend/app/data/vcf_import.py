@@ -112,7 +112,12 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
 
 
 def iter_records(path: Path, samples: list[str], assembly: str):
-    seen: set[tuple[str, int, str, str]] = set()
+    # Keep duplicate-detection memory bounded: require coordinate-sorted VCF input and
+    # retain only keys at the current chromosome/position, not every variant in the file.
+    chrom_order = {str(i): i for i in range(1, 23)} | {"X": 23, "Y": 24, "MT": 25}
+    last_coordinate: tuple[str, int] | None = None
+    last_order: tuple[int, int] | None = None
+    seen_at_coordinate: set[tuple[str, str]] = set()
     source_index = 0
     variant_index = 0
     with open_vcf(path) as stream:
@@ -138,10 +143,18 @@ def iter_records(path: Path, samples: list[str], assembly: str):
             alts = alt_text.split(",")
             if not alts or any(not ALLELE_RE.fullmatch(a) or a == ref for a in alts) or len(set(alts)) != len(alts):
                 raise ImportValidationError("invalid, duplicate, symbolic, or reference-equal ALT allele")
-            key = (chrom, pos, ref, alt_text)
-            if key in seen:
+            order = (chrom_order[chrom], pos)
+            coordinate = (chrom, pos)
+            if last_order is not None and order < last_order:
+                raise ImportValidationError("VCF records must be sorted by chromosome and position")
+            if coordinate != last_coordinate:
+                seen_at_coordinate.clear()
+                last_coordinate = coordinate
+                last_order = order
+            key = (ref, alt_text)
+            if key in seen_at_coordinate:
                 raise ImportValidationError("duplicate VCF record")
-            seen.add(key)
+            seen_at_coordinate.add(key)
             formats = fmt.split(":")
             if "GT" not in formats:
                 raise ImportValidationError("GT is missing from FORMAT")
