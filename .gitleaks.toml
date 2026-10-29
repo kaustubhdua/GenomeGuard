@@ -1,0 +1,14 @@
+title = "GenomeGuard secret scanning configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Supabase publishable API keys are intentionally browser-visible; this does not allow service-role or secret keys."
+regexTarget = "line"
+regexes = ['''sb_publishable_[A-Za-z0-9_-]+''']
+paths = [
+  '''frontend/src/pages/datasets\.js''',
+  '''frontend/src/pages/chromosomes\.js''',
+  '''frontend/src/catalogue-api\.js''',
+]
