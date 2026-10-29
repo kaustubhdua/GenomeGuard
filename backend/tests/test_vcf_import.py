@@ -43,6 +43,11 @@ def test_vcf_split_alt_records_have_unique_variant_indices(tmp_path):
     assert rows[0]["calls"] == [(1, 2, False), (2, 2, False)]
     assert rows[1]["calls"] == [(1, 2, True), (0, 2, False)]
     assert rows[2]["calls"] == [(1, 2, True), (1, 2, False)]
+    # Independent hand calculation: 3 alternate copies / 4 called alleles = 0.75.
+    assert rows[0]["alt_allele_frequency"] == pytest.approx(0.75)
+    # For C>A,T, the A ALT has 1/4 copies and T has 2/4 copies.
+    assert rows[1]["alt_allele_frequency"] == pytest.approx(0.25)
+    assert rows[2]["alt_allele_frequency"] == pytest.approx(0.5)
 
 
 def test_vcf_assembly_mismatch_fails_closed(tmp_path):
