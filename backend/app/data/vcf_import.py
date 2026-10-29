@@ -209,7 +209,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
             with conn.cursor() as cur:
                 cur.execute(
                     """SELECT id, source_name, source_url, source_release, reference_assembly,
-                              file_sha256, data_use_review, import_status
+                              file_sha256, data_use_review, import_status, metadata
                        FROM genomeguard.variant_dataset_manifest
                        WHERE dataset_key=%s FOR UPDATE""",
                     (args.dataset_key,),
@@ -220,13 +220,18 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                         "dataset must be registered and approved by a trusted data steward before import"
                     )
                 (dataset_id, source_name, source_url, source_release, assembly,
-                 registered_sha, review_status, import_status) = row
+                 registered_sha, review_status, import_status, reviewed_metadata) = row
                 if (source_name != args.source_name or source_url != args.source_url
                         or source_release != args.source_release or assembly != args.assembly
                         or registered_sha != digest):
                     raise ImportValidationError("source metadata or checksum does not match the reviewed manifest")
                 if review_status != "approved_public_research":
                     raise ImportValidationError("manifest is not approved for public research")
+                if isinstance(reviewed_metadata, str):
+                    reviewed_metadata = json.loads(reviewed_metadata)
+                if (reviewed_metadata.get("reuse_statement_url") != args.reuse_statement_url
+                        or reviewed_metadata.get("citation") != args.citation):
+                    raise ImportValidationError("reuse statement or citation differs from the reviewed manifest")
                 if import_status == "loaded":
                     raise ImportValidationError("dataset is already loaded; use a new reviewed release key")
                 cur.execute(
