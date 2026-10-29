@@ -263,7 +263,10 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert meta["consent_records_matched"] == 0
         assert meta["dataset_policy_samples_scoped"] == 44
         assert meta["consent_policy"]["not_individual_consent"] is True
-        assert len(meta["consent_records_sha256"]) == 64
+        assert meta["consent_records_sha256"] is None
+        assert meta["consent_source_file"] is None
+        assert len(meta["consent_policy_source_sha256"]) == 64
+        assert meta["consent_policy_source_file"] == "policy.json"
         assert all(d["consent"]["consent_basis"] == "dataset_policy" for d in cohort.donors)
         assert all(d["consent"]["consent_date"] is None for d in cohort.donors)
         assert all(d["consent"]["source_policy_id"] == "test-public-release-v1"
