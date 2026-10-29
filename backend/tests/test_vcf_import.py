@@ -1,8 +1,10 @@
+import ast
 import hashlib
 from pathlib import Path
 
 import pytest
 
+from app.data import vcf_import
 from app.data.vcf_import import ImportValidationError, iter_records, main, parse_gt, read_header
 
 
@@ -216,3 +218,16 @@ def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tm
         "variant_count": 3,
         "genotype_call_count": 5,
     }
+
+
+
+def test_every_vcf_import_batch_passes_source_sample_order():
+    tree = ast.parse(Path(vcf_import.__file__).read_text(encoding="utf-8"))
+    calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "write_batch"
+    ]
+    assert calls
+    assert all(len(node.args) == 5 for node in calls)
