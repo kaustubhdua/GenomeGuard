@@ -14,7 +14,25 @@ from urllib.parse import urlparse
 
 import psycopg
 
-ASSEMBLIES = {"GRCh37", "GRCh38", "T2T-CHM13"}
+ASSEMBLIES = {"GRCh37", "GRCh38"}
+CHROM_LENGTHS = {
+    "GRCh37": {
+        "1": 249250621, "2": 243199373, "3": 198022430, "4": 191154276,
+        "5": 180915260, "6": 171115067, "7": 159138663, "8": 146364022,
+        "9": 141213431, "10": 135534747, "11": 135006516, "12": 133851895,
+        "13": 115169878, "14": 107349540, "15": 102531392, "16": 90354753,
+        "17": 81195210, "18": 78077248, "19": 59128983, "20": 63025520,
+        "21": 48129895, "22": 51304566, "X": 155270560, "Y": 59373566, "MT": 16569,
+    },
+    "GRCh38": {
+        "1": 248956422, "2": 242193529, "3": 198295559, "4": 190214555,
+        "5": 181538259, "6": 170805979, "7": 159345973, "8": 145138636,
+        "9": 138394717, "10": 133797422, "11": 135086622, "12": 133275309,
+        "13": 114364328, "14": 107043718, "15": 101991189, "16": 90338345,
+        "17": 83257441, "18": 80373285, "19": 58617616, "20": 64444167,
+        "21": 46709983, "22": 50818468, "X": 156040895, "Y": 57227415, "MT": 16569,
+    },
+}
 ALLELE_RE = re.compile(r"^[ACGTN]+$")
 
 
@@ -93,7 +111,7 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
     raise ImportValidationError("VCF is missing a #CHROM header")
 
 
-def iter_records(path: Path, samples: list[str]):
+def iter_records(path: Path, samples: list[str], assembly: str):
     seen: set[tuple[str, int, str, str]] = set()
     source_index = 0
     variant_index = 0
@@ -107,13 +125,15 @@ def iter_records(path: Path, samples: list[str]):
                 raise ImportValidationError("VCF row has the wrong number of columns")
             chrom, pos_text, _, ref, alt_text, _, _, _, fmt = fields[:9]
             chrom = chrom.removeprefix("chr").upper()
+            if chrom == "M":
+                chrom = "MT"
             if not re.fullmatch(r"(?:[1-9]|1[0-9]|2[0-2]|X|Y|M|MT)", chrom):
                 raise ImportValidationError(f"unsupported chromosome: {chrom}")
             try:
                 pos = int(pos_text)
             except ValueError as exc:
                 raise ImportValidationError("invalid position") from exc
-            if pos < 1 or not ALLELE_RE.fullmatch(ref):
+            if pos < 1 or pos > CHROM_LENGTHS[assembly].get(chrom, 0) or not ALLELE_RE.fullmatch(ref):
                 raise ImportValidationError("invalid position/reference allele")
             alts = alt_text.split(",")
             if not alts or any(not ALLELE_RE.fullmatch(a) or a == ref for a in alts) or len(set(alts)) != len(alts):
@@ -222,7 +242,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         genotype_count = 0
         batch_size = 100
         batch = []
-        for record in iter_records(args.vcf, samples):
+        for record in iter_records(args.vcf, samples, args.assembly):
             batch.append(record)
             if len(batch) >= batch_size:
                 v, g = write_batch(conn, dataset_id, batch, sample_map, samples)
