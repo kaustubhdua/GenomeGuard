@@ -112,7 +112,12 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
 
 
 def iter_records(path: Path, samples: list[str], assembly: str):
-    seen: set[tuple[str, int, str, str]] = set()
+    # Keep duplicate-detection memory bounded: require coordinate-sorted VCF input and
+    # retain only keys at the current chromosome/position, not every variant in the file.
+    chrom_order = {str(i): i for i in range(1, 23)} | {"X": 23, "Y": 24, "MT": 25}
+    last_coordinate: tuple[str, int] | None = None
+    last_order: tuple[int, int] | None = None
+    seen_at_coordinate: set[tuple[str, str]] = set()
     source_index = 0
     variant_index = 0
     with open_vcf(path) as stream:
@@ -138,10 +143,18 @@ def iter_records(path: Path, samples: list[str], assembly: str):
             alts = alt_text.split(",")
             if not alts or any(not ALLELE_RE.fullmatch(a) or a == ref for a in alts) or len(set(alts)) != len(alts):
                 raise ImportValidationError("invalid, duplicate, symbolic, or reference-equal ALT allele")
-            key = (chrom, pos, ref, alt_text)
-            if key in seen:
+            order = (chrom_order[chrom], pos)
+            coordinate = (chrom, pos)
+            if last_order is not None and order < last_order:
+                raise ImportValidationError("VCF records must be sorted by chromosome and position")
+            if coordinate != last_coordinate:
+                seen_at_coordinate.clear()
+                last_coordinate = coordinate
+                last_order = order
+            key = (ref, alt_text)
+            if key in seen_at_coordinate:
                 raise ImportValidationError("duplicate VCF record")
-            seen.add(key)
+            seen_at_coordinate.add(key)
             formats = fmt.split(":")
             if "GT" not in formats:
                 raise ImportValidationError("GT is missing from FORMAT")
@@ -187,6 +200,14 @@ def validate_args(args) -> None:
             raise ImportValidationError("source and reuse-statement URLs must be HTTPS")
     if not args.dataset_key.strip() or not args.source_name.strip() or not args.source_release.strip():
         raise ImportValidationError("dataset key, source name, and release are required")
+    try:
+        retrieved_at = datetime.fromisoformat(args.retrieved_at.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise ImportValidationError("retrieval timestamp must be an ISO-8601 datetime with timezone") from exc
+    if retrieved_at.tzinfo is None or retrieved_at.utcoffset() is None:
+        raise ImportValidationError("retrieval timestamp must include an explicit timezone")
+    if retrieved_at > datetime.now(UTC).replace(microsecond=0):
+        raise ImportValidationError("retrieval timestamp cannot be in the future")
 
 
 def import_to_database(args, digest: str, samples: list[str]) -> dict:
@@ -198,7 +219,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
         "citation": args.citation,
         "source_file_name": args.vcf.name,
         "source_file_bytes": args.vcf.stat().st_size,
-        "retrieved_at": datetime.now(UTC).isoformat(),
+        "retrieved_at": datetime.fromisoformat(args.retrieved_at.replace("Z", "+00:00")).astimezone(UTC).isoformat(),
         "importer_version": "1.0",
         "model": "normalized per-sample/per-ALT genotype calls",
     }
@@ -218,6 +239,7 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                       AND genomeguard.variant_dataset_manifest.source_release=excluded.source_release
                       AND genomeguard.variant_dataset_manifest.reference_assembly=excluded.reference_assembly
                       AND genomeguard.variant_dataset_manifest.data_use_review='approved_public_research'
+                      AND genomeguard.variant_dataset_manifest.consent_basis='dataset_policy'
                       AND genomeguard.variant_dataset_manifest.import_status <> 'loaded'
                     RETURNING id""",
                     (args.dataset_key, args.source_name, args.source_url, args.source_release,
@@ -225,6 +247,28 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                 )
                 row = cur.fetchone()
                 if not row:
+                    # A fully loaded, byte-identical manifest is an idempotent no-op. Do not
+                    # reset counters or delete data on a repeat invocation.
+                    cur.execute(
+                        """SELECT id,sample_count,variant_count,genotype_call_count
+                           FROM genomeguard.variant_dataset_manifest
+                           WHERE dataset_key=%s AND file_sha256=%s AND source_url=%s
+                             AND source_release=%s AND reference_assembly=%s
+                             AND data_use_review='approved_public_research'
+                             AND consent_basis='dataset_policy' AND import_status='loaded'""",
+                        (args.dataset_key, digest, args.source_url, args.source_release, args.assembly),
+                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        dataset_id, sample_count, variant_count, genotype_count = existing
+                        return {
+                            "dataset_id": str(dataset_id),
+                            "status": "loaded",
+                            "already_loaded": True,
+                            "sample_count": sample_count,
+                            "variant_count": variant_count,
+                            "genotype_call_count": genotype_count,
+                        }
                     raise ImportValidationError("dataset key already exists with another checksum or is already loaded")
                 dataset_id = row[0]
                 cur.execute("DELETE FROM genomeguard.dataset_genotype_calls WHERE dataset_id=%s", (dataset_id,))
@@ -322,6 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-name", required=True)
     parser.add_argument("--source-url", required=True)
     parser.add_argument("--source-release", required=True)
+    parser.add_argument("--retrieved-at", required=True, help="ISO-8601 retrieval timestamp including timezone, e.g. 2026-10-29T08:30:00Z")
     parser.add_argument("--assembly", required=True, choices=sorted(ASSEMBLIES))
     parser.add_argument("--expected-sha256", required=True)
     parser.add_argument("--reuse-statement-url", required=True)
@@ -335,7 +380,7 @@ def main(argv: list[str] | None = None) -> int:
         if digest != args.expected_sha256:
             raise ImportValidationError("SHA-256 mismatch")
         _, samples = read_header(args.vcf, args.assembly)
-        variants = sum(1 for _ in iter_records(args.vcf, samples))
+        variants = sum(1 for _ in iter_records(args.vcf, samples, args.assembly))
         if args.dry_run:
             print(json.dumps({"status": "validated_not_imported", "sha256": digest,
                               "sample_count": len(samples), "variant_count": variants,

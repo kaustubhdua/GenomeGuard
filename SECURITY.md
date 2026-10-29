@@ -22,6 +22,7 @@ There is no guaranteed response or remediation SLA. This project has not undergo
 ## Deployment rules
 
 - With `GG_DEMO_MODE=false` the server refuses to start unless `GG_ADMIN_API_KEY` is a unique secret of at least 32 characters, `GG_MASTER_KEY` is a base64-encoded 32-byte key, and `GG_ALLOW_TAMPER_DEMO=false`.
+- With `GG_DEMO_MODE=false`, `GG_DATABASE_URL` must be a PostgreSQL URL; production must not silently fall back to SQLite on an ephemeral filesystem. Pre-provision `genomeguard_runtime` and grant only the server-side database role the required schema/table privileges.
 - Keep keys in a secret manager, never in the repository.
 - Publish the audit head hash somewhere outside the system; otherwise a full rewrite of the database cannot be detected.
 

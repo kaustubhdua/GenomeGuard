@@ -79,10 +79,14 @@ Deno.serve(async (request: Request) => {
   if (!url || !serviceKey) return error(503, "server_configuration_missing", "The API is not configured.");
   const path = new URL(request.url).pathname.replace(/\/$/, "");
   if (path.endsWith("/chromosomes") && request.method === "GET") {
+    const assembly = new URL(request.url).searchParams.get("assembly") || "GRCh38";
+    if (!["GRCh37", "GRCh38"].includes(assembly)) {
+      return error(400, "invalid_assembly", "Choose GRCh37 or GRCh38.");
+    }
     try {
       const [chromosomes, coverage] = await Promise.all([
-        rpc(url, serviceKey, "gg_list_chromosome_reference", {}),
-        rpc(url, serviceKey, "gg_list_chromosome_coverage", {}),
+        rpc(url, serviceKey, "gg_list_chromosome_reference", { p_assembly: assembly }),
+        rpc(url, serviceKey, "gg_list_chromosome_coverage", { p_assembly: assembly }),
       ]);
       const coverageByChromosome = new Map(
         (Array.isArray(coverage) ? coverage : []).map((row: Record<string, unknown>) => [
@@ -101,7 +105,7 @@ Deno.serve(async (request: Request) => {
         },
       })) : [];
       return json({
-        reference_assembly: "GRCh38",
+        reference_assembly: assembly,
         chromosome_count: rows.length,
         chromosomes: rows,
         provenance_note: "GRCh38 chromosome reference metadata is catalogued separately from variant/genotype data. A chromosome is not available for analysis unless variant_data_loaded is true and its dataset provenance is verified.",

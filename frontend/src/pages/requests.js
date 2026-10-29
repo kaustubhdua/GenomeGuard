@@ -6,13 +6,13 @@ const DISEASES = ["", "diabetes", "cancer", "cardiovascular", "asthma"];
 const LEVELS = ["frequency", "count", "boolean", "record"];
 
 const PRESETS = [
-  { name: "Diabetes frequency study", why: "A normal study: some donors are excluded by consent, rare variants are dropped.",
+  { name: "Diabetes frequency study", why: "Demo-only: some synthetic donors are excluded by simulated permissions; rare demo variants are dropped.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "frequency", is_commercial: false, cohort_filter: {}, variant_filter: { min_maf: 0.1, limit: 20, include_planted: 2 } } },
-  { name: "Same study, commercial use", why: "Donors whose consent forbids commercial use drop out.",
+  { name: "Same study, commercial use", why: "Synthetic donors whose simulated permissions forbid commercial use are excluded.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "frequency", is_commercial: true, cohort_filter: {}, variant_filter: { min_maf: 0.1, limit: 20 } } },
   { name: "Narrow cohort", why: "One cohort and one population: small, so closer to the minimum size.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "frequency", is_commercial: false, cohort_filter: { cohort_id: "DIABETES-STUDY", population: "POP_A" }, variant_filter: { min_maf: 0.1, limit: 20 } } },
-  { name: "Individual rows (record level)", why: "Registered accounts are refused; controlled access always needs a human.",
+  { name: "Individual rows (record level)", why: "Demo-only: registered personas are refused; controlled access is held for human review.",
     body: { purpose: "disease_research", disease: "diabetes", data_level: "record", is_commercial: false, cohort_filter: {}, variant_filter: { min_maf: 0.1, limit: 10 } } },
 ];
 
@@ -170,7 +170,9 @@ function formSection(out) {
     const total = c.considered || 1, out_ = Object.values(ex).reduce((a, b2) => a + b2, 0);
     preview.replaceChildren(
       h("div", { class: "bar", role: "img", "aria-label": `${c.eligible} of ${c.considered} donors eligible` }, h("i", { class: "seg-ok", style: `width:${(100 * c.eligible) / total}%` }), h("i", { class: "seg-ex", style: `width:${(100 * out_) / total}%` })),
-      h("div", { class: "legend" }, h("span", {}, h("b", {}, c.eligible), ` of ${c.considered} donors have consent that fits this request`),
+      h("div", { class: "legend" }, h("span", {}, h("b", {}, c.eligible), state.demo
+        ? ` of ${c.considered} synthetic donors pass simulated permission rules for this request`
+        : ` of ${c.considered} samples pass the dataset-level public-release policy mapping for this request`),
         Object.entries(ex).sort((a, b2) => b2[1] - a[1]).map(([k, v]) => h("span", {}, `${v} excluded: ${reasonText(k)}`))));
   }
   async function submit(b, btn) {
@@ -205,7 +207,8 @@ function formSection(out) {
       state.demo ? h("div", { class: "presets" }, PRESETS.map((p) => h("button", { class: "ghost", title: p.why, onclick: () => load(p.body) }, p.name))) : null, form,
       h("div", { style: "margin-top:12px;display:flex;gap:10px;flex-wrap:wrap" }, submitBtn, probeBtn,
         att && state.who !== att.api_key ? h("button", { class: "ghost", onclick: () => { setWho(att.api_key); location.reload(); } }, "Switch to the probe account") : null), msg),
-    row("Consent check", "Updates as you type", preview));
+    row(state.demo ? "Simulated consent check" : "Dataset policy check",
+      state.demo ? "Synthetic permissions; demonstration only" : "Dataset-level policy only, not participant-specific consent", preview));
   load(state.demo ? PRESETS[0].body : st);
   return wrap;
 }

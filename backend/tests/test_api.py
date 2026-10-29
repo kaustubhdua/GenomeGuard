@@ -30,6 +30,8 @@ def test_readiness_distinguishes_demo_liveness_from_production_readiness():
     assert ready.status_code == 503
     body = ready.json()
     assert body["status"] == "not_ready" and body["ready"] is False
+    assert live.json()["readiness"]["ready"] is False
+    assert live.json()["readiness"]["checks"] == body["checks"]
     assert body["checks"]["demo_mode_disabled"] is False
     assert body["checks"]["participant_consent_records_verified"] is False
     assert body["checks"]["durable_storage_verified"] is False
@@ -157,6 +159,7 @@ def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
     master_key = base64.b64encode(b"m" * 32).decode()
     svc = make_service(admin_api_key=admin_key)
     monkeypatch.setenv("GG_DEMO_MODE", "false")
+    monkeypatch.setenv("GG_DATABASE_URL", "postgresql://test.invalid/genomeguard")
     monkeypatch.setenv("GG_ALLOW_TAMPER_DEMO", "false")
     monkeypatch.setenv("GG_ADMIN_API_KEY", admin_key)
     monkeypatch.setenv("GG_MASTER_KEY", master_key)

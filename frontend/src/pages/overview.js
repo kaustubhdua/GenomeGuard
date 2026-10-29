@@ -1,5 +1,5 @@
 import { api, state, isSteward } from "../api.js";
-import { h, card, kpi, badge, pipeline, workflow, when, pct } from "../ui.js";
+import { h, card, kpi, badge, pipeline, workflow, when, pct, notice } from "../ui.js";
 import { startTour, tourAvailable } from "../tour.js";
 
 const DEMO_ROSTER = [
@@ -10,6 +10,17 @@ const DEMO_ROSTER = [
   ["Audit log", "Records events in a locally hash-chained log. The chain is tamper-evident, not an independent immutable anchor."],
   ["Consent concierge (demo)", "Provides fixed scripted answers for the demo; it is not a real participant support channel."],
 ];
+
+const READINESS_LABELS = {
+  demo_mode_disabled: "Demo mode must be disabled",
+  real_genotype_provenance: "Real genotype provenance must be verified",
+  participant_consent_records_verified: "Required participant consent records must be verified",
+  destructive_tamper_demo_disabled: "Destructive demo controls must be disabled",
+  postgres_storage_configured: "PostgreSQL persistence must be configured",
+  durable_storage_verified: "Durable persistence and recovery must be verified",
+  external_audit_anchor_verified: "Independent audit anchoring must be verified",
+  institutional_identity_provider_verified: "Institutional identity must be verified",
+};
 
 const RESEARCH_ROSTER = [
   ["Dataset policy provenance", "Applies the documented public-release policy mapping for this dataset. It is not participant-specific consent or a legal authorization decision."],
@@ -22,14 +33,22 @@ const RESEARCH_ROSTER = [
 
 export async function render() {
   const hasIdentity = !!(state.demo || state.who || state.adminKey);
-  const [reqs, verify, ev, me] = await Promise.all([
+  const healthAtStart = state.health || {};
+  // Prefer the liveness snapshot when available. Older hosted API revisions may not
+  // include it yet; the strict readiness endpoint returns useful JSON with HTTP 503.
+  const readyRequest = healthAtStart.readiness
+    ? Promise.resolve({ ok: true, status: 200, data: healthAtStart.readiness })
+    : api("/health/ready");
+  const [reqs, verify, ev, me, readyResult] = await Promise.all([
     hasIdentity ? api("/requests") : Promise.resolve({ ok: false, status: 401, data: null }),
     api("/audit/verify"),
     state.demo ? api("/eval/results") : Promise.resolve({ ok: false }),
     isSteward() || !hasIdentity ? Promise.resolve({ ok: false }) : api("/me"),
+    readyRequest,
   ]);
   const rows = reqs.ok ? reqs.data.requests || [] : [];
   const hl = state.health || {};
+  const readiness = hl.readiness ? { ok: true, data: hl.readiness } : readyResult;
   const count = (o) => rows.filter((r) => r.outcome === o).length;
   const latest = rows[0];
   const root = h("div", { class: "stack" });
@@ -54,6 +73,17 @@ export async function render() {
     pipe, h("p", { class: "muted", style: "margin:12px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap" }, caption,
       latest ? h("button", { class: "ghost", onclick: () => pipe.replay() }, "Replay workflow") : null));
   root.append(hero);
+
+  if (!readiness.ok || readiness.data?.ready !== true) {
+    const checks = readiness.data?.checks || {};
+    const failed = Object.entries(checks).filter(([, ok]) => ok !== true)
+      .map(([key]) => READINESS_LABELS[key] || key.replaceAll("_", " "));
+    root.append(notice("warn",
+      h("strong", {}, "Production readiness is not verified."),
+      h("p", { class: "muted" }, "This deployment must be treated as a research prototype. A running API or successful page load does not prove durable storage, institutional identity, participant consent, or safe data release."),
+      failed.length ? h("p", { class: "fine" }, "Open release checks: " + failed.join("; ") + ".")
+        : h("p", { class: "fine" }, "The readiness endpoint is unavailable, so the system cannot verify its release controls.")));
+  }
 
   const pv = hl.provenance || {};
   if (pv.genotypes) root.append(card("Where the data comes from", "Labelled so nothing is overstated",
