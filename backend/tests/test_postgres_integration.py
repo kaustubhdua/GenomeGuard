@@ -30,6 +30,10 @@ def pg_store():
         store.close()
 
 
+def test_postgres_store_uses_schema_separate_from_normalized_supabase_tables(pg_store):
+    assert pg_store.one("SELECT current_schema() AS schema")["schema"] == "genomeguard_runtime"
+
+
 def test_postgres_persists_request_decision_budget_and_audit(pg_store):
     requester_id = pg_store.add_requester(
         "Integration Researcher", "researcher", "standard", "test-institution", "hash-test-key"
