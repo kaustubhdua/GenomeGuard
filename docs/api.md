@@ -22,12 +22,15 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/audit` | Audit log (newest first) with chain verification | admin |
 | GET | `/audit/verify` | Recompute the hash chain; optional external anchor | public |
 | GET | `/audit/head` | Current head hash: copy it somewhere outside the system | public |
+| GET | `/audit/checkpoint` | Export an audit checkpoint for offline or cross-system anchoring | public |
+| POST | `/audit/verify-checkpoint` | Verify an exported checkpoint against the live chain | public |
 | POST | `/admin/tamper/{idx:int}` | DEMO ONLY: corrupt one audit entry | admin |
 | POST | `/admin/untamper` | DEMO ONLY: remove the tamper-demo marker | admin |
 | GET | `/anomalies` | Per-requester timelines and alerts | admin |
 | POST | `/requesters/{id:int}/freeze` | Freeze an account | admin |
 | POST | `/requesters/{id:int}/unfreeze` | Human unfreeze | admin |
 | GET | `/reports/compliance` | Plain-language compliance report (from/to ISO dates) | admin |
+| GET | `/reports/compliance/export` | Export full regulatory evidence package (DPDP, GDPR, HIPAA) | admin |
 | GET | `/eval/results` | Stored red-team evaluation metrics | public |
 | GET | `/demo/donors` | Demo donor personas and keys (demo mode only) | public |
 | GET | `/donor/{id:int}` | A donor's own consent, status and who used their data | donor |
@@ -38,5 +41,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | POST | `/donor/{id:int}/ask` | Ask the consent concierge one of a fixed set of questions (who_used, what_allowed, how_withdraw, relatives, security) | donor |
 | GET | `/federated/he` | Homomorphic (Paillier) allele-count aggregation demo (synthetic) | public |
 | GET | `/federated/demo` | Simulated hospitals with secure aggregation (synthetic) | public |
+| GET | `/catalogue/datasets` | Local dataset catalogue (replaces Supabase Edge Function) | public |
+| GET | `/catalogue/chromosomes` | Local chromosome reference (replaces Supabase Edge Function) | public |
 | GET | `/openapi.json` | Machine-readable endpoint list | public |
 | GET | `/docs` | Human-readable endpoint list | public |
