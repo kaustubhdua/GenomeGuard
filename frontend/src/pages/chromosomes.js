@@ -19,12 +19,12 @@ async function renderAssembly(assembly) {
   if (!response.ok) {
     root.append(notice("warn",
       h("strong", {}, "Chromosome coverage service is not reachable from this deployment."),
-      h("p", { class: "muted" }, "The live Supabase chromosome catalogue could not be loaded. Check the connection and try again; no placeholder counts are shown."),
+      h("p", { class: "muted" }, "The chromosome catalogue could not be loaded from the backend. Check the connection and try again; no placeholder counts are shown."),
       h("p", { class: "fine" }, "Technical status: HTTP " + (response.status || "network error"))));
     root.append(card("What this page will show", "No simulated records",
       h("ul", {},
         h("li", {}, "Reference assembly and chromosome length from the Genome Reference Consortium."),
-        h("li", {}, "Actual stored variant count and observed coordinate range from Supabase."),
+        h("li", {}, "Actual stored variant count and observed coordinate range from the local database."),
         h("li", {}, "A clear unavailable state until verified variant records and source provenance exist."))));
     return root;
   }

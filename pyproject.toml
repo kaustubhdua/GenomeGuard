@@ -26,7 +26,10 @@ Documentation = "https://github.com/kaustubhdua/GenomeGuard/tree/main/docs"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.26", "jsonschema>=4.22,<5"]
-llm = ["anthropic>=0.30"]
+# llm optional: install any of the providers you want to use.
+# All are optional — built-in template agents work without any key.
+# Google Gemini free tier: pip install google-generativeai  (or just set GEMINI_API_KEY)
+# The LLM client uses plain urllib — no SDK required for Gemini, Anthropic, or OpenAI.
 synth = ["msprime>=1.3"]
 
 [tool.setuptools.packages.find]

@@ -1,7 +1,6 @@
-// Public, read-only catalogue calls. The Supabase publishable key is intended for browser
-// use; it is not a service-role secret. Governed API routes still require a verified user token.
-const SUPABASE_URL = "https://hkyieaovolkethovyenb.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ZnV6zbGRzisNWOblNLgmYg_czCO4GXL";
+// Public catalogue endpoints served by the local GenomeGuard backend.
+// Previously called Supabase Edge Functions with a hardcoded publishable key.
+// Now calls the same Python backend that serves all other pages — zero external dependencies.
 
 export async function loadPublicCatalogue(resource, options = {}) {
   if (!["datasets", "chromosomes"].includes(resource)) {
@@ -10,10 +9,11 @@ export async function loadPublicCatalogue(resource, options = {}) {
   const assembly = resource === "chromosomes" && ["GRCh37", "GRCh38"].includes(options.assembly)
     ? options.assembly : "GRCh38";
   const query = resource === "chromosomes" ? `?assembly=${encodeURIComponent(assembly)}` : "";
+  const path = `/catalogue/${resource}${query}`;
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/genomeguard-api/${resource}${query}`, {
+    const response = await fetch(path, {
       method: "GET",
-      headers: { Accept: "application/json", apikey: SUPABASE_PUBLISHABLE_KEY },
+      headers: { Accept: "application/json" },
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
     });

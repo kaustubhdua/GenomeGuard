@@ -281,3 +281,29 @@ def test_checkpoint_and_compliance_export_endpoints():
     assert "gdpr_art9" in pack["regulatory_evidence"]
     assert "hipaa" in pack["regulatory_evidence"]
     assert pack["audit_checkpoint"]["length"] >= cp["length"]
+
+def test_catalogue_endpoints():
+    svc, c = make_client()
+    resp = c.get("/catalogue/datasets")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "datasets" in data
+    assert "dataset_count" in data
+    assert data["dataset_count"] >= 1
+    ds = data["datasets"][0]
+    assert ds["dataset_key"] == svc.dataset_id
+    assert ds["sample_count"] == svc.ds.n_donors
+    assert ds["variant_count"] == svc.ds.n_variants
+
+    c_resp = c.get("/catalogue/chromosomes?assembly=GRCh38")
+    assert c_resp.status_code == 200
+    c_data = c_resp.json()
+    assert c_data["reference_assembly"] == "GRCh38"
+    assert c_data["chromosome_count"] == 25
+    chr22 = next(ch for ch in c_data["chromosomes"] if ch["chromosome"] == "22")
+    assert chr22["data_coverage"]["variant_data_loaded"] is True
+    assert chr22["data_coverage"]["variant_count"] == svc.ds.n_variants
+
+    bad = c.get("/catalogue/chromosomes?assembly=invalid")
+    assert bad.status_code == 400
+
