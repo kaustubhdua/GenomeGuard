@@ -11,6 +11,13 @@ GenomeGuard is a research governance workspace. It should read as a technical re
 - **Coverage bars on the chromosome explorer.** Bar length is the chromosome's length relative to the longest one; the dark span is where stored variants were observed.
 - **Stain-named semantic colour.** Colours are named after histology stains and carry fixed meaning: light green = permit, orange G-band = protected (transformed), eosin = deny, hematoxylin violet = held for a human, DAPI blue = focus and links. The light theme is a light box (clean, cool grey-white); the dark theme is a fluorescence field.
 
+## Biology palette, liveliness and sample data
+
+- The page is leaf-green and white; the left rail is a dark chlorophyll column in both themes, with a few cells drifting at its top.
+- The hero carries a slowly drifting DNA double helix whose rungs are the four stain colours (motion is off under reduced-motion).
+- The top bar holds only the page name, search and theme. The data-source line sits in its own slim strip below it.
+- Where a live source is empty or unreachable (overview, Chromosomes, Datasets) the person can preview a layout with sample data. Sample data is always flagged "Sample data" on screen, uses invented values (only the GRCh38 chromosome lengths are real), and has a "Back to the live view" control. It lives in `frontend/src/sample-data.js`.
+
 ## Type
 
 Familjen Grotesk for everything a person reads; Spline Sans Mono for data only (hashes, coordinates, counts). Both are SIL Open Font License, self-hosted in `frontend/src/fonts/` with their licences, so the page makes no third-party font request.

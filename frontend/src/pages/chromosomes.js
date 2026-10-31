@@ -1,4 +1,5 @@
-import { h, card, notice } from "../ui.js";
+import { h, card, notice, sampleNotice } from "../ui.js";
+import { sampleChromosomes } from "../sample-data.js";
 import { loadPublicCatalogue } from "../catalogue-api.js";
 
 const format = (value) => Number(value || 0).toLocaleString("en-US");
@@ -8,18 +9,20 @@ export async function render() {
   return renderAssembly("GRCh38");
 }
 
-async function renderAssembly(assembly) {
+async function renderAssembly(assembly, sample = false) {
   const root = h("div", { class: "stack" });
   root.append(h("section", { class: "card hero" }, h("div", { class: "hero-copy" },
     h("h1", {}, "Chromosome explorer"),
     h("p", { class: "lede" }, `Browse the ${assembly} human reference chromosomes and see where verified variant records are actually available. Reference coordinates are not genotype data, and an empty chromosome is never treated as analysed.`))));
 
-  const response = await loadPublicCatalogue("chromosomes", { assembly });
+  const response = sample ? { ok: true, status: 200, data: sampleChromosomes(assembly) } : await loadPublicCatalogue("chromosomes", { assembly });
+  const showSample = async () => root.replaceWith(await renderAssembly(assembly, true));
   if (!response.ok) {
     root.append(notice("warn",
       h("strong", {}, "Chromosome coverage service is not reachable from this deployment."),
-      h("p", { class: "muted" }, "The chromosome catalogue could not be loaded from the backend. Check the connection and try again; no placeholder counts are shown."),
-      h("p", { class: "fine" }, "Technical status: HTTP " + (response.status || "network error"))));
+      h("p", { class: "muted" }, "The live Supabase chromosome catalogue could not be loaded. Check the connection and try again; no placeholder counts are shown."),
+      h("p", { class: "fine" }, "Technical status: HTTP " + (response.status || "network error")),
+      h("button", { onclick: showSample }, "Preview with sample data")));
     root.append(card("What this page will show", "No simulated records",
       h("ul", {},
         h("li", {}, "Reference assembly and chromosome length from the Genome Reference Consortium."),
@@ -29,6 +32,7 @@ async function renderAssembly(assembly) {
   }
 
   const data = response.data || {};
+  if (sample) root.append(sampleNotice("The lengths are the public GRCh38 reference lengths. The variant coverage is invented to show the layout.", async () => root.replaceWith(await renderAssembly(assembly))));
   const rows = Array.isArray(data.chromosomes) ? data.chromosomes : [];
   const loaded = rows.filter((r) => r.data_coverage?.variant_data_loaded === true).length;
   root.append(h("div", { class: "grid g3" },
@@ -36,13 +40,13 @@ async function renderAssembly(assembly) {
     card("Chromosomes catalogued", format(rows.length), h("p", { class: "muted" }, "Autosomes, sex chromosomes and mitochondrial reference")),
     card("With variant records", format(loaded), h("p", { class: "muted" }, "Only non-empty coverage counts as loaded"))));
 
-  if (data.provenance_note) root.append(notice("info", data.provenance_note));
+  if (data.provenance_note && !sample) root.append(notice("info", data.provenance_note));
   const assemblySelect = h("select", { id: "assembly-filter", "aria-label": "Reference assembly" },
     h("option", { value: "GRCh38" }, "GRCh38"),
     h("option", { value: "GRCh37" }, "GRCh37"));
   assemblySelect.value = assembly;
   assemblySelect.addEventListener("change", async () => {
-    const next = await renderAssembly(assemblySelect.value);
+    const next = await renderAssembly(assemblySelect.value, sample);
     root.replaceWith(next);
   });
   const search = h("input", { type: "search", placeholder: "Filter chromosomes (e.g. 22, X, MT)", "aria-label": "Filter chromosomes" });
@@ -87,7 +91,7 @@ async function renderAssembly(assembly) {
   };
   search.addEventListener("input", paint);
   onlyLoaded.addEventListener("change", paint);
-  root.append(card("Chromosome coverage", "Live database counts, not inferred from the reference catalogue",
+  root.append(card("Chromosome coverage", sample ? "Sample values, not read from a database" : "Live database counts, not inferred from the reference catalogue",
     h("div", { class: "explorer-bar" },
       h("label", { for: "assembly-filter" }, "Reference assembly", assemblySelect),
       search,

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#F1F4F4">
+<meta name="theme-color" content="#EDF4EC">
 <title>GenomeGuard: Research governance workspace</title>
 <meta name="description" content="A research workspace for genomic dataset access governance, disclosure-risk assessment, query monitoring, and auditable decisions. Public-genotype research prototype; not for clinical use.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 28'%3E%3Cpath fill='%2315122B' d='M5 0A5 5 0 0 1 10 5V10.5Q10 12.5 8 13.5Q10 14.5 10 16.5V23A5 5 0 0 1 0 23V16.5Q0 14.5 2 13.5Q0 12.5 0 10.5V5A5 5 0 0 1 5 0Z'/%3E%3Cpath fill='%23BE1B55' d='M19 0A5 5 0 0 1 24 5V10.5Q24 12.5 22 13.5Q24 14.5 24 16.5V23A5 5 0 0 1 14 23V16.5Q14 14.5 16 13.5Q14 12.5 14 10.5V5A5 5 0 0 1 19 0Z'/%3E%3C/svg%3E">
@@ -18,7 +18,7 @@
   <nav class="rail" aria-label="Main">
     <a class="brand" href="#/overview">
       <svg width="24" height="28" viewBox="0 0 24 28" aria-hidden="true" focusable="false">
-        <path d="M5 0A5 5 0 0 1 10 5V10.5Q10 12.5 8 13.5Q10 14.5 10 16.5V23A5 5 0 0 1 0 23V16.5Q0 14.5 2 13.5Q0 12.5 0 10.5V5A5 5 0 0 1 5 0Z" style="fill:var(--ink)"/>
+        <path d="M5 0A5 5 0 0 1 10 5V10.5Q10 12.5 8 13.5Q10 14.5 10 16.5V23A5 5 0 0 1 0 23V16.5Q0 14.5 2 13.5Q0 12.5 0 10.5V5A5 5 0 0 1 5 0Z" style="fill:var(--mint)"/>
         <path d="M19 0A5 5 0 0 1 24 5V10.5Q24 12.5 22 13.5Q24 14.5 24 16.5V23A5 5 0 0 1 14 23V16.5Q14 14.5 16 13.5Q14 12.5 14 10.5V5A5 5 0 0 1 19 0Z" style="fill:var(--deny)"/>
         <path d="M1 5.5h8M1 19.5h8M15 7.5h8M15 21h8" style="stroke:var(--rail);stroke-width:1.5;fill:none"/>
       </svg>
@@ -53,10 +53,10 @@
     <header class="topbar">
       <button class="iconbtn ghost menubtn" id="menu" aria-label="Open menu" aria-expanded="false" aria-controls="nav">Menu</button>
       <div class="crumb" id="crumb">GenomeGuard</div>
-      <a class="iconbtn prov" id="prov" href="#/overview" title="Where this data comes from"></a>
       <button class="iconbtn ghost" id="open-cmdk" aria-label="Search Ctrl K">Search <span class="kbd">Ctrl K</span></button>
       <button class="iconbtn ghost" id="theme" aria-label="Switch colour theme">Theme</button>
     </header>
+    <a class="prov" id="prov" href="#/overview" title="Where this data comes from"></a>
     <main id="view" tabindex="-1"><div class="skeleton" style="height:120px"></div></main>
   </div>
 </div>

@@ -1,5 +1,6 @@
 import { api, state, isSteward } from "../api.js";
 import { h, card, kpi, badge, bands, pipeline, workflow, when, pct, notice } from "../ui.js";
+import { sampleStages } from "../sample-data.js";
 import { startTour, tourAvailable } from "../tour.js";
 
 const DEMO_ROSTER = [
@@ -56,7 +57,7 @@ export async function render() {
   // hero: the latest request drawn as a chromosome of stages, or an idle one
   const idle = [["consent", "Consent"], ["risk", "Risk"], ["protect", "Protect"], ["monitor", "Watch"], ["decide", "Decide"], ["explain", "Explain"], ["audit", "Record"]]
     .map(([id, short]) => ({ id, short, state: "idle" }));
-  let stages = idle, figureHead = "No requests yet";
+  let stages = idle, figureHead = "No requests yet", showingSample = false;
   if (latest) {
     const full = await api("/requests/" + latest.id);
     if (full.ok) {
@@ -65,7 +66,9 @@ export async function render() {
       figureHead = `Latest request #${latest.id}: ${q.data_level} data for ${(q.purpose || "").replaceAll("_", " ")}`;
     }
   }
-  const pipe = pipeline(stages, { play: !!latest, caption: true, idle: "Send a request and each stage fills in here, ending at the access decision." });
+  // with no request yet, play a labelled sample run so the figure is not an empty strip
+  if (!latest) { stages = sampleStages(); showingSample = true; figureHead = "A request, stage by stage"; }
+  const pipe = pipeline(stages, { play: !!latest || showingSample, caption: true, idle: "Send a request and each stage fills in here, ending at the access decision." });
   const hero = h("section", { class: "card hero" },
     h("div", { class: "hero-copy" },
       h("h1", {}, "Every request for genomic data gets a decision, a reason, and a record."),
@@ -78,8 +81,8 @@ export async function render() {
         state.demo ? h("a", { class: "btn ghost", href: "#/donor" }, "Participant view") : null)),
     h("div", { class: "hero-figure" },
       h("div", { class: "hero-figure-h" },
-        h("span", {}, latest ? h("b", {}, figureHead) : figureHead),
-        latest ? h("button", { class: "ghost", onclick: () => pipe.replay() }, "Replay") : null),
+        h("span", {}, latest ? h("b", {}, figureHead) : [h("b", {}, figureHead), " ", h("span", { class: "sample-flag" }, "Sample data"), " ", h("span", { class: "muted" }, "Your own requests replace this.")]),
+        h("button", { class: "ghost", onclick: () => pipe.replay() }, "Replay")),
       pipe));
   root.append(hero);
 
@@ -118,11 +121,12 @@ export async function render() {
       chain ? h("span", {}, `${chain.length} entries`, bands(chain.head_hash, { width: 132, height: 12, label: "Banded fingerprint of the audit chain head hash" })) : "",
       chain && !chain.ok ? "deny" : "permit")));
 
+  const SAMPLE_FEED = [["permit_with_transform", "#3 disease research, frequency"], ["escalate", "#2 methods development, frequency"], ["deny", "#1 commercial use, genotype"]];
   const feed = rows.length
     ? h("ul", { class: "feed" }, rows.slice(0, 6).map((r) => h("li", {}, badge(r.outcome), h("a", { href: "#/request/" + r.id }, `#${r.id} ${((r.request || {}).purpose || "").replaceAll("_", " ")}, ${(r.request || {}).data_level}`), h("span", { class: "m" }, when(r.ts)))))
-    : h("div", { class: "empty" }, state.demo
-      ? "Nothing yet. Open Requests and run a demo preset."
-      : "No requests yet. Submit an authorized request from the Requests page.");
+    : h("div", {},
+      h("p", { class: "fine", style: "margin:0 0 6px" }, h("span", { class: "sample-flag" }, "Sample data"), state.demo ? "Open Requests and run a demo preset to replace these." : "Submit an authorized request from the Requests page to replace these."),
+      h("ul", { class: "feed" }, SAMPLE_FEED.map(([o, t]) => h("li", {}, badge(o), h("span", {}, t), h("span", { class: "m" }, "sample")))));
   const proof = h("dl", { class: "facts" },
     h("dt", {}, "Differencing attack, no defence"), h("dd", {}, diff ? pct(diff.none.mean, 0) + " recovered" : "run make eval"),
     h("dt", {}, "Same attack with GenomeGuard"), h("dd", {}, diff ? pct(diff.ladder_plus_guard.mean, 0) + " (guessing is " + pct(diff.baseline.mean, 0) + ")" : "n/a"),

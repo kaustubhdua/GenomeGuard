@@ -1,4 +1,5 @@
-import { h, card, notice, bands } from "../ui.js";
+import { h, card, notice, bands, sampleNotice } from "../ui.js";
+import { sampleDatasets } from "../sample-data.js";
 import { loadPublicCatalogue } from "../catalogue-api.js";
 
 const fmt = (value) => Number(value || 0).toLocaleString("en-US");
@@ -13,6 +14,7 @@ const date = (value) => {
 };
 
 function sourceLink(url) {
+  if (!url) return null;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return h("span", { class: "muted" }, "Source link unavailable");
@@ -35,6 +37,11 @@ function provenanceChecklist() {
 }
 
 export async function render() {
+  return renderCatalogue(false);
+}
+
+// The router passes its own argument to render(), so the sample switch lives on a separate function.
+async function renderCatalogue(sample) {
   const root = h("div", { class: "stack dataset-page" });
   root.append(h("section", { class: "card hero dataset-hero" }, h("div", { class: "hero-copy" },
     h("h1", {}, "Dataset catalogue"),
@@ -43,24 +50,26 @@ export async function render() {
       h("span", { class: "status-dot" }, "Verified records only"),
       h("span", { class: "muted" }, "Public research data. Not for clinical use.")))));
 
-  const response = await loadPublicCatalogue("datasets");
+  const response = sample ? { ok: true, status: 200, data: sampleDatasets() } : await loadPublicCatalogue("datasets");
+  const showSample = async () => root.replaceWith(await renderCatalogue(true));
   if (!response.ok) {
     const retry = h("button", { class: "btn", onclick: async () => {
       retry.disabled = true;
       retry.textContent = "Checking…";
-      const next = await render();
+      const next = await renderCatalogue(false);
       root.replaceWith(next);
     } }, "Retry connection");
     root.append(notice("warn",
       h("strong", {}, "The catalogue could not be reached."),
       h("p", { class: "muted" }, "No placeholder data is shown. Check the connection and try again; the rest of the workspace remains available."),
       h("p", { class: "fine" }, "Connection status: " + (response.status || "network unavailable")),
-      retry));
+      h("div", { class: "hero-actions" }, retry, h("button", { class: "ghost", onclick: showSample }, "Preview with sample data"))));
     root.append(card("What qualifies for this catalogue", "Four checks before a dataset appears", provenanceChecklist()));
     return root;
   }
 
   const data = response.data || {};
+  if (sample) root.append(sampleNotice("These records are invented to show the layout. They are not imports and carry no consent or authorization.", async () => root.replaceWith(await renderCatalogue(false))));
   const datasets = Array.isArray(data.datasets) ? data.datasets : [];
   const totals = datasets.reduce((acc, d) => ({
     samples: acc.samples + Number(d.sample_count || 0),
@@ -73,14 +82,16 @@ export async function render() {
     card("Imported samples", fmt(totals.samples), h("p", { class: "muted" }, "Measured source samples")),
     card("Normalized variants", fmt(totals.variants), h("p", { class: "muted" }, "Split alternate-allele records"))));
 
-  root.append(notice("info", data.provenance_note ||
+  root.append(sample ? "" : notice("info", data.provenance_note ||
     "Dataset-level public-research approval is not participant-specific consent or clinical authorization."));
 
   if (!datasets.length) {
     root.append(h("section", { class: "card dataset-empty" },
       h("h2", {}, "No dataset has been verified yet."),
       h("p", { class: "muted" }, "No dataset has completed the source-review, checksum, assembly, import and count-reconciliation process. That is different from having no chromosome reference metadata."),
-      h("a", { class: "btn", href: "#/chromosomes" }, "Explore chromosome reference metadata")));
+      h("div", { class: "hero-actions" },
+        h("a", { class: "btn", href: "#/chromosomes" }, "Explore chromosome reference metadata"),
+        h("button", { class: "ghost", onclick: showSample }, "Preview with sample data"))));
     root.append(card("How a dataset becomes available", "A transparent, reproducible import gate", provenanceChecklist()));
     root.append(h("p", { class: "fine dataset-footnote" }, "Nothing here is synthetic. A dataset will appear only after a real import has been verified."));
     return root;
