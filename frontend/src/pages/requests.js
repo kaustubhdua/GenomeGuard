@@ -159,19 +159,39 @@ function formSection(out) {
   }
   let timer;
   function sync() { clearTimeout(timer); timer = setTimeout(refreshPreview, 200); }
+  let previewRun = 0;
   async function refreshPreview() {
+    const run = ++previewRun;
     const b = body();
     const q = new URLSearchParams({ purpose: b.purpose, commercial: String(b.is_commercial), data_level: b.data_level });
     if (b.disease) q.set("disease", b.disease);
     if (b.cohort_filter.population) q.set("population", b.cohort_filter.population);
-    const r = await api("/consent/summary?" + q);
-    if (!r.ok) { preview.replaceChildren(notice("warn", errorText(r))); return; }
-    const c = r.data, ex = c.excluded_by_reason || {};
-    const total = c.considered || 1, out_ = Object.values(ex).reduce((a, b2) => a + b2, 0);
-    preview.replaceChildren(
-      h("div", { class: "bar", role: "img", "aria-label": `${c.eligible} of ${c.considered} individuals within policy mapping` }, h("i", { class: "seg-ok", style: `width:${(100 * c.eligible) / total}%` }), h("i", { class: "seg-ex", style: `width:${(100 * out_) / total}%` })),
-      h("div", { class: "legend" }, h("span", {}, h("b", {}, c.eligible), (state.demo ? ` of ${c.considered} synthetic donors pass simulated permission rules for this request` : ` of ${c.considered} individuals pass the dataset-level public-release policy mapping for this request`)),
-        Object.entries(ex).sort((a, b2) => b2[1] - a[1]).map(([k, v]) => h("span", {}, `${v} excluded: ${reasonText(k)}`))));
+    const consent = await api("/consent/summary?" + q);
+    if (run !== previewRun) return;
+    if (!consent.ok) { preview.replaceChildren(notice("warn", errorText(consent))); return; }
+    const c = consent.data, ex = c.excluded_by_reason || {}, total = c.considered || 1;
+    const excluded = Object.values(ex).reduce((x, y) => x + y, 0);
+    const bar = h("div", { class: "bar", role: "img", "aria-label": `${c.eligible} of ${c.considered} individuals within policy mapping` },
+      h("i", { class: "seg-ok", style: `width:${100 * c.eligible / total}%` }),
+      h("i", { class: "seg-ex", style: `width:${100 * excluded / total}%` }));
+    const details = h("div", { class: "legend" },
+      h("span", {}, h("b", {}, c.eligible), state.demo ? ` of ${c.considered} synthetic donors pass simulated permission rules` : ` of ${c.considered} samples pass dataset-level policy mapping (not participant-specific consent)`),
+      Object.entries(ex).map(([k, v]) => h("span", {}, `${v} excluded: ${reasonText(k)}`)));
+    const result = await api("/requests/preview", { method: "POST", body: b });
+    if (run !== previewRun) return;
+    if (!result.ok) { preview.replaceChildren(bar, details, notice("warn", "Privacy preview unavailable: " + errorText(result))); return; }
+    const d = result.data || {}, before = d.risk_before || {}, after = d.risk_after || {}, final = d.final || {};
+    const facts = h("dl", { class: "facts" },
+      h("dt", {}, "Risk before → after"), h("dd", {}, `${before.band || "—"} → ${after.band || "—"}`),
+      h("dt", {}, "Variants requested → retained"), h("dd", {}, `${d.variants_requested ?? "—"} → ${d.variants_after_protection ?? "—"}`),
+      h("dt", {}, "Final output"), h("dd", {}, final.level || "—"),
+      h("dt", {}, "Noise scale"), h("dd", {}, final.noise_scale == null ? "None" : Number(final.noise_scale).toFixed(4)),
+      h("dt", {}, "Estimated epsilon cost"), h("dd", {}, Number(d.epsilon_cost || 0).toFixed(4)),
+      h("dt", {}, "Budget remaining"), h("dd", {}, Number(d.epsilon_remaining ?? 0).toFixed(4)));
+    const steps = d.steps?.length ? h("ol", { class: "plain" }, d.steps.map(s => h("li", {}, `${s.step}: ${s.detail || ""} (${s.band || "risk not scored"})`))) : h("p", { class: "muted" }, "No extra transformation predicted.");
+    const limits = h("ul", { class: "plain" }, (d.limitations || []).map(x => h("li", {}, x)));
+    preview.replaceChildren(bar, details, h("section", { class: "card" }, h("h3", {}, "Privacy versus utility"), h("p", {}, `Predicted outcome: ${d.outcome || "unknown"}`), facts),
+      h("section", { class: "card" }, h("h3", {}, "Protection path"), steps), notice("info", limits));
   }
   async function submit(b, btn) {
     btn.disabled = true; msg.replaceChildren();
