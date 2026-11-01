@@ -170,13 +170,16 @@ export async function render() {
     workflowList());
   // Detailed decision traces are loaded on their own route, never during overview paint.
   root.append(flowPanel);
-  if (state.demo && diff) root.append(h("section", { class: "gg-panel gg-evidence" },
+  if (state.demo) root.append(h("section", { class: "gg-panel gg-evidence" },
     h("div", { class: "gg-panel-head" },
       h("div", {}, h("span", { class: "gg-section-index" }, "06"), h("h2", {}, "Privacy evaluation evidence")),
       h("a", { href: "#/redteam" }, "Evaluation details →")),
     h("div", { class: "gg-evidence-grid" },
-      fact("Attack recovery without controls", pct(diff.none?.mean, 0)),
-      fact("With GenomeGuard protections", pct(diff.ladder_plus_guard?.mean, 0)),
-      fact("Baseline guessing", pct(diff.baseline?.mean, 0)))));
+      fact("Attack recovery without controls", diff ? pct(diff.none?.mean, 0) : "Unavailable",
+        diff ? "Evaluation result" : "Evaluation results are not currently available"),
+      fact("With GenomeGuard protections", diff ? pct(diff.ladder_plus_guard?.mean, 0) : "Unavailable",
+        diff ? "Evaluation result" : "Evaluation results are not currently available"),
+      fact("Baseline guessing", diff ? pct(diff.baseline?.mean, 0) : "Unavailable",
+        diff ? "Evaluation result" : "Evaluation results are not currently available"))));
   return root;
 }
