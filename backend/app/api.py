@@ -355,7 +355,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         body = await _body(request)
         return _j(S().preview(r, body))
 
-    @route("GET", "/variants/search", "Exact coordinate or variant-ID lookup; metadata only", "requester")
+    @route("GET", "/variants/search", "Exact coordinate or variant-ID lookup; metadata only", "public")
     async def variant_search(request):
         requester(request)
         query = request.query_params.get("q", "").strip()
