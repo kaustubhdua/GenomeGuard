@@ -72,7 +72,7 @@ export async function render([id]) {
     const rel = d.release, vals = rel.values || [], ids = rel.variant_ids || [];
     ledger.append(row("Released data", `${rel.level}, ${vals.length} variants`,
       h("div", { class: "tablewrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Variant"), h("th", { class: "num" }, rel.level === "frequency" ? "Allele frequency" : rel.level === "count" ? "Allele count" : "Present"))),
-        h("tbody", {}, vals.slice(0, 30).map((v, i) => h("tr", {}, h("td", {}, "v" + ids[i]), h("td", { class: "num" }, typeof v === "boolean" ? (v ? "yes" : "no") : String(v))))))),
+        h("tbody", {}, vals.slice(0, 30).map((v, i) => h("tr", {}, h("td", {}, h("a", { href: "#/variants?q=" + encodeURIComponent("v" + ids[i]) }, "v" + ids[i])), h("td", { class: "num" }, typeof v === "boolean" ? (v ? "yes" : "no") : String(v))))))),
       vals.length > 30 ? h("p", { class: "muted" }, `Showing 30 of ${vals.length}.`) : null,
       h("p", { class: "muted" }, "Aggregate only. No individual genotypes, donor identities or cohort membership are ever returned.")));
   } else if (d.status !== "held") {
