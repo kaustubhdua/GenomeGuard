@@ -219,6 +219,18 @@ label.f input, label.f select { font-weight: 400; color: var(--ink); }
 .empty-state, .error-boundary { max-width: 62ch; }
 .empty-state h1, .error-boundary h1 { font-size: 26px; }
 .skeleton { min-height: 14px; border-radius: var(--r-ctl); background: linear-gradient(90deg, var(--rule-2), var(--rule), var(--rule-2)); background-size: 200% 100%; }
+.connection-status {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px 16px; margin: 12px 0; padding: 12px 14px;
+  color: var(--ink); background: var(--pane-2); border: 1px solid var(--transform);
+  border-radius: var(--r-ctl); font-size: 14px;
+}
+.connection-status button {
+  flex: 0 0 auto; min-height: 36px; padding: 6px 12px; color: var(--ink);
+  background: var(--pane); border: 1px solid var(--control); border-radius: var(--r-ctl);
+  cursor: pointer; font: inherit; font-weight: 600;
+}
+.connection-status button:disabled { cursor: wait; opacity: .7; }
 
 /* ---------- hero (overview) ---------- */
 .card.hero { padding: 0; overflow: hidden; }
