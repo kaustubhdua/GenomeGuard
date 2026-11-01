@@ -37,5 +37,6 @@ export async function render() {
   query.addEventListener("keydown", (event) => { if (event.key === "Enter") search(); });
   root.append(card("Search locus", "Exact coordinate (CHR:POS:REF:ALT) or vN identifier",
     h("div", { class: "form" }, query, button), output));
+  if (initialQuery) search();
   return root;
 }
