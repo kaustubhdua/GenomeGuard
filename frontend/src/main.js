@@ -87,7 +87,7 @@ function visibleNav() {
   if (state.demo) return NAV;
   return NAV.map(([label, items]) => [label, items.filter(([id]) => {
     if (["donor", "redteam", "federated"].includes(id)) return false;
-    if (["family", "anomalies", "audit"].includes(id)) return isSteward();
+    if (["dataset-qc", "family", "anomalies", "audit"].includes(id)) return isSteward();
     return true;
   })]).filter(([, items]) => items.length);
 }
