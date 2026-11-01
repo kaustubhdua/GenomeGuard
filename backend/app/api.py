@@ -349,6 +349,86 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             {"population": pop} if pop else {})
         return _j(out)
 
+    @route("POST", "/requests/preview", "Non-consuming privacy and utility preview", "requester")
+    async def preview_request(request):
+        r = requester(request)
+        body = await _body(request)
+        return _j(S().preview(r, body))
+
+    @route("GET", "/variants/search", "Exact coordinate or variant-ID lookup; metadata only", "requester")
+    async def variant_search(request):
+        requester(request)
+        query = request.query_params.get("q", "").strip()
+        if not query or len(query) > 100:
+            raise ServiceError(400, "invalid_query", "Enter a variant ID or exact coordinate such as 22:105123:A:G.")
+        import re
+        svc = S()
+        matches = []
+        id_match = re.fullmatch(r"[vV]?(\\d+)", query)
+        coord_match = re.fullmatch(r"(?:chr)?([0-9]{1,2}|X|Y|M|MT):(\\d+)(?::([ACGTN]+):([ACGTN]+))?", query, re.I)
+        if id_match:
+            idx = int(id_match.group(1)) - 1
+            if 0 <= idx < len(svc.ds.coords):
+                matches = [idx]
+        elif coord_match:
+            chrom, pos, ref, alt = coord_match.groups()
+            chrom = chrom.upper().removeprefix("CHR")
+            if chrom == "M":
+                chrom = "MT"
+            pos = int(pos)
+            matches = [i for i, (c, p, r, a) in enumerate(svc.ds.coords)
+                       if c.upper().removeprefix("CHR") == chrom and p == pos
+                       and (ref is None or (r.upper() == ref.upper() and a.upper() == alt.upper()))][:20]
+        else:
+            raise ServiceError(422, "unsupported_search", "Gene-symbol search is unavailable: this dataset has no linked annotation catalogue. Search by exact coordinate or variant ID.")
+        provenance = getattr(svc, "provenance", {})
+        return _j({
+            "query": query,
+            "matches": [{
+                "variant_id": i + 1, "chromosome": str(svc.ds.coords[i][0]),
+                "position": int(svc.ds.coords[i][1]), "reference_allele": str(svc.ds.coords[i][2]),
+                "alternate_allele": str(svc.ds.coords[i][3]),
+                "reference_assembly": provenance.get("reference_assembly") or "Not recorded",
+            } for i in matches],
+            "frequency_policy": "Cohort frequencies are shown only in a governed aggregate release, not by this metadata lookup.",
+            "annotation_available": False,
+        })
+
+    @route("GET", "/admin/dataset-qc", "Steward-only aggregate dataset QC and provenance summary", "admin")
+    async def dataset_qc(request):
+        admin(request)
+        import numpy as np
+        svc = S()
+        g = np.asarray(svc.ds.genotypes)
+        maf = np.asarray(svc.ds.maf, dtype=float)
+        coords = svc.ds.coords or []
+        chrom_counts = {}
+        for chrom, *_ in coords:
+            key = str(chrom)
+            chrom_counts[key] = chrom_counts.get(key, 0) + 1
+        n, v = g.shape
+        provenance = getattr(svc, "provenance", {})
+        return _j({
+            "dataset_id": svc.dataset_id,
+            "source": provenance.get("genotype_source") or provenance.get("genotypes_label") or "Unknown",
+            "source_sha256": provenance.get("source_vcf_sha256"),
+            "sample_count": int(n), "variant_count": int(v),
+            "genotype_call_count": int(n * v),
+            "matrix_missing_calls": int((g < 0).sum()),
+            "missingness_note": "The active cohort matrix contains only retained genotype calls; source-level VCF missingness is not retained by this loader and cannot be reconstructed here.",
+            "maf": {
+                "minimum": round(float(maf.min()), 6) if maf.size else None,
+                "median": round(float(np.median(maf)), 6) if maf.size else None,
+                "maximum": round(float(maf.max()), 6) if maf.size else None,
+                "below_1_percent": int((maf < 0.01).sum()),
+                "monomorphic": int((maf == 0).sum()),
+            },
+            "chromosome_variant_counts": chrom_counts,
+            "reference_assembly": provenance.get("reference_assembly") or "Not recorded",
+            "consent_basis": provenance.get("consent_label") or "Unknown",
+            "review_status": "Inspection only — not an import acceptance or production-readiness approval",
+        })
+
     @route("GET", "/audit", "Audit log (newest first) with chain verification", "admin")
     async def audit(request):
         admin(request)
