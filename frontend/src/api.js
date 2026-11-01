@@ -79,10 +79,11 @@ export function disconnectKey() {
 }
 
 export async function boot() {
-  // Fetch health and readiness together: the shell can initialize without serial API waits.
-  const [h, readiness] = await Promise.all([call("/health"), call("/health/ready")]);
+  // /health already includes the readiness summary. Avoid a duplicate request during
+  // startup; the shell can render immediately while this single request hydrates state.
+  const h = await call("/health");
   state.health = h.data;
-  state.readiness = readiness.data || { ready: false, checks: {} };
+  state.readiness = h.data?.readiness || { ready: false, checks: {} };
   state.demo = null;
   state.donors = [];
   if (!h.ok || !h.data?.demo_mode) {
