@@ -149,7 +149,7 @@ def import_to_database(args) -> dict:
                             alternate_allele, population, allele_count, allele_number,
                             allele_frequency, homozygote_count)
                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                           ON CONFLICT (dataset_id, chromosome, reference_allele,
+                           ON CONFLICT (dataset_id, chromosome, position, reference_allele,
                                         alternate_allele, population) DO NOTHING""",
                         batch,
                     )
