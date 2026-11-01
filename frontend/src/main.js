@@ -260,8 +260,38 @@ for (const container of [ $("nav"), $("view") ]) {
 }
 window.addEventListener("hashchange", render);
 window.addEventListener("gg:refresh-who", async () => { await boot(); drawWho(); });
-// Paint the shell and route immediately; hydrate identity and live API data in the background.
+function drawConnectionStatus() {
+  const el = $("connection-status");
+  if (!state.bootError) {
+    el.hidden = true;
+    el.replaceChildren();
+    return;
+  }
+  el.hidden = false;
+  el.replaceChildren(
+    h("span", {}, "GenomeGuard API is taking longer than expected. " + state.bootError),
+    h("button", { type: "button", onclick: async () => {
+      el.querySelector("button").disabled = true;
+      el.querySelector("button").textContent = "Retrying…";
+      await boot();
+      drawWho();
+      drawProv();
+      drawConnectionStatus();
+      if (!state.bootError) render();
+    } }, "Retry connection")
+  );
+}
+
+// Paint the shell immediately; the animated page skeleton remains visible during API startup.
 drawWho();
 drawProv();
 render();
-boot().then(() => { drawWho(); drawProv(); render(); });
+boot().then(() => {
+  drawWho();
+  drawProv();
+  drawConnectionStatus();
+  render();
+}).catch(() => {
+  state.bootError = "A startup error occurred. Check your connection and retry.";
+  drawConnectionStatus();
+});
