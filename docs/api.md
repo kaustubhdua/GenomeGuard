@@ -7,6 +7,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | Method | Path | Purpose | Access |
 |---|---|---|---|
 | GET | `/health` | Liveness and dataset facts | public |
+| GET | `/health/live` | Cheap process liveness probe; no database or cohort initialization | public |
 | GET | `/health/ready` | Production readiness gate; distinguishes liveness from safe real-data operation | public |
 | GET | `/demo/requesters` | Demo accounts and keys (demo mode only) | public |
 | POST | `/admin/requesters` | Provision a requester API key (returned once) | admin |
