@@ -163,9 +163,12 @@ def main() -> None:
                     return
                 errors.append(f"HTTP {response.status}: {path}")
         pg.on("response", check_response)
-        pg.goto(base + "/#/overview")
-        pg.wait_for_timeout(1500)
-        pg.get_by_role("button", name="Guided walkthrough").click()
+        pg.goto(base + "/#/overview", wait_until="domcontentloaded")
+        # Demo identity is hydrated asynchronously by boot(); wait for the real control
+        # instead of assuming the API and dataset bootstrap finish within 1.5 seconds.
+        tour_button = pg.get_by_role("button", name="Guided walkthrough")
+        tour_button.wait_for(state="visible", timeout=30000)
+        tour_button.click()
         notes: dict[int, str] = {}
         for step in range(1, 9):
             if step in (2, 4):
