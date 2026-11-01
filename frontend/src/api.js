@@ -7,7 +7,7 @@ function readStorage(key) {
 }
 
 // Defer any remembered identity until the server confirms demo mode.
-export const state = { who: "", adminKey: "", demo: null, health: null, readiness: null, me: null, donors: [], donor: null };
+export const state = { who: "", adminKey: "", demo: null, health: null, readiness: null, bootError: "", me: null, donors: [], donor: null };
 
 export const isSteward = () => state.who === "steward";
 
@@ -24,10 +24,23 @@ async function call(path, { method = "GET", body, headers = {} } = {}) {
   const hd = { Accept: "application/json", ...headers };
   if (body !== undefined) hd["Content-Type"] = "application/json";
   let res;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    res = await fetch(path, { method, headers: hd, body: body === undefined ? undefined : JSON.stringify(body) });
-  } catch {
-    return { ok: false, status: 0, data: { error: "network", message: "Cannot reach the GenomeGuard API." } };
+    res = await fetch(path, {
+      method, headers: hd, body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const timedOut = error?.name === "AbortError";
+    return { ok: false, status: 0, data: {
+      error: timedOut ? "timeout" : "network",
+      message: timedOut
+        ? "The API is taking longer than 30 seconds to respond. The service may be starting up; please retry."
+        : "Cannot reach the GenomeGuard API. Check your connection and try again.",
+    } };
+  } finally {
+    clearTimeout(timeout);
   }
   let data = null;
   try { data = await res.json(); } catch { /* empty body */ }
@@ -81,8 +94,10 @@ export function disconnectKey() {
 export async function boot() {
   // /health already includes the readiness summary. Avoid a duplicate request during
   // startup; the shell can render immediately while this single request hydrates state.
+  state.bootError = "";
   const h = await call("/health");
   state.health = h.data;
+  if (!h.ok) state.bootError = h.data?.message || h.data?.error || "The GenomeGuard API is not responding.";
   state.readiness = h.data?.readiness || { ready: false, checks: {} };
   state.demo = null;
   state.donors = [];
