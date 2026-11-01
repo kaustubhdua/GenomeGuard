@@ -7,7 +7,7 @@ services:
     name: genomeguard
     runtime: docker
     plan: free
-    healthCheckPath: /health
+    healthCheckPath: /health/live
     envVars:
       - key: GG_DEMO_MODE
         value: "false"  # Disable public demo credentials and simulated personas
