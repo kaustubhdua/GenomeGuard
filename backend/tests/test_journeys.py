@@ -107,4 +107,4 @@ def test_tamper_is_detected_at_the_exact_entry_and_undo_restores_the_demo():
     v = c.get("/audit/verify").json()
     assert v["ok"] is False and v["first_broken_index"] == 2
     assert c.post("/admin/untamper", headers=ADMIN).json()["ok"] is True
-    assert c.get("/health").json()["audit_chain_ok"] is True
+    assert c.get("/audit/verify").json()["ok"] is True
