@@ -235,6 +235,69 @@ class GenomeGuardService:
             return "escalate"
         return "permit" if outcome.startswith("permit") else outcome
 
+    # =============================================================== non-consuming preview
+    def preview(self, requester: dict, req: dict) -> dict:
+        """Evaluate policy, risk and the transform ladder without mutating request state.
+
+        This deliberately does not write requests/audit events, run the anomaly monitor,
+        materialize a release, or charge epsilon. A preview is advisory, not a reservation.
+        """
+        clean = self._validate(req)
+        rid = requester["id"]
+        level = clean["data_level"]
+        if rid in self.monitor.frozen:
+            return {"outcome": "deny", "reasons": ["requester_frozen"], "steps": [],
+                    "eligible": 0, "considered": self.ds.n_donors, "variants_requested": 0,
+                    "epsilon_cost": 0.0, **self.budget(rid)}
+        tier = requester["credential_level"]
+        if (level == "record" and tier != "controlled") or (
+                tier == "anonymous" and level not in ("boolean", "count")):
+            return {"outcome": "deny", "reasons": ["credential_insufficient"], "steps": [],
+                    "eligible": 0, "considered": self.ds.n_donors, "variants_requested": 0,
+                    "epsilon_cost": 0.0, **self.budget(rid)}
+        pop = clean["cohort_filter"].get("population")
+        creq = ConsentRequest(clean["purpose"], clean["disease"], clean["is_commercial"], level,
+                              pop if isinstance(pop, str) else None, clean["cohort_filter"])
+        elig = eligible_cohort(creq, self.ds.donors)
+        vidx = self.resolve_variants(clean["variant_filter"])
+        if not vidx:
+            return {"outcome": "deny", "reasons": ["no_variants"], "steps": [],
+                    **elig.counts_only(), "variants_requested": 0, "epsilon_cost": 0.0,
+                    **self.budget(rid)}
+        if tier == "anonymous" and elig.n < 5 * self.p.k_min:
+            return {"outcome": "deny", "reasons": ["cohort_too_small_for_tier"], "steps": [],
+                    **elig.counts_only(), "variants_requested": len(vidx), "epsilon_cost": 0.0,
+                    **self.budget(rid)}
+        ladder = run_ladder(self.ds, elig.donor_ids, vidx, level, self.p,
+                            epsilon_available=self._remaining(rid),
+                            rng=np.random.default_rng(0), build_release=False)
+        before = _brief(ladder.risk_before)
+        after = _brief(ladder.risk_after)
+        for summary in (before, after):
+            for key in ("min_carriers", "carrier_families", "relatives_exposed_total",
+                        "membership_signal", "rare_few_carriers"):
+                summary.pop(key, None)
+        budget = self.budget(rid)
+        return {
+            "outcome": ladder.outcome, "reasons": ladder.reasons,
+            "eligible": elig.n, "considered": elig.considered,
+            "excluded_by_reason": elig.excluded_by_reason,
+            "variants_requested": len(vidx),
+            "variants_after_protection": len(ladder.plan.variant_idx),
+            "risk_before": before, "risk_after": after,
+            "steps": ladder.steps, "final": {
+                "level": ladder.plan.level, "n_variants": len(ladder.plan.variant_idx),
+                "bin_width": ladder.plan.bin_width, "epsilon": ladder.plan.epsilon,
+                "noise_scale": ladder.plan.noise_scale,
+            },
+            "epsilon_cost": round(ladder.epsilon_spent, 4),
+            "epsilon_remaining_after_preview": round(max(0.0, budget["epsilon_remaining"] - ladder.epsilon_spent), 4),
+            **budget,
+            "limitations": ["Anomaly/history checks run only on submission.",
+                           "Preview does not reserve or consume privacy budget.",
+                           "Final submission re-evaluates all rules; outcomes may differ."],
+        }
+
     # ================================================================== submit
     @transactional
     def submit(self, requester: dict, req: dict, now: float | None = None) -> dict:
