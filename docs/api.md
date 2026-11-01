@@ -14,6 +14,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | POST | `/requests` | Submit a data request; returns decision, explanation, risk, transform summary and (if released) aggregate data | requester |
 | POST | `/requests/preview` | Non-consuming privacy and utility preview | requester |
 | GET | `/variants/search` | Metadata-only variant lookup by ID or exact chromosome coordinate | public |
+| GET | `/admin/dataset-qc` | Steward-only aggregate dataset QC and provenance summary | admin |
 | GET | `/beacon/g_variants` | GA4GH Beacon v2 style allele lookup, governed by the same consent, risk and audit pipeline | requester |
 | GET | `/requests` | List requests (own; all with admin key) | requester or admin |
 | GET | `/requests/{id:int}` | One decision in detail | requester or admin |
