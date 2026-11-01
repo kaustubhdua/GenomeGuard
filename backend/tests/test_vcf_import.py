@@ -52,6 +52,32 @@ def test_vcf_split_alt_records_have_unique_variant_indices(tmp_path):
     assert rows[2]["alt_allele_frequency"] == pytest.approx(0.5)
 
 
+def test_vcf_rejects_whitespace_and_control_characters_in_sample_ids(tmp_path):
+    path = _vcf(tmp_path)
+    text = path.read_text(encoding="utf-8").replace("SAMPLE_A", "SAMPLE_A ")
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ImportValidationError, match="sample identifiers"):
+        read_header(path, "GRCh37")
+
+
+def test_vcf_rejects_non_decimal_positions(tmp_path):
+    path = _vcf(tmp_path)
+    text = path.read_text(encoding="utf-8").replace("22\\t100\\t", "22\\t+100\\t")
+    path.write_text(text, encoding="utf-8")
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="invalid position"):
+        list(iter_records(path, samples, "GRCh37"))
+
+
+def test_vcf_rejects_duplicate_format_fields(tmp_path):
+    path = _vcf(tmp_path)
+    text = path.read_text(encoding="utf-8").replace("\\tFORMAT\\t", "\\tGT:GT\\t")
+    path.write_text(text, encoding="utf-8")
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="exactly one GT"):
+        list(iter_records(path, samples, "GRCh37"))
+
+
 def test_vcf_assembly_mismatch_fails_closed(tmp_path):
     path = _vcf(tmp_path, "GRCh37")
     with pytest.raises(ImportValidationError, match="assembly mismatch"):
@@ -175,6 +201,8 @@ def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tm
                     {"reuse_statement_url": args.reuse_statement_url, "citation": args.citation},
                 )
             elif "SELECT sample_count, variant_count, genotype_call_count" in sql:
+                self.last_row = (2, 3, 5)
+            elif "SELECT count(*) FROM genomeguard.dataset_samples" in sql:
                 self.last_row = (2, 3, 5)
             elif "DELETE FROM genomeguard." in sql:
                 raise AssertionError("idempotent import must not delete existing data")
