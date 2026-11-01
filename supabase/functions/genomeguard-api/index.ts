@@ -108,7 +108,7 @@ Deno.serve(async (request: Request) => {
         reference_assembly: assembly,
         chromosome_count: rows.length,
         chromosomes: rows,
-        provenance_note: "GRCh38 chromosome reference metadata is catalogued separately from variant/genotype data. A chromosome is not available for analysis unless variant_data_loaded is true and its dataset provenance is verified.",
+        provenance_note: `${assembly} chromosome reference metadata is catalogued separately from variant/genotype data. A chromosome is not available for analysis unless variant_data_loaded is true and its dataset provenance is verified.`,
       });
     } catch {
       return error(503, "chromosome_catalog_unavailable", "Chromosome reference metadata could not be loaded.");
