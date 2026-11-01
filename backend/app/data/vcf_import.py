@@ -105,8 +105,15 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
                 ] or columns[8] != "FORMAT":
                     raise ImportValidationError("invalid VCF header; FORMAT and at least one sample are required")
                 samples = columns[9:]
-                if any(not s or s in {".", "0"} or len(s) > 200 for s in samples) or len(samples) != len(set(samples)):
-                    raise ImportValidationError("empty or duplicate sample identifiers")
+                if (
+                    any(
+                        not s or s in {".", "0"} or len(s) > 200 or s != s.strip()
+                        or any(ord(char) < 32 or ord(char) == 127 for char in s)
+                        for s in samples
+                    )
+                    or len(samples) != len(set(samples))
+                ):
+                    raise ImportValidationError("invalid, empty, or duplicate sample identifiers")
                 return headers, samples
     raise ImportValidationError("VCF is missing a #CHROM header")
 
@@ -134,10 +141,9 @@ def iter_records(path: Path, samples: list[str], assembly: str):
                 chrom = "MT"
             if not re.fullmatch(r"(?:[1-9]|1[0-9]|2[0-2]|X|Y|M|MT)", chrom):
                 raise ImportValidationError(f"unsupported chromosome: {chrom}")
-            try:
-                pos = int(pos_text)
-            except ValueError as exc:
-                raise ImportValidationError("invalid position") from exc
+            if not re.fullmatch(r"[0-9]+", pos_text):
+                raise ImportValidationError("invalid position")
+            pos = int(pos_text)
             if pos < 1 or pos > CHROM_LENGTHS[assembly].get(chrom, 0) or not ALLELE_RE.fullmatch(ref):
                 raise ImportValidationError("invalid position/reference allele")
             alts = alt_text.split(",")
@@ -156,8 +162,11 @@ def iter_records(path: Path, samples: list[str], assembly: str):
                 raise ImportValidationError("duplicate VCF record")
             seen_at_coordinate.add(key)
             formats = fmt.split(":")
-            if "GT" not in formats:
-                raise ImportValidationError("GT is missing from FORMAT")
+            if (
+                not fmt or any(not field for field in formats)
+                or len(formats) != len(set(formats)) or formats.count("GT") != 1
+            ):
+                raise ImportValidationError("FORMAT must contain exactly one GT field and no duplicates")
             gt_index = formats.index("GT")
             genotypes = []
             for sample_cell in fields[9:]:
@@ -260,6 +269,23 @@ def import_to_database(args, digest: str, samples: list[str]) -> dict:
                         (dataset_id,),
                     )
                     counts = cur.fetchone()
+                    cur.execute(
+                        """SELECT
+                             (SELECT count(*) FROM genomeguard.dataset_samples WHERE dataset_id=%s),
+                             (SELECT count(*) FROM genomeguard.dataset_variants WHERE dataset_id=%s),
+                             (SELECT count(*) FROM genomeguard.dataset_genotype_calls
+                               WHERE dataset_id=%s AND called_alleles>0)""",
+                        (dataset_id, dataset_id, dataset_id),
+                    )
+                    measured = cur.fetchone()
+                    if not counts or tuple(counts) != tuple(measured or ()):
+                        raise ImportValidationError(
+                            "loaded manifest counts do not reconcile with normalized genotype tables"
+                        )
+                    if counts[0] != len(samples) or not all(counts):
+                        raise ImportValidationError(
+                            "loaded dataset sample set or counts do not match the source VCF"
+                        )
                     return {
                         "dataset_id": str(dataset_id), "status": "loaded", "already_loaded": True,
                         "sample_count": counts[0], "variant_count": counts[1],
