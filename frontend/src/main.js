@@ -23,8 +23,6 @@ function prefetchRoute(hash) {
   hit.prefetched = true;
   hit.load().catch(() => { hit.prefetched = false; }); // a failed prefetch must remain retryable
 }
-  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["variants", "Variant inspector", "#/variants"], ["datasets", "Datasets", "#/datasets"]]],
-  ["Steward", [["dataset-qc", "Dataset QC", "#/dataset-qc", true]]],
 const NAV = [
   [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["variants", "Variant inspector", "#/variants"], ["datasets", "Datasets", "#/datasets"]]],
   ["Researcher", [["requests", "Requests", "#/requests"]]],
