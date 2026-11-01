@@ -62,7 +62,7 @@ def test_vcf_rejects_whitespace_and_control_characters_in_sample_ids(tmp_path):
 
 def test_vcf_rejects_non_decimal_positions(tmp_path):
     path = _vcf(tmp_path)
-    text = path.read_text(encoding="utf-8").replace("22\\t100\\t", "22\\t+100\\t")
+    text = path.read_text(encoding="utf-8").replace("22\t100\t", "22\t+100\t")
     path.write_text(text, encoding="utf-8")
     _, samples = read_header(path, "GRCh37")
     with pytest.raises(ImportValidationError, match="invalid position"):
@@ -71,7 +71,7 @@ def test_vcf_rejects_non_decimal_positions(tmp_path):
 
 def test_vcf_rejects_duplicate_format_fields(tmp_path):
     path = _vcf(tmp_path)
-    text = path.read_text(encoding="utf-8").replace("\\tFORMAT\\t", "\\tGT:GT\\t")
+    text = path.read_text(encoding="utf-8").replace("\tFORMAT\t", "\tGT:GT\t")
     path.write_text(text, encoding="utf-8")
     _, samples = read_header(path, "GRCh37")
     with pytest.raises(ImportValidationError, match="exactly one GT"):
