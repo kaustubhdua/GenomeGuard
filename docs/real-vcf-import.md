@@ -17,12 +17,12 @@ The VCF header must identify an assembly that exactly matches the command-line a
 - SHA-256 must exactly match the operator-provided expected checksum.
 - Source and reuse-statement URLs must be HTTPS.
 - The operator must supply the actual source retrieval timestamp as timezone-aware ISO-8601; the importer never infers retrieval time from import start time.
-- The VCF must include recognizable assembly metadata, unique sample IDs, GT fields, supported chromosome labels, valid coordinates and DNA alleles.
+- The VCF must include recognizable assembly metadata, unique sample IDs without surrounding whitespace/control characters, exactly one GT field in each FORMAT declaration, supported chromosome labels, strictly decimal valid coordinates and DNA alleles.
 - Only haploid and diploid genotype calls are supported. Symbolic/breakend alleles and unsupported ploidy fail closed.
 - Multi-allelic records are split into one normalized row per ALT allele; genotype calls store ALT dosage, called-allele count and phase flag.
 - Duplicate records and allele indices absent from a record are rejected. Input must be coordinate-sorted; duplicate detection retains only records at the current coordinate so memory use does not grow with total variant count.
-- The importer streams variants and commits bounded batches. The manifest remains `loading` until database counts reconcile.
-- The catalogue only lists manifests marked `loaded` with non-zero measured counts. An interrupted import remains unpublished and can be restarted from scratch with the same key/checksum; a completed dataset cannot be overwritten by this CLI.
+- The importer streams variants and commits bounded batches. The manifest remains `loading` until database counts reconcile; a retry resumes only after verifying a contiguous committed-variant checkpoint and matching source sample set.
+- The catalogue only lists manifests marked `loaded` with non-zero measured counts. An interrupted import remains unpublished and can resume from the last committed batch with the same key/checksum. A repeat import of a loaded dataset is a no-op only after the manifest counts are reconciled against the normalized tables and source sample count; a completed dataset cannot be overwritten by this CLI.
 
 ## Dry run
 
@@ -40,6 +40,7 @@ python -m app.data.vcf_import \
   --expected-sha256 "<64 lowercase hex characters>" \
   --reuse-statement-url "https://official-source.example/reuse-terms" \
   --citation "Exact collection publication citation" \
+  --reviewed-public-research \
   --dry-run
 ```
 
@@ -73,6 +74,11 @@ Do not run the example as written. The review decision and exact checksum must b
 Only after the dry run succeeds and the manifest is approved, configure `DATABASE_URL` in the trusted operator environment. The importer explicitly executes `SET ROLE genomeguard_importer`; that `NOLOGIN` role is provisioned by the importer-privileges migration and has only the required manifest-update, normalized-table, and sequence grants. The connection user must be authorized to assume that role. The database login used by `DATABASE_URL` must be explicitly granted membership in `genomeguard_importer` so `SET ROLE genomeguard_importer` can succeed; do not grant that membership to browser-facing or general application roles. Never place the connection string in frontend variables, Git, shell history, screenshots or logs.
 
 The import writes no synthetic rows. It does not enable data release, create consent, or prove that a particular use is ethically or legally authorized. The participant-specific consent path and a governed release function must be completed and tested before private-cohort workflows are enabled.
+
+
+## Decision-engine integration boundary
+
+The normalized VCF tables are not currently an input adapter for `GenomeGuardService`. The legacy decision engine uses its own `Dataset` contract and consent-filtered participant records; the normalized public-release tables contain source sample identifiers and genotype calls under dataset-level reuse review. Treating those source identifiers as participants with verified individual consent, or copying calls into the legacy store without a documented identity/consent mapping, would be unsafe. The current API therefore does not release these calls into the decision engine. A future integration must be an explicitly reviewed aggregate-only adapter with dataset-policy authorization, minimum-cohort thresholds, no raw sample/genotype output, and independent tests for consent, withdrawal, and privacy controls. Do not mark the release gate complete merely because the importer reports `loaded`.
 
 ## Test coverage
 
