@@ -97,6 +97,48 @@ function drawNav(active) {
         h("a", { href, "aria-current": id === active ? "page" : false }, text, steward ? h("span", { class: "tag" }, "steward") : null)))));
 }
 
+function drawWho() {
+  const selector = $("who");
+  const label = $("who-label");
+  const authPanel = $("auth-panel");
+  const note = $("who-note");
+
+  if (state.demo) {
+    // Demo mode offers explicit synthetic personas; never expose real credentials here.
+    label.hidden = false;
+    selector.hidden = false;
+    authPanel.hidden = true;
+    const options = [
+      ["steward", "Data steward"],
+      ...(state.demo.requesters || []).map((r) => [r.api_key, r.name || r.institution || "Researcher"]),
+    ];
+    selector.replaceChildren(...options.map(([value, text]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      return option;
+    }));
+    selector.value = state.who || "";
+    note.textContent = isSteward()
+      ? "Demo steward persona · synthetic cohort"
+      : "Demo researcher persona · synthetic cohort";
+    return;
+  }
+
+  // In real-data mode identities are supplied as short-lived credentials, not selectable
+  // demo personas. Keep the selector hidden and show the credential panel instead.
+  label.hidden = true;
+  selector.hidden = true;
+  authPanel.hidden = false;
+  if (state.adminKey) {
+    note.textContent = "Steward credentials are active in memory for this tab.";
+  } else if (state.who) {
+    note.textContent = "Researcher credentials are active in memory for this tab.";
+  } else {
+    note.textContent = "No identity connected. Use an institution-issued API key.";
+  }
+}
+
 function drawProv() {
   const p = (state.health || {}).provenance || {};
   const el = $("prov");
