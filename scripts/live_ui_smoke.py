@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
 PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies",
-         "#/audit", "#/donor", "#/redteam", "#/federated"]
+         "#/audit", "#/donor", "#/redteam", "#/federated", "#/variants", "#/dataset-qc"]
 FAILURES: list[str] = []
 
 
