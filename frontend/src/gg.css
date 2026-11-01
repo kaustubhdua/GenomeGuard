@@ -771,7 +771,7 @@ body { background: var(--paper); }
 .crumb { font-size:14px; font-weight:650; letter-spacing:.01em; }
 #view { max-width:1600px; padding:clamp(22px,3vw,42px) clamp(22px,3.5vw,54px) 90px; }
 .gg-overview { gap:18px; }
-.gg-command { position:relative; display:grid; grid-template-columns:minmax(0,1.3fr) minmax(260px,.7fr); min-height:320px; overflow:hidden; border:1px solid rgba(127,190,151,.22); border-radius:13px; color:#eaf6ed; background-color:#0b1b15; background:radial-gradient(ellipse at 78% 44%,rgba(57,143,95,.25),transparent 32%),radial-gradient(ellipse at 4% 0%,rgba(72,160,111,.16),transparent 45%),linear-gradient(120deg,#0a2118,#0b1b15 64%,#10251b); box-shadow:0 22px 60px rgba(0,0,0,.12); }
+.gg-command { position:relative; display:grid; grid-template-columns:minmax(0,1.3fr) minmax(260px,.7fr); min-height:320px; overflow:hidden; border:1px solid rgba(127,190,151,.22); border-radius:13px; color:#eaf6ed; background:radial-gradient(ellipse at 78% 44%,rgba(57,143,95,.25),transparent 32%),radial-gradient(ellipse at 4% 0%,rgba(72,160,111,.16),transparent 45%),linear-gradient(120deg,#0a2118,#0b1b15 64%,#10251b); background-color:#0b1b15; box-shadow:0 22px 60px rgba(0,0,0,.12); }
 .gg-command-copy { position:relative; z-index:2; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding:clamp(28px,4vw,54px); }
 .gg-eyebrow { display:flex; align-items:center; gap:10px; color:#9bbba7; font:600 10px/1.4 var(--mono); letter-spacing:.14em; text-transform:uppercase; }
 .gg-live-dot { width:7px; height:7px; border-radius:50%; background:#73e2aa; box-shadow:0 0 0 4px rgba(115,226,170,.12),0 0 14px rgba(115,226,170,.5); }
