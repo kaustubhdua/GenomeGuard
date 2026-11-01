@@ -81,7 +81,7 @@ def test_vcf_rejects_duplicate_format_fields(tmp_path):
 def test_vcf_rejects_conflicting_assembly_metadata(tmp_path):
     path = _vcf(tmp_path)
     text = path.read_text(encoding="utf-8").replace(
-        "##reference=GRCh37", "##reference=GRCh37\\n##assembly=GRCh38"
+        "##reference=GRCh37", "##reference=GRCh37\n##assembly=GRCh38"
     )
     path.write_text(text, encoding="utf-8")
     with pytest.raises(ImportValidationError, match="lacks recognizable assembly"):
