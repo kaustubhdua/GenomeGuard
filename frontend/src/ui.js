@@ -2,6 +2,14 @@
 import { state } from "./api.js";
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
+  // Media created through the shared UI helper should not compete with the initial
+  // viewport for bandwidth. Callers can opt out with loading: "eager".
+  if (tag.toLowerCase() === "img") {
+    el.loading = "lazy";
+    el.decoding = "async";
+  } else if (tag.toLowerCase() === "iframe") {
+    el.loading = "lazy";
+  }
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === false || v == null) continue;
     if (k === "class") el.className = v;
