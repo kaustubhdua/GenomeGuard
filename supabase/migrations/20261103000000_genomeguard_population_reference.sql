@@ -63,6 +63,17 @@ BEGIN
   END IF;
 END
 $$;
+
+CREATE POLICY population_reference_manifest_importer_read
+  ON genomeguard.population_reference_manifest
+  FOR SELECT TO genomeguard_reference_importer USING (true);
+CREATE POLICY population_variant_frequency_importer_read
+  ON genomeguard.population_variant_frequency
+  FOR SELECT TO genomeguard_reference_importer USING (true);
+CREATE POLICY population_variant_frequency_importer_insert
+  ON genomeguard.population_variant_frequency
+  FOR INSERT TO genomeguard_reference_importer WITH CHECK (true);
+
 GRANT USAGE ON SCHEMA genomeguard TO genomeguard_reference_importer;
 GRANT SELECT ON genomeguard.population_reference_manifest TO genomeguard_reference_importer;
 GRANT INSERT, SELECT ON genomeguard.population_variant_frequency TO genomeguard_reference_importer;
