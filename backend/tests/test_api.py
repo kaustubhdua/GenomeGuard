@@ -307,3 +307,36 @@ def test_catalogue_endpoints():
     bad = c.get("/catalogue/chromosomes?assembly=invalid")
     assert bad.status_code == 400
 
+
+def test_preview_is_non_consuming_and_returns_only_risk_utility_summary():
+    svc, c = make_client()
+    before_budget = svc.budget(svc.authenticate(RESEARCHER)["id"])
+    before_audit = svc.audit.head()
+    preview = c.post("/requests/preview", json=DEMO_REQ, headers=H(RESEARCHER))
+    assert preview.status_code == 200
+    data = preview.json()
+    assert data["outcome"] in ("permit", "permit_with_transform", "deny", "escalate")
+    assert data["variants_requested"] > 0
+    assert "risk_before" in data and "risk_after" in data
+    assert "release" not in data and "donor_ids" not in str(data)
+    assert svc.budget(svc.authenticate(RESEARCHER)["id"]) == before_budget
+    assert svc.audit.head() == before_audit
+    assert c.get("/requests", headers=H(RESEARCHER)).json()["requests"] == []
+
+
+def test_variant_inspector_and_steward_qc_are_metadata_only_and_authorized():
+    svc, c = make_client()
+    assert c.get("/admin/dataset-qc").status_code == 401
+    qc = c.get("/admin/dataset-qc", headers=ADMIN)
+    assert qc.status_code == 200
+    q = qc.json()
+    assert q["sample_count"] == svc.ds.n_donors
+    assert q["variant_count"] == svc.ds.n_variants
+    assert "genotypes" not in str(q).lower()
+    variant = c.get("/variants/search?q=v1")
+    assert variant.status_code == 200
+    data = variant.json()
+    assert len(data["matches"]) == 1
+    assert data["matches"][0]["variant_id"] == 1
+    assert "maf" not in str(data).lower()
+    assert "donor" not in str(data).lower()
