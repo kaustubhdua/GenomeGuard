@@ -78,6 +78,16 @@ def test_vcf_rejects_duplicate_format_fields(tmp_path):
         list(iter_records(path, samples, "GRCh37"))
 
 
+def test_vcf_rejects_conflicting_assembly_metadata(tmp_path):
+    path = _vcf(tmp_path)
+    text = path.read_text(encoding="utf-8").replace(
+        "##reference=GRCh37", "##reference=GRCh37\\n##assembly=GRCh38"
+    )
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ImportValidationError, match="lacks recognizable assembly"):
+        read_header(path, "GRCh37")
+
+
 def test_vcf_assembly_mismatch_fails_closed(tmp_path):
     path = _vcf(tmp_path, "GRCh37")
     with pytest.raises(ImportValidationError, match="assembly mismatch"):
