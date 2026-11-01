@@ -56,13 +56,15 @@ def open_vcf(path: Path):
 
 def infer_assembly(headers: list[str]) -> str | None:
     text = "\n".join(headers).lower()
+    matches = set()
     if any(x in text for x in ("grch38", "hg38")):
-        return "GRCh38"
+        matches.add("GRCh38")
     if any(x in text for x in ("grch37", "hg19", "human_g1k_v37", "b37")):
-        return "GRCh37"
+        matches.add("GRCh37")
     if any(x in text for x in ("t2t-chm13", "chm13v2")):
-        return "T2T-CHM13"
-    return None
+        matches.add("T2T-CHM13")
+    # Contradictory assembly labels are ambiguous and must never be resolved by precedence.
+    return next(iter(matches)) if len(matches) == 1 else None
 
 
 def parse_gt(gt: str, alt_index: int, max_allele_index: int) -> tuple[int | None, int, bool]:
