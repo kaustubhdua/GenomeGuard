@@ -160,8 +160,11 @@ def test_vcf_rejects_unsorted_coordinates(tmp_path):
 
 
 
-# A repeat of an already-loaded, byte-identical dataset must be a no-op.
-def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tmp_path, monkeypatch):
+# A repeat import is a no-op only when persisted rows still match the loaded manifest.
+@pytest.mark.parametrize(("measured_counts", "expect_error"), [((2, 3, 5), False), ((2, 3, 4), True)])
+def test_loaded_manifest_import_reconciles_counts_before_noop(
+    tmp_path, monkeypatch, measured_counts, expect_error
+):
     from types import SimpleNamespace
 
     from app.data import vcf_import
@@ -203,7 +206,7 @@ def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tm
             elif "SELECT sample_count, variant_count, genotype_call_count" in sql:
                 self.last_row = (2, 3, 5)
             elif "SELECT count(*) FROM genomeguard.dataset_samples" in sql:
-                self.last_row = (2, 3, 5)
+                self.last_row = measured_counts
             elif "DELETE FROM genomeguard." in sql:
                 raise AssertionError("idempotent import must not delete existing data")
 
@@ -239,6 +242,11 @@ def test_loaded_manifest_import_is_idempotent_without_deleting_or_reimporting(tm
     conn = Connection()
     monkeypatch.setenv("DATABASE_URL", "postgresql://test-only")
     monkeypatch.setattr(vcf_import.psycopg, "connect", lambda *_args, **_kwargs: conn)
+
+    if expect_error:
+        with pytest.raises(ImportValidationError, match="do not reconcile"):
+            vcf_import.import_to_database(args, digest, ["SAMPLE_A", "SAMPLE_B"])
+        return
 
     result = vcf_import.import_to_database(args, digest, ["SAMPLE_A", "SAMPLE_B"])
     assert result == {
