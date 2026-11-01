@@ -1,4 +1,4 @@
-import { api, state, isSteward } from "../api.js";
+import { api, isSteward } from "../api.js";
 import { h, card, notice, errorText } from "../ui.js";
 
 const fmt = (v) => v == null ? "Not recorded" : Number(v).toLocaleString("en-US");
@@ -6,10 +6,6 @@ export async function render() {
   const root = h("div", { class: "stack" });
   root.append(h("section", { class: "card hero" }, h("h1", {}, "Locus & variant inspector"),
     h("p", { class: "lede" }, "Find a variant by exact coordinate or GenomeGuard variant ID. This lookup returns locus metadata only; cohort frequencies and carrier evidence remain behind governed aggregate releases.")));
-  if (!state.who && !state.adminKey) {
-    root.append(notice("warn", "Connect with an issued researcher or steward key to search variant metadata."));
-    return root;
-  }
   const initialQuery = new URLSearchParams(location.hash.split("?")[1] || "").get("q") || "";
   const query = h("input", { type: "search", value: initialQuery, placeholder: "e.g. 22:105123:A:G or v42", "aria-label": "Variant coordinate or ID" });
   const output = h("div", { "aria-live": "polite" });
