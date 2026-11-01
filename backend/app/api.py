@@ -363,8 +363,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         import re
         svc = S()
         matches = []
-        id_match = re.fullmatch(r"[vV]?(\\d+)", query)
-        coord_match = re.fullmatch(r"(?:chr)?([0-9]{1,2}|X|Y|M|MT):(\\d+)(?::([ACGTN]+):([ACGTN]+))?", query, re.I)
+        id_match = re.fullmatch(r"[vV]?(\d+)", query)
+        coord_match = re.fullmatch(r"(?:chr)?([0-9]{1,2}|X|Y|M|MT):(\d+)(?::([ACGTN]+):([ACGTN]+))?", query, re.I)
         if id_match:
             idx = int(id_match.group(1)) - 1
             if 0 <= idx < len(svc.ds.coords):
