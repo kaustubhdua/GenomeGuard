@@ -10,7 +10,7 @@ export async function render() {
     root.append(notice("warn", "Connect with an issued researcher or steward key to search variant metadata."));
     return root;
   }
-  const query = h("input", { type: "search", placeholder: "e.g. 22:105123:A:G or v42", "aria-label": "Variant coordinate or ID" });
+  const initialQuery = new URLSearchParams(location.hash.split("?")[1] || "").get("q") || "";\n  const query = h("input", { type: "search", value: initialQuery, placeholder: "e.g. 22:105123:A:G or v42", "aria-label": "Variant coordinate or ID" });
   const output = h("div", { "aria-live": "polite" });
   const button = h("button", { onclick: search }, "Search variant");
   async function search() {
