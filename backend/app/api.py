@@ -357,7 +357,6 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("GET", "/variants/search", "Exact coordinate or variant-ID lookup; metadata only", "public")
     async def variant_search(request):
-        requester(request)
         query = request.query_params.get("q", "").strip()
         if not query or len(query) > 100:
             raise ServiceError(400, "invalid_query", "Enter a variant ID or exact coordinate such as 22:105123:A:G.")
