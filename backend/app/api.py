@@ -127,10 +127,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "institutional_identity_provider_verified": False,
         }
 
+    @route("GET", "/health/live", "Cheap process liveness probe; does not initialize the cohort or database", "public")
+    async def liveness(request):
+        # Hosting health checks must not trigger the expensive, lazy service bootstrap.
+        # This endpoint confirms only that the ASGI process can answer HTTP requests.
+        return _j({"status": "ok"})
+
     @route("GET", "/health", "Liveness and non-authoritative dataset/readiness facts", "public")
     async def health(request):
         svc = S()
-        audit = svc.audit.verify()
         provenance = getattr(svc, "provenance", {})
         checks = readiness_checks(svc)
         participant_consent_verified = (
@@ -146,7 +151,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "participant_consent_records_matched": int(provenance.get("consent_records_matched") or 0),
             "dataset_policy_samples_scoped": int(provenance.get("dataset_policy_samples_scoped") or 0),
             "donors": svc.ds.n_donors, "variants": svc.ds.n_variants,
-            "k_min": svc.p.k_min, "audit_chain_ok": audit["ok"], "provenance": provenance,
+            "k_min": svc.p.k_min, "audit_chain_ok": None, "provenance": provenance,
             "agents_use_llm": svc.team.agents["explainer"].llm.available,
             "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo,
             "storage_backend": getattr(svc.store, "backend", "sqlite"),
