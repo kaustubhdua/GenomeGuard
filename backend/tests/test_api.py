@@ -15,13 +15,28 @@ from tests.helpers import (
 def test_health_and_docs_and_openapi():
     svc, c = make_client()
     h = c.get("/health").json()
-    assert h["synthetic_data_only"] is True and h["audit_chain_ok"] is True
+    assert h["synthetic_data_only"] is True and h["audit_chain_ok"] is None
+    assert c.get("/audit/verify").json()["ok"] is True
     assert h["provenance"]["genotypes"] == "synthetic" and h["provenance"]["consent"] == "simulated"
     assert h["participant_consent_records_verified"] is False
     assert h["participant_consent_records_matched"] == 0
     assert c.get("/docs").status_code == 200
     eps = c.get("/openapi.json").json()["endpoints"]
     assert {"POST /requests", "GET /audit/verify"} <= {f"{e['method']} {e['path']}" for e in eps}
+
+
+def test_host_liveness_probe_does_not_initialize_service(monkeypatch):
+    from starlette.testclient import TestClient
+
+    import app.api as api_module
+
+    monkeypatch.setattr(api_module, "bootstrap",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError(
+                            "liveness must not bootstrap the database or cohort")))
+    client = TestClient(api_module.create_app())
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
 def test_readiness_distinguishes_demo_liveness_from_production_readiness():
