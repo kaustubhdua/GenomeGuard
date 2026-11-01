@@ -68,14 +68,17 @@ async function render() {
         h("a", { class: "btn ghost", href: "#/overview" }, "Back to overview")));
   }
   if (mine !== token) return;
-  if (page instanceof Element) page.classList.add("page-enter");
+  if (page instanceof Element) {
+    page.classList.add("page-enter");
+    // Set image hints before inserting the page so the browser can defer off-screen
+    // requests from the start instead of discovering them after they enter the DOM.
+    page.querySelectorAll("img").forEach((img) => {
+      if (!img.hasAttribute("loading")) img.loading = "lazy";
+      if (!img.hasAttribute("decoding")) img.decoding = "async";
+    });
+  }
   view.replaceChildren(page);
   view.setAttribute("aria-busy", "false");
-  // Images added by future pages default to native lazy loading and async decode.
-  view.querySelectorAll("img").forEach((img) => {
-    if (!img.hasAttribute("loading")) img.loading = "lazy";
-    if (!img.hasAttribute("decoding")) img.decoding = "async";
-  });
   document.title = (hit ? hit[0].title + " · " : "") + "GenomeGuard";
   view.focus({ preventScroll: true });
   window.scrollTo(0, 0);
