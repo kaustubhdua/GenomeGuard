@@ -26,9 +26,9 @@ function prefetchRoute(hash) {
   [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["variants", "Variant inspector", "#/variants"], ["datasets", "Datasets", "#/datasets"]]],
   ["Steward", [["dataset-qc", "Dataset QC", "#/dataset-qc", true]]],
 const NAV = [
-  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["datasets", "Datasets", "#/datasets"]]],
+  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["variants", "Variant inspector", "#/variants"], ["datasets", "Datasets", "#/datasets"]]],
   ["Researcher", [["requests", "Requests", "#/requests"]]],
-  ["Steward", [["family", "Family exposure", "#/family/1", true], ["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true]]],
+  ["Steward", [["dataset-qc", "Dataset QC", "#/dataset-qc", true], ["family", "Family exposure", "#/family/1", true], ["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true]]],
   ["Patient", [["donor", "My data", "#/donor"]]],
   ["Evidence", [["redteam", "Red-team results", "#/redteam"], ["federated", "Federated analysis", "#/federated"]]],
 ];
