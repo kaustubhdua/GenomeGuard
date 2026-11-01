@@ -55,7 +55,10 @@ def main() -> int:
         health = json.loads(body)
         check("health endpoint responds", status == 200 and "json" in content_type.lower())
         check("service reports healthy", health.get("status") == "ok")
-        check("audit chain verifies", health.get("audit_chain_ok") is True)
+        audit_status, audit_body, audit_type = get(base, "/audit/verify", args.timeout)
+        audit = json.loads(audit_body)
+        check("audit verification endpoint responds",
+              audit_status == 200 and "json" in audit_type.lower() and audit.get("ok") is True)
         check("demo mode enabled for public smoke test", health.get("demo_mode") is True)
         check("genotypes are synthetic", health.get("synthetic_data_only") is True
               and (health.get("provenance") or {}).get("genotypes") == "synthetic")
