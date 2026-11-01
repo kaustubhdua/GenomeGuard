@@ -1,4 +1,4 @@
-import { api, state } from "../api.js";
+import { api, isSteward, state } from "../api.js";
 import { h, card, notice, errorText } from "../ui.js";
 
 const fmt = (v) => v == null ? "Not recorded" : Number(v).toLocaleString("en-US");
@@ -6,7 +6,7 @@ export async function render() {
   const root = h("div", { class: "stack" });
   root.append(h("section", { class: "card hero" }, h("h1", {}, "Dataset QC & import review"),
     h("p", { class: "lede" }, "Steward-only inspection of the active in-memory cohort, its provenance and measurable quality indicators. This is an inspection report, not a dataset approval or production-readiness certificate.")));
-  if (!state.adminKey && !state.demo) {
+  if (!isSteward() && !state.adminKey) {
     root.append(notice("warn", "This page is restricted to an authenticated data steward."));
     return root;
   }
