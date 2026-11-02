@@ -17,6 +17,19 @@ No organizations, memberships, consent records, or participants are seeded. A ne
 - The membership and consent tables have RLS enabled and no direct grants to browser roles.
 - The RPCs are executable only by `service_role`; the Edge Function validates the Supabase bearer token and supplies the verified user ID server-side.
 
+## Supabase Auth sign-in and membership status
+
+The static frontend now provides Supabase Auth email/password sign-in, account creation, and sign-out using the project's browser-safe publishable key. Access and refresh tokens remain in tab memory; the UI does not persist credentials to local or session storage. A successful Auth sign-in is not treated as authorization.
+
+After sign-in, the frontend calls `GET /me`, which invokes the service-role-only `gg_get_my_access_status(uuid)` RPC using the user ID verified from the bearer token. The response contains only that user's own organization memberships and an explicit access state:
+
+- `active`: exactly one active membership in an active organization;
+- `ambiguous_memberships`: more than one active membership, which blocks request workflows until an administrator resolves it;
+- `pending_or_inactive`: one or more memberships exist but none is active;
+- `no_membership`: the account has no organization membership.
+
+The frontend explains pending/no-membership states instead of allowing an authenticated but unprovisioned user to submit or review requests. Account creation does not create an organization, activate a membership, or grant a role. Email-confirmation delivery and the successful browser sign-in path still require live user-level verification.
+
 ## Request review API
 
 `POST /requests/{request_id}/review`
