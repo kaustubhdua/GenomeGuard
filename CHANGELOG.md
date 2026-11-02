@@ -22,6 +22,10 @@
 - Expanded browser smoke coverage to the dataset, chromosome, variant, and QC routes,
   including valid/malformed VCF uploads, gzip input, oversized-file rejection, and
   aggregate-only JSON and human-readable QC exports.
+- Grouped primary navigation into Overview, Dataset Explorer, Research Requests,
+  Steward Review, and Audit & Security. Demo-only participant and experimental tools
+  remain available in a separate Research Lab group; steward-only navigation is hidden
+  from researcher personas.
 - Added a curated public genomic source-discovery endpoint and page for IGSR/1000 Genomes,
   gnomAD aggregate reference data, and ClinVar summary metadata. The index links to official
   source and policy references, marks exact-artifact review as pending, and never claims a

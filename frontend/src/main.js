@@ -25,11 +25,15 @@ function prefetchRoute(hash) {
   hit.load().catch(() => { hit.prefetched = false; }); // a failed prefetch must remain retryable
 }
 const NAV = [
-  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["variants", "Variant inspector", "#/variants"], ["datasets", "Datasets", "#/datasets"], ["sources", "Source discovery", "#/sources"]]],
-  ["Researcher", [["requests", "Requests", "#/requests"]]],
-  ["Steward", [["dataset-qc", "Dataset QC", "#/dataset-qc", true], ["family", "Family exposure", "#/family/1", true], ["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true]]],
-  ["Patient", [["donor", "My data", "#/donor"]]],
-  ["Evidence", [["redteam", "Red-team results", "#/redteam"], ["federated", "Federated analysis", "#/federated"]]],
+  ["Overview", [["overview", "Overview", "#/overview"]]],
+  ["Dataset Explorer", [["datasets", "Datasets", "#/datasets"], ["chromosomes", "Chromosomes", "#/chromosomes"],
+    ["variants", "Variant inspector", "#/variants"], ["sources", "Source discovery", "#/sources"]]],
+  ["Research Requests", [["requests", "Requests", "#/requests"]]],
+  ["Steward Review", [["requests", "Request review queue", "#/requests", true],
+    ["dataset-qc", "Dataset QC", "#/dataset-qc", true], ["family", "Family exposure", "#/family/1", true]]],
+  ["Audit & Security", [["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true]]],
+  ["Research Lab", [["donor", "My data", "#/donor"], ["redteam", "Red-team results", "#/redteam"],
+    ["federated", "Federated analysis", "#/federated"]]],
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -88,10 +92,11 @@ async function render() {
 }
 
 function visibleNav() {
-  if (state.demo) return NAV;
+  const steward = isSteward();
   return NAV.map(([label, items]) => [label, items.filter(([id]) => {
-    if (["donor", "redteam", "federated"].includes(id)) return false;
-    if (["dataset-qc", "family", "anomalies", "audit"].includes(id)) return isSteward();
+    if (id === "requests") return label === (steward ? "Steward Review" : "Research Requests");
+    if (["dataset-qc", "family", "anomalies", "audit"].includes(id)) return steward;
+    if (["donor", "redteam", "federated"].includes(id)) return state.demo;
     return true;
   })]).filter(([, items]) => items.length);
 }
