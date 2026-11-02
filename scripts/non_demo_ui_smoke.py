@@ -303,6 +303,7 @@ def main() -> int:
 
         # Sign-up without a returned session must explain email verification and membership provisioning.
         page.locator("#supabase-signout").click()
+        page.get_by_text("Signed out. Your session was cleared", exact=False).wait_for(timeout=5000)
         page.locator("#supabase-email").fill("new-user@example.org")
         page.locator("#supabase-password").fill("correct-horse-battery")
         page.locator("#supabase-full-name").fill("New User")
@@ -322,6 +323,7 @@ def main() -> int:
 
         # A reviewer sees only their organization's queue and can record a reasoned decision.
         page.locator("#supabase-signout").click()
+        page.get_by_text("Signed out. Your session was cleared", exact=False).wait_for(timeout=5000)
         page.locator("#supabase-email").fill("reviewer@example.org")
         page.locator("#supabase-password").fill("correct-horse-battery")
         page.locator("#supabase-signin").click()
