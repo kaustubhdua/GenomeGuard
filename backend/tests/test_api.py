@@ -412,13 +412,14 @@ def test_steward_vcf_qc_upload_is_bounded_temporary_and_omits_sample_ids(monkeyp
         "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tPRIVATE_SAMPLE\n"
         "1\t100\t.\tA\tG\t42\tPASS\t.\tGT\t0/1\n"
-    ).encode()
+    )
+    content_bytes = content.encode()
     headers = {
         **ADMIN,
         "Content-Type": "application/octet-stream",
         "X-Filename": "C:\\private\\PRIVATE_SAMPLE.vcf",
         "X-Reference-Assembly": "GRCh38",
-        "X-Expected-Sha256": hashlib.sha256(content).hexdigest(),
+        "X-Expected-Sha256": hashlib.sha256(content_bytes).hexdigest(),
     }
 
     assert client.post("/admin/vcf-qc", content=content, headers={
@@ -430,7 +431,7 @@ def test_steward_vcf_qc_upload_is_bounded_temporary_and_omits_sample_ids(monkeyp
     assert report["status"] == "PASSED"
     assert report["import_eligibility"] == "NOT_ESTABLISHED"
     assert report["file"]["name"] == "[uploaded VCF]"
-    assert report["file"]["sha256"] == hashlib.sha256(content).hexdigest()
+    assert report["file"]["sha256"] == hashlib.sha256(content_bytes).hexdigest()
     assert report["statistics"]["split_variant_count"] == 1
     assert "PRIVATE_SAMPLE" not in json.dumps(report)
 

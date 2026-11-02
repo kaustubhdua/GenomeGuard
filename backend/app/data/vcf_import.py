@@ -11,7 +11,6 @@ import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from contextlib import contextmanager
 from urllib.parse import urlparse
 
 import psycopg
