@@ -15,6 +15,7 @@ or infrastructure was changed.
 | `GET /catalogue/datasets` | HTTP 404 | The live API does not expose the current dataset catalogue route. |
 | `GET /catalogue/sources` | HTTP 404 | The live API does not expose current public-source discovery. |
 | `/#/overview` browser page | Loads, but its heading is “Govern genomic data access with auditable decisions.” | This differs from the current repository’s overview heading and is evidence of frontend deployment drift. |
+| Runtime revision | Not present in the observed health response | The exact deployed commit could not be identified from the public endpoint. Current code now exposes Render's platform-provided commit SHA on health/liveness endpoints; re-check after deployment. |
 
 The current repository is ahead of the hosted API behavior observed above. A successful
 `/health` response is not evidence that the latest code is deployed. The API acceptance

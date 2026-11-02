@@ -30,13 +30,46 @@ def test_host_liveness_probe_does_not_initialize_service(monkeypatch):
 
     import app.api as api_module
 
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
     monkeypatch.setattr(api_module, "bootstrap",
                         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError(
                             "liveness must not bootstrap the database or cohort")))
     client = TestClient(api_module.create_app())
     response = client.get("/health/live")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "deployment": {
+        "platform": None, "git_commit": None,
+    }}
+
+
+def test_health_reports_render_deployment_commit_without_exposing_other_environment(monkeypatch):
+    from starlette.testclient import TestClient
+
+    import app.api as api_module
+
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "a" * 40)
+    monkeypatch.setenv("RENDER_GIT_BRANCH", "main")
+    monkeypatch.setenv("GG_ADMIN_API_KEY", "must-not-be-returned")
+    service, _ = make_client()
+    response = TestClient(api_module.create_app(service)).get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["deployment"] == {"platform": "render", "git_commit": "a" * 40}
+    assert "must-not-be-returned" not in response.text
+
+
+def test_health_omits_invalid_render_commit(monkeypatch):
+    from starlette.testclient import TestClient
+
+    import app.api as api_module
+
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "not-a-commit")
+    service, _ = make_client()
+    body = TestClient(api_module.create_app(service)).get("/health").json()
+    assert body["deployment"] == {"platform": "render", "git_commit": None}
 
 
 def test_readiness_distinguishes_demo_liveness_from_production_readiness():

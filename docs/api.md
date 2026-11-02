@@ -6,8 +6,8 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 
 | Method | Path | Purpose | Access |
 |---|---|---|---|
-| GET | `/health` | Liveness and dataset facts | public |
-| GET | `/health/live` | Cheap process liveness probe; no database or cohort initialization | public |
+| GET | `/health` | Liveness, dataset facts, and deployment revision when provided by the host | public |
+| GET | `/health/live` | Cheap process liveness and deployment revision; no database or cohort initialization | public |
 | GET | `/health/ready` | Production readiness gate; distinguishes liveness from safe real-data operation | public |
 | GET | `/demo/requesters` | Demo accounts and keys (demo mode only) | public |
 | POST | `/admin/requesters` | Provision a requester API key (returned once) | admin |
@@ -57,6 +57,12 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 policy links plus explicit pending-review/not-imported statuses; it does not fetch or
 approve artifacts. `GET /catalogue/datasets` reports only source-backed real VCF
 imports. Synthetic demo cohorts are not presented as verified imported datasets.
+
+On Render, `/health` and `/health/live` return the platform and commit SHA from
+Render's `RENDER` and `RENDER_GIT_COMMIT` runtime variables. The commit field is `null`
+when the host does not provide a valid full SHA. These public endpoints expose no
+secrets; the revision supports exact-deployment acceptance checks and does not indicate
+production readiness.
 
 ## Aggregate population-reference lookup
 

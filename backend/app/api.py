@@ -72,6 +72,14 @@ def _j(data, status: int = 200) -> JSONResponse:
     return JSONResponse(jsonable(data), status_code=status)
 
 
+def _deployment_info() -> dict[str, str | None]:
+    commit = os.environ.get("RENDER_GIT_COMMIT", "")
+    return {
+        "platform": "render" if os.environ.get("RENDER") == "true" else None,
+        "git_commit": commit.lower() if re.fullmatch(r"[0-9a-fA-F]{40}", commit) else None,
+    }
+
+
 async def _body(request: Request) -> dict:
     try:
         data = await request.json()
@@ -138,7 +146,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def liveness(request):
         # Hosting health checks must not trigger the expensive, lazy service bootstrap.
         # This endpoint confirms only that the ASGI process can answer HTTP requests.
-        return _j({"status": "ok"})
+        return _j({"status": "ok", "deployment": _deployment_info()})
 
     @route("GET", "/health", "Liveness and non-authoritative dataset/readiness facts", "public")
     async def health(request):
@@ -162,6 +170,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "agents_use_llm": svc.team.agents["explainer"].llm.available,
             "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo,
             "storage_backend": getattr(svc.store, "backend", "sqlite"),
+            "deployment": _deployment_info(),
             "readiness": {"ready": all(checks.values()), "checks": checks},
         })
 

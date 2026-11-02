@@ -44,7 +44,7 @@ jobs:
           python -m playwright install --with-deps chromium
           npm install --prefix /tmp/gg-axe --no-save --package-lock=false axe-core@4.14.0
       - name: Verify live real-data provenance, production gates, and disabled demo endpoints
-        run: python scripts/live_research_mode_smoke.py --base "$BASE_URL" --retries 60 --retry-delay 15 --timeout 30
+        run: python scripts/live_research_mode_smoke.py --base "$BASE_URL" --expected-commit "$GITHUB_SHA" --retries 60 --retry-delay 15 --timeout 30
       - name: Verify nine live UI routes in light/dark themes and mobile widths
         run: python scripts/live_ui_smoke.py --base "$BASE_URL" --timeout 60000
       - name: Verify live accessibility, keyboard, reduced motion, and reflow

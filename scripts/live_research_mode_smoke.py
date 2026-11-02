@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from urllib.error import HTTPError, URLError
@@ -45,16 +46,24 @@ def main() -> int:
     parser.add_argument("--retries", type=int, default=24)
     parser.add_argument("--retry-delay", type=float, default=15.0)
     parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--expected-commit")
     args = parser.parse_args()
     base = args.base.rstrip("/")
+    if args.expected_commit and not re.fullmatch(r"[0-9a-fA-F]{40}", args.expected_commit):
+        parser.error("--expected-commit must be a full 40-character Git commit SHA")
+    expected_commit = args.expected_commit.lower() if args.expected_commit else None
 
     # Wait for Render to finish deploying the commit, not merely for an older healthy
     # instance. A previous release can return HTTP 200 while still serving stale provenance.
     health_status, health = 0, {}
     current_policy_metadata = False
+    current_deployment = False
     for attempt in range(max(1, args.retries)):
         health_status, health = call(base, "/health", timeout=args.timeout)
         provenance = health.get("provenance") or {}
+        deployment = health.get("deployment") or {}
+        deployed_commit = str(deployment.get("git_commit") or "").lower()
+        current_deployment = expected_commit is None or deployed_commit == expected_commit
         current_policy_metadata = (
             health_status == 200
             and health.get("status") == "ok"
@@ -66,11 +75,13 @@ def main() -> int:
             and int(provenance.get("dataset_policy_samples_scoped") or 0)
                 == int(health.get("donors") or -1)
         )
-        if current_policy_metadata:
+        if current_policy_metadata and current_deployment:
             break
         if attempt + 1 < args.retries:
-            print(f"[WAIT] deployment has not exposed current dataset-policy provenance "
-                  f"({attempt + 1}/{args.retries})")
+            reason = ("expected commit " + expected_commit + ", got "
+                      + (deployed_commit or "unknown") if not current_deployment else
+                      "current dataset-policy provenance is unavailable")
+            print(f"[WAIT] {reason} ({attempt + 1}/{args.retries})")
             time.sleep(args.retry_delay)
     check("public application starts and health is HTTP 200",
           health_status == 200 and health.get("status") == "ok",
@@ -84,6 +95,9 @@ def main() -> int:
               "deployment did not become current before the retry window expired")
         print("\nLIVE RESEARCH MODE SMOKE FAILED (stale deployment)")
         return 1
+    check("deployed Render commit matches the requested revision",
+          current_deployment,
+          str((health.get("deployment") or {}).get("git_commit") or "commit not reported"))
 
     provenance = health.get("provenance") or {}
     check("demo mode is disabled", health.get("demo_mode") is False)

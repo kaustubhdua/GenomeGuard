@@ -8,6 +8,9 @@
 - Expanded read-only live UI smoke checks to cover chromosome, dataset, and source
   discovery routes, assert their intended page headings, and check responsive overflow
   at phone widths. Added a dated audit documenting the observed hosted API drift.
+- Exposed Render's runtime commit SHA on public health endpoints and require the live
+  research acceptance workflows to match the tested commit, distinguishing deployment
+  lag from application/provenance failures without exposing configuration secrets.
 - Added a curated public genomic source-discovery endpoint and page for IGSR/1000 Genomes,
   gnomAD aggregate reference data, and ClinVar summary metadata. The index links to official
   source and policy references, marks exact-artifact review as pending, and never claims a

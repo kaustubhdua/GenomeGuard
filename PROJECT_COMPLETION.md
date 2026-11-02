@@ -60,6 +60,8 @@ the latest read-only checks; no live infrastructure was changed.
 - Made the embedded-cohort Docker build cache key explicit and passed the commit SHA
   from the CI image build. Expanded deployed UI smoke coverage for chromosome, dataset,
   and source-discovery routes with page-specific heading and mobile overflow assertions.
+- Added a secret-free Render deployment revision field to liveness/health responses and
+  made live acceptance wait for the exact GitHub-tested commit when run in CI.
 
 ## Relevant files and commits
 
@@ -114,7 +116,9 @@ the latest read-only checks; no live infrastructure was changed.
   a dataset-level policy (the current source reports zero participant records), and
   both current source/dataset catalogue API routes return 404. `/health/ready` remains
   HTTP 503; the hosted overview heading also differs from the current repository UI.
-  See the [live readiness audit](docs/live-readiness-audit-2026-11-02.md).
+  The response did not expose a revision, so the exact deployed commit could not be
+  independently identified. The new health revision field will be visible after a
+  Render deployment. See the [live readiness audit](docs/live-readiness-audit-2026-11-02.md).
 - Pytest emitted existing warnings for development-key use in local fixtures and an
   `httpx`/Starlette test-client deprecation; they did not fail the suite.
 
