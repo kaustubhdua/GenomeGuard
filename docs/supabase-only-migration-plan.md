@@ -98,6 +98,16 @@ The migration is complete only when:
 GenomeGuard remains a research prototype, not a clinical service. Public dataset-level policy mapping is not participant-specific consent, and passing software tests is not independent security, privacy, legal, or clinical approval.
 
 
+## Latest verified status (3 November 2026)
+
+- Added `GET /steward/requests?limit=&offset=` and the `public.gg_list_review_queue(uuid,integer,integer)` RPC. The queue is organization-scoped, paginated, rejects users without exactly one active reviewer/organization-admin membership, and returns no participant-level genotype data.
+- Applied the migration to Supabase project `common 1` under migration name `genomeguard_steward_review_queue`; deployed `genomeguard-api` Edge Function version 8.
+- Read-only SQL verification confirms the RPC is `SECURITY DEFINER`, uses an empty search path, grants execution only to `service_role`, and denies `anon` and `authenticated`. A call using an unprovisioned identity fails with SQLSTATE `42501` (`active_reviewer_membership_required`).
+- The project still has zero GenomeGuard organizations, memberships, participant-consent records, normalized dataset samples, variants, genotype calls, requests, and decisions. Therefore the successful authenticated request/review lifecycle cannot yet be exercised end to end.
+- The production Vercel deployment still proxies API calls to Render. A live read-only check on 2 November returned HTTP 200 for `/health`, but the response exposed `storage_backend=sqlite` and an incorrect `consent_records_matched=600` value for a dataset-level policy. `/catalogue/datasets` and `/catalogue/sources` returned 404; `/health/ready` returned 503. Do not treat the Vercel static deployment as proof that the backend is current or durable.
+- CI and security checks for the then-current repository commit passed; the new queue migration and workflow regression checks are running on the latest main commit. The exact results are tracked in GitHub Actions.
+- The release gate remains closed. The shared Supabase project is not yet connected to the running Render backend, and no real dataset import, authoritative identity provisioning, external audit anchor, or production backup/restore drill has been verified.
+
 ## Latest verified status (29 October 2026)
 
 - Full CI, browser/accessibility checks, clean PostgreSQL migration/privilege/backup-restore checks, security verification, real-data image provenance checks and Beacon schema validation passed on commit `9841d7687022b05e898f69f344061dd0b2a87e3b`.
