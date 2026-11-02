@@ -26,7 +26,7 @@ deployment were applied; no production genomic or participant data was inserted.
 | Participant-specific consent enforcement | NOT IMPLEMENTED | Current documented operation relies on simulated consent or dataset-level policy mapping; it is not evidence of participant-specific consent for hosted public data. |
 | Risk analysis | IMPLEMENTED, NOT VERIFIED | Research heuristics exist; independent scientific/privacy validation is not established. Do not use as clinical or validated privacy-risk advice. |
 | Audit records | IMPLEMENTED, NOT VERIFIED | A hash-chained local audit implementation is tested. Independent external anchoring, key custody, and production recovery were not verified. |
-| Supabase API/persistence cutover | BLOCKED BY EXTERNAL DEPENDENCY | A live database, authorized runtime credentials, applied migrations, and end-to-end persistence evidence are required. No live database was accessed or changed. |
+| Supabase API/persistence cutover | PARTIAL / BLOCKED BY EXTERNAL DEPENDENCY | The isolated GenomeGuard schema is live and additive migrations are applied. The Python backend still uses SQLite; a server-side PostgreSQL runtime connection, durable end-to-end persistence, backup/restore, and production cutover are not verified. |
 | Production identity, deployment, and acceptance | BLOCKED BY EXTERNAL DEPENDENCY | Requires an authoritative identity provider, organization provisioning, configured production services, and acceptance against the exact deployed commit. |
 | Clinical annotation and validated pathogenicity ML | NOT IMPLEMENTED | Existing locus lookup is not a clinical annotation service or a validated pathogenicity model. |
 
@@ -35,8 +35,7 @@ deployment were applied; no production genomic or participant data was inserted.
 - Added public, read-only `/population-frequencies` serving only exact-coordinate
   aggregate records from approved and loaded manifests, with source, release, URL,
   checksum, assembly, population, AC, AN, AF, and homozygote-count evidence.
-- Added an exact-lookup database index migration without changing readiness gates or
-  applying any migration to a live database.
+- Added and applied the exact-locus aggregate population-frequency lookup index as live migration `20261102213956`; readiness gates were not changed. The new population-reference tables remain empty.
 - Integrated the variant inspector with the lookup. It distinguishes database
   unavailability, missing reference evidence, and returned aggregate results; it never
   substitutes active-cohort frequencies.
@@ -128,7 +127,7 @@ deployment were applied; no production genomic or participant data was inserted.
 ### Supabase steward queue implementation
 
 - Added `supabase/migrations/20261102212149_genomeguard_steward_review_queue.sql` and applied the migration to Supabase project `common 1` as `genomeguard_steward_review_queue`.
-- Added `GET /steward/requests?limit=50&offset=0` to `supabase/functions/genomeguard-api/index.ts`; deployed Edge Function version 8.
+- Added `GET /steward/requests?limit=50&offset=0` to `supabase/functions/genomeguard-api/index.ts`; deployed Edge Function version 11.
 - Added the service-role-only `public.gg_list_review_queue(uuid,integer,integer)` RPC. It resolves reviewer membership from server-side records, rejects missing or ambiguous memberships, bounds pagination, filters to the reviewer's organization, and exposes only request metadata.
 - Added a clean-PostgreSQL migration regression test for queue pagination, organization isolation, researcher denial, ambiguous multi-organization denial, and function grants. GitHub Actions is running the new checks on the current mainline; do not mark the suite complete until that run finishes.
 - Live SQL inspection confirmed `SECURITY DEFINER`, an empty search path, execute permission for `service_role` only, and denial for `anon` and `authenticated`. A request using an unprovisioned identity failed closed with SQLSTATE `42501`.
@@ -138,11 +137,14 @@ deployment were applied; no production genomic or participant data was inserted.
 - Routed authenticated request submission, request detail, steward queue, and review actions through the Supabase Edge Function. The request/review interface explicitly states that this API path stores governance requests and human review only; it does not run the genomic risk engine or release data.
 - Routed public source discovery, verified dataset catalogue, and chromosome-reference pages through the Supabase Edge Function. Live SQL confirms 25 GRCh38 chromosome-reference records and zero verified public datasets; the empty dataset state is truthful.
 - Deployed `genomeguard-api` Edge Function version 11. The current frontend changes are in GitHub mainline; Vercel must finish deploying the matching frontend commit before browser acceptance can be claimed.
+- Applied the missing importer-privilege, append-only importer, population-reference schema, and exact-locus lookup-index migrations as live versions `20261102213657` through `20261102213956`. The importer roles are NOLOGIN, have scoped INSERT/SELECT grants, and do not have DELETE; the two population-reference tables are empty.
+- Reconciled repository migration filename prefixes to the live Supabase versions and added a migration-history report. The missing identity-foundation file was reconstructed from the duplicated DDL and verified live schema; it is explicitly marked for human review. No migration-history repair or `supabase db push` was run. The future reader migration `20261104000000` remains unapplied.
+
 - Supabase Auth account creation, email confirmation delivery, successful sign-in in a real browser, positive request submission, and positive steward review are **not verified**. The live project has two Auth users but zero GenomeGuard organizations and memberships; no account was selected or promoted without the owner's instruction.
 
 ### Current hosted deployment evidence
 
-- The latest Vercel production deployment observed is `dpl_5yQmTqq4J2WC8vvbdDhChHPMows4`, serving commit `7ed416ce53fdbbb5269a867f55bcb8dcfbfb6d4e`. It is behind the current GitHub mainline.
+- The latest Vercel production deployment observed is `dpl_6D31fP2Fjb4xBf5TgZUArhY5q6i7`, serving commit `cdf906c83f8fff97dd5aecd96d26770436628482`. It is behind the current GitHub mainline.
 - The public frontend returned HTTP 200. The proxied `/health` returned HTTP 200 but still reports `storage_backend=sqlite` and `consent_records_matched=600` even though the source policy is dataset-level and not participant-specific. Treat the count as a deployment/data-provenance discrepancy, not participant consent.
 - `/catalogue/datasets` and `/catalogue/sources` returned HTTP 404. `/health/ready` returned HTTP 503, which is the correct fail-closed state while production gates remain incomplete.
 - Supabase project `common 1` is healthy. The GenomeGuard schema has 25 tables, but normalized dataset manifests/samples/variants/genotype calls, organizations, memberships, participant consent, requests, decisions and API events are all empty. The Python Render backend is not yet connected to this PostgreSQL database.
