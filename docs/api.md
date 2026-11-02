@@ -22,6 +22,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/requests` | List requests (own; all with admin key) | requester or admin |
 | GET | `/requests/{id:int}` | One decision in detail | requester or admin |
 | POST | `/requests/{id:int}/review` | Human approve/deny of an escalation | admin |
+| POST | `/requests/{id:int}/release` | Recheck policy, consent, cohort and risk before separately governed release | admin |
 | POST | `/requests/{id:int}/copilot` | Steward copilot: a read-only, tool-using agent investigates one request and gives an advisory recommendation (?refresh=true to rerun) | admin |
 | GET | `/requests/{id:int}/exposure` | Family-exposure graph (simulated model); steward-only because it describes withheld variants and registry relatives | admin |
 | GET | `/consent/summary` | How many donors would be eligible (counts only) | requester |

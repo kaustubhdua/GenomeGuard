@@ -107,10 +107,18 @@ function listSection(res) {
     h("tbody", {}, rows.map((r) => {
       const a = h("a", { href: "#/request/" + r.id }, "#" + r.id);
       const q = r.request || {};
+      const statusLabel = {
+        held: "waiting for review",
+        approved_pending_release: "approved; release pending",
+        needs_information: "more information requested",
+        release_blocked: "release blocked",
+      }[r.status];
       const tr = h("tr", { class: "link", onclick: () => (location.hash = "#/request/" + r.id) },
         h("td", {}, a), h("td", {}, when(r.ts)), isSteward() ? h("td", {}, r.requester) : null,
         h("td", {}, `${(q.purpose || "").replaceAll("_", " ")}${q.disease ? (state.demo ? ", " + q.disease : ", topic: " + q.disease) : ""}, ${q.data_level}`),
-        h("td", {}, badge(r.outcome), r.status === "held" ? h("span", { class: "pill warn", style: "margin-left:8px" }, "waiting for review") : null));
+        h("td", {}, badge(r.outcome), statusLabel
+          ? h("span", { class: "pill warn", style: "margin-left:8px" }, statusLabel)
+          : null));
       return tr;
     }))));
   return h("section", { class: "card request-history", "aria-labelledby": "request-history-title" },

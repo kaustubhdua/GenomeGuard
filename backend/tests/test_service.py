@@ -110,7 +110,9 @@ def test_controlled_record_level_needs_human_and_releases_only_aggregates():
     d = svc.submit(U(svc, CONTROLLED), req)
     assert d["outcome"] == "escalate" and d["needs_human"] and "release" not in d
     assert "record_level_needs_approval" in d["reasons"]
-    out = svc.review(d["id"], "bob", approve=True)
+    approved = svc.review(d["id"], "bob", approve=True)
+    assert approved["status"] == "approved_pending_release" and "release" not in approved
+    out = svc.release_approved(d["id"], "bob")
     assert out["status"] == "released" and out["release"]["level"] != "record"
     assert all(isinstance(v, (int, float)) for v in out["release"]["values"])
 
@@ -133,7 +135,9 @@ def test_withdrawal_after_decision_is_respected_on_approval():
     svc.ds.donors[:] = [type(x)(x.id, x.population, x.cohort_id, x.family_id, x.consent,
                                 True if x.population == "POP_A" else x.withdrawn)
                         for x in svc.ds.donors]
-    out = svc.review(d["id"], "bob", approve=True)
+    approved = svc.review(d["id"], "bob", approve=True)
+    assert approved["status"] == "approved_pending_release" and "release" not in approved
+    out = svc.release_approved(d["id"], "bob")
     assert n0 >= 20 and out["outcome"] == "deny" and out["reasons"] == ["below_k_min"]
 
 

@@ -16,9 +16,39 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.core.audit_chain import GENESIS, entry_hash, jsonable
-from app.store import Store, now_iso
+from app.store import CatalogueUnavailableError, Store, now_iso
 
 _MIGRATIONS = Path(__file__).resolve().parents[1] / "migrations"
+_VERIFIED_PUBLIC_DATASET_CTE = """
+WITH measured AS (
+    SELECT m.id, m.dataset_key, m.source_name, m.source_url, m.source_release,
+           m.reference_assembly, m.file_sha256, m.data_use_review, m.consent_basis,
+           m.import_status, m.variant_count, m.genotype_call_count, m.sample_count,
+           m.imported_at, m.metadata ->> 'reuse_statement_url' AS reuse_statement_url,
+           m.metadata ->> 'citation' AS citation,
+           (SELECT count(*) FROM genomeguard.dataset_samples AS s
+            WHERE s.dataset_id = m.id) AS measured_sample_count,
+           (SELECT count(*) FROM genomeguard.dataset_variants AS v
+            WHERE v.dataset_id = m.id) AS measured_variant_count,
+           (SELECT count(*) FROM genomeguard.dataset_genotype_calls AS c
+            WHERE c.dataset_id = m.id AND c.called_alleles > 0) AS measured_call_count
+    FROM genomeguard.variant_dataset_manifest AS m
+    WHERE m.data_use_review = 'approved_public_research'
+      AND m.consent_basis = 'dataset_policy'
+      AND m.import_status = 'loaded'
+      AND m.source_url ~ '^https://'
+      AND m.file_sha256 ~ '^[0-9a-f]{64}$'
+      AND m.metadata ->> 'reuse_statement_url' ~ '^https://'
+      AND length(trim(m.metadata ->> 'citation')) > 0
+      AND m.sample_count > 0 AND m.variant_count > 0
+      AND m.genotype_call_count > 0 AND m.imported_at IS NOT NULL
+), verified_public_dataset AS (
+    SELECT * FROM measured
+    WHERE sample_count = measured_sample_count
+      AND variant_count = measured_variant_count
+      AND genotype_call_count = measured_call_count
+)
+"""
 
 
 def _translate(sql: str) -> str:
@@ -179,6 +209,115 @@ class PostgresStore(Store):
                 "status": "unavailable", "matches": [],
                 "message": "Approved aggregate population-reference lookup is unavailable in this database.",
             }
+
+    def verified_public_datasets(self) -> list[dict]:
+        """Return only public manifests whose normalized rows reconcile to stored counts."""
+        query = f"""{_VERIFIED_PUBLIC_DATASET_CTE}
+            SELECT dataset_key, source_name, source_url, source_release, reference_assembly,
+                   file_sha256, variant_count, genotype_call_count, sample_count, imported_at,
+                   reuse_statement_url, citation
+            FROM verified_public_dataset
+            ORDER BY source_name, dataset_key
+            LIMIT 1001
+        """
+        try:
+            with self.lock, self.connection.transaction():
+                self.connection.execute("SET TRANSACTION READ ONLY")
+                self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
+                rows = self.connection.execute(query).fetchall()
+            return [{
+                "dataset_key": row["dataset_key"],
+                "source_name": row["source_name"],
+                "source_url": row["source_url"],
+                "source_release": row["source_release"],
+                "reference_assembly": row["reference_assembly"],
+                "file_sha256": row["file_sha256"],
+                "variant_count": int(row["variant_count"]),
+                "genotype_call_count": int(row["genotype_call_count"]),
+                "sample_count": int(row["sample_count"]),
+                "imported_at": row["imported_at"],
+                "reuse_statement_url": row["reuse_statement_url"],
+                "citation": row["citation"],
+            } for row in rows[:1000]]
+        except psycopg.Error as error:
+            raise CatalogueUnavailableError(
+                "The verified public dataset catalogue is unavailable."
+            ) from error
+
+    def verified_public_chromosome_coverage(self, assembly: str) -> list[dict]:
+        """Aggregate coordinates only from reconciled, approved public imports."""
+        query = f"""{_VERIFIED_PUBLIC_DATASET_CTE}
+            SELECT CASE WHEN normalized_chromosome = 'M' THEN 'MT'
+                        ELSE normalized_chromosome END AS chromosome,
+                   count(*) AS variant_count, min(position) AS first_position,
+                   max(position) AS last_position
+            FROM (
+                SELECT CASE
+                         WHEN upper(v.chromosome) LIKE 'CHR%'
+                           THEN substring(upper(v.chromosome) FROM 4)
+                         ELSE upper(v.chromosome)
+                       END AS normalized_chromosome,
+                       v.position
+                FROM genomeguard.dataset_variants AS v
+                JOIN verified_public_dataset AS m ON m.id = v.dataset_id
+                WHERE m.reference_assembly = %s
+            ) AS coverage
+            GROUP BY normalized_chromosome
+            ORDER BY normalized_chromosome
+        """
+        try:
+            with self.lock, self.connection.transaction():
+                self.connection.execute("SET TRANSACTION READ ONLY")
+                self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
+                rows = self.connection.execute(query, (assembly,)).fetchall()
+            return [{
+                "chromosome": row["chromosome"],
+                "variant_count": int(row["variant_count"]),
+                "first_position": int(row["first_position"]),
+                "last_position": int(row["last_position"]),
+            } for row in rows]
+        except psycopg.Error as error:
+            raise CatalogueUnavailableError(
+                "Verified public chromosome coverage is unavailable."
+            ) from error
+
+    def verified_public_variant_search(
+        self, chromosome: str, position: int, reference: str | None = None,
+        alternate: str | None = None,
+    ) -> list[dict]:
+        """Find coordinate metadata only in reconciled, approved public imports."""
+        query = f"""{_VERIFIED_PUBLIC_DATASET_CTE}
+            SELECT m.dataset_key, m.reference_assembly, v.variant_index,
+                   v.chromosome, v.position, v.reference_allele, v.alternate_allele
+            FROM genomeguard.dataset_variants AS v
+            JOIN verified_public_dataset AS m ON m.id = v.dataset_id
+            WHERE upper(regexp_replace(v.chromosome, '^chr', '', 'i')) = %s
+              AND v.position = %s
+              AND (%s IS NULL OR upper(v.reference_allele) = %s)
+              AND (%s IS NULL OR upper(v.alternate_allele) = %s)
+            ORDER BY m.dataset_key, v.variant_index
+            LIMIT 20
+        """
+        try:
+            with self.lock, self.connection.transaction():
+                self.connection.execute("SET TRANSACTION READ ONLY")
+                self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
+                rows = self.connection.execute(
+                    query, (chromosome, position, reference, reference, alternate, alternate),
+                ).fetchall()
+            return [{
+                "dataset_key": row["dataset_key"],
+                "reference_assembly": row["reference_assembly"],
+                "variant_id": int(row["variant_index"]) + 1,
+                "chromosome": row["chromosome"],
+                "position": int(row["position"]),
+                "reference_allele": row["reference_allele"],
+                "alternate_allele": row["alternate_allele"],
+            } for row in rows]
+        except psycopg.Error as error:
+            raise CatalogueUnavailableError(
+                "Verified public variant search is unavailable."
+            ) from error
 
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:

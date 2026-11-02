@@ -28,6 +28,7 @@ from app.config import get_settings, validate_settings
 from app.core.audit_chain import jsonable
 from app.data.vcf_qc import MAX_UPLOAD_BYTES, validate_vcf
 from app.service import DEMO_REQUESTERS, GenomeGuardService, ServiceError, bootstrap
+from app.store import CatalogueUnavailableError
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +81,47 @@ def _deployment_info() -> dict[str, str | None]:
     }
 
 
+def _reported_consent_provenance(
+    provenance: dict, sample_count: int,
+) -> tuple[dict, int, int, bool]:
+    reported = dict(provenance)
+
+    def count(value) -> tuple[int, bool]:
+        if value is None:
+            return 0, True
+        if isinstance(value, bool):
+            return 0, False
+        if isinstance(value, int) and value >= 0:
+            return value, True
+        if isinstance(value, str) and value.isdecimal():
+            return int(value), True
+        return 0, False
+
+    matched, matched_valid = count(provenance.get("consent_records_matched"))
+    scoped, scoped_valid = count(provenance.get("dataset_policy_samples_scoped"))
+    is_dataset_policy = (
+        provenance.get("consent_basis") == "dataset_policy"
+        or provenance.get("consent") == "source_policy"
+    )
+    consistent = matched_valid and scoped_valid
+    if is_dataset_policy:
+        consistent = (
+            consistent
+            and matched == 0
+            and not provenance.get("consent_source")
+            and not provenance.get("consent_records_sha256")
+            and scoped == sample_count
+        )
+        matched = 0
+        reported["consent_records_matched"] = 0
+        reported["consent_source"] = None
+        reported["consent_records_sha256"] = None
+    else:
+        reported["consent_records_matched"] = matched
+    reported["dataset_policy_samples_scoped"] = scoped
+    return reported, matched, scoped, consistent
+
+
 async def _body(request: Request) -> dict:
     try:
         data = await request.json()
@@ -110,6 +152,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if not S().is_admin(request.headers.get("x-admin-key")):
             raise ServiceError(401, "unauthorized", "admin key required (X-Admin-Key)")
 
+    def require_governed_data(svc: GenomeGuardService) -> None:
+        if not svc.release_enabled:
+            raise ServiceError(
+                503, "governed_data_unavailable",
+                "The active decision engine is not linked to a verified normalized dataset import.",
+            )
+
     def route(method: str, path: str, summary: str, who: str):
         def deco(fn):
             ROUTES_DOC.append((method, path, summary, who))
@@ -119,6 +168,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                     return await fn(request)
                 except ServiceError as e:
                     return _j(e.to_json(), e.status)
+                except CatalogueUnavailableError:
+                    return _j({
+                        "error": "catalogue_unavailable",
+                        "message": "The verified normalized dataset catalogue is unavailable.",
+                    }, 503)
             handler.__name__ = fn.__name__
             return Route(path, handler, methods=[method])
         return deco
@@ -128,12 +182,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     def readiness_checks(svc: GenomeGuardService) -> dict[str, bool]:
         provenance = getattr(svc, "provenance", {})
+        _, consent_records_matched, _, consent_provenance_consistent = (
+            _reported_consent_provenance(provenance, svc.ds.n_donors)
+        )
         return {
             "demo_mode_disabled": not settings.demo_mode,
             "real_genotype_provenance": provenance.get("genotypes") == "real_vcf",
             "participant_consent_records_verified": (
                 provenance.get("consent") == "source_records"
-                and int(provenance.get("consent_records_matched") or 0) == int(svc.ds.n_donors)
+                and consent_records_matched == int(svc.ds.n_donors)
+                and consent_provenance_consistent
             ),
             "destructive_tamper_demo_disabled": not settings.allow_tamper_demo,
             "postgres_storage_configured": getattr(svc.store, "backend", "sqlite") == "postgresql",
@@ -151,25 +209,31 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/health", "Liveness and non-authoritative dataset/readiness facts", "public")
     async def health(request):
         svc = S()
-        provenance = getattr(svc, "provenance", {})
+        raw_provenance = getattr(svc, "provenance", {})
+        provenance, consent_records_matched, policy_samples_scoped, consent_provenance_consistent = (
+            _reported_consent_provenance(raw_provenance, svc.ds.n_donors)
+        )
         checks = readiness_checks(svc)
         participant_consent_verified = (
-            provenance.get("consent") == "source_records"
-            and int(provenance.get("consent_records_matched") or 0) == int(svc.ds.n_donors)
+            raw_provenance.get("consent") == "source_records"
+            and consent_records_matched == int(svc.ds.n_donors)
+            and consent_provenance_consistent
         )
         return _j({
             "status": "ok",
-            "synthetic_data_only": provenance.get("genotypes") == "synthetic",
-            "provenance_known": provenance.get("genotypes") != "unknown",
-            "consent_simulated": provenance.get("consent") == "simulated",
+            "synthetic_data_only": raw_provenance.get("genotypes") == "synthetic",
+            "provenance_known": raw_provenance.get("genotypes") != "unknown",
+            "consent_simulated": raw_provenance.get("consent") == "simulated",
             "participant_consent_records_verified": participant_consent_verified,
-            "participant_consent_records_matched": int(provenance.get("consent_records_matched") or 0),
-            "dataset_policy_samples_scoped": int(provenance.get("dataset_policy_samples_scoped") or 0),
+            "participant_consent_records_matched": consent_records_matched,
+            "dataset_policy_samples_scoped": policy_samples_scoped,
+            "consent_provenance_consistent": consent_provenance_consistent,
             "donors": svc.ds.n_donors, "variants": svc.ds.n_variants,
             "k_min": svc.p.k_min, "audit_chain_ok": None, "provenance": provenance,
             "agents_use_llm": svc.team.agents["explainer"].llm.available,
             "demo_mode": settings.demo_mode, "tamper_demo": settings.allow_tamper_demo,
             "storage_backend": getattr(svc.store, "backend", "sqlite"),
+            "governed_data_release_enabled": svc.release_enabled,
             "deployment": _deployment_info(),
             "readiness": {"ready": all(checks.values()), "checks": checks},
         })
@@ -226,9 +290,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
            "transform summary and (if released) aggregate data", "requester")
     async def post_request(request):
         r = requester(request)
+        svc = S()
+        require_governed_data(svc)
         body = await _body(request)
-        d = await run_in_threadpool(S().submit, r, body)
-        return _j(d if S().is_admin(request.headers.get("x-admin-key")) else requester_view(d), 201)
+        d = await run_in_threadpool(svc.submit, r, body)
+        return _j(d if svc.is_admin(request.headers.get("x-admin-key")) else requester_view(d), 201)
 
     @route("GET", "/beacon/g_variants", "GA4GH Beacon v2 style allele lookup, governed by the "
            "same consent, risk and audit pipeline", "requester")
@@ -262,6 +328,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         except ServiceError as exc:
             return _j({"meta": response_meta(), "error": {"errorCode": exc.status,
                        "errorMessage": "Authentication required"}}, exc.status)
+        svc = S()
+        try:
+            require_governed_data(svc)
+        except ServiceError as exc:
+            return _j({"meta": response_meta(), "error": {"errorCode": exc.status,
+                       "errorMessage": exc.message}}, exc.status)
 
         raw_gran = q.get("requestedGranularity", "boolean")
         gran = raw_gran if raw_gran in ("boolean", "count") else "boolean"
@@ -277,7 +349,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             return _j({"meta": meta, "error": {"errorCode": 422,
                        "errorMessage": "requestedGranularity must be boolean or count"},
                        "info": {"requestedGranularity": raw_gran}}, 422)
-        hits = [i for i, (c, p, _ref, a) in enumerate(S().ds.coords)
+        hits = [i for i, (c, p, _ref, a) in enumerate(svc.ds.coords)
                 if c == chrom and p == start and (alt is None or a == alt)]
         if not hits:
             summary = {"exists": False}
@@ -289,7 +361,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 "data_level": gran, "is_commercial": q.get("commercial") == "true",
                 "variant_filter": {"variant_ids": [hits[0] + 1]}}
         try:
-            d = await run_in_threadpool(S().submit, r, body)
+            d = await run_in_threadpool(svc.submit, r, body)
         except ServiceError as exc:
             message = ("Request not permitted by governance policy" if exc.status == 403
                        else "Request parameters failed governance validation")
@@ -335,11 +407,29 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def review(request):
         admin(request)
         b = await _body(request)
-        if not isinstance(b.get("approve"), bool):
+        action = b.get("action")
+        approve = b.get("approve")
+        if action is None and not isinstance(approve, bool):
             raise ServiceError(422, "invalid_review", "approve must be a JSON boolean")
+        if action is not None and action not in {"approve", "deny", "request_information"}:
+            raise ServiceError(422, "invalid_review", "unsupported steward review action")
+        if action is not None:
+            approve = action == "approve"
         who = str(b.get("reviewer", "reviewer"))[:32]
-        d = await run_in_threadpool(S().review, request.path_params["id"], who, b["approve"])
+        d = await run_in_threadpool(
+            S().review, request.path_params["id"], who, approve, action,
+        )
         return _j(d)
+
+    @route("POST", "/requests/{id:int}/release", "Recheck and perform a separately approved governed release", "admin")
+    async def release_approved(request):
+        admin(request)
+        body = await _body(request)
+        who = str(body.get("reviewer", "reviewer"))[:32]
+        result = await run_in_threadpool(
+            S().release_approved, request.path_params["id"], who,
+        )
+        return _j(result)
 
     @route("POST", "/requests/{id:int}/copilot", "Steward copilot: a read-only, tool-using agent "
            "investigates one request and gives an advisory recommendation (?refresh=true to rerun)",
@@ -362,9 +452,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
            "requester")
     async def consent_summary(request):
         r = requester(request)
+        svc = S()
+        require_governed_data(svc)
         q = request.query_params
         pop = q.get("population")
-        out = S().eligibility(
+        out = svc.eligibility(
             r, q.get("purpose", "general_research"), q.get("disease") or None,
             q.get("commercial", "false").lower() == "true", q.get("data_level", "frequency"),
             {"population": pop} if pop else {})
@@ -373,8 +465,10 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("POST", "/requests/preview", "Non-consuming privacy and utility preview", "requester")
     async def preview_request(request):
         r = requester(request)
+        svc = S()
+        require_governed_data(svc)
         body = await _body(request)
-        return _j(S().preview(r, body))
+        return _j(svc.preview(r, body))
 
     @route("GET", "/variants/search", "Exact coordinate or variant-ID lookup; metadata only", "public")
     async def variant_search(request):
@@ -383,9 +477,32 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(400, "invalid_query", "Enter a variant ID or exact coordinate such as 22:105123:A:G.")
         import re
         svc = S()
-        matches = []
         id_match = re.fullmatch(r"[vV]?(\d+)", query)
         coord_match = re.fullmatch(r"(?:chr)?([0-9]{1,2}|X|Y|M|MT):(\d+)(?::([ACGTN]+):([ACGTN]+))?", query, re.I)
+        if not svc.release_enabled:
+            if not coord_match:
+                raise ServiceError(
+                    422, "coordinate_required",
+                    "Search the verified public catalogue by exact chromosome and position.",
+                )
+            chrom, raw_pos, ref, alt = coord_match.groups()
+            chrom = chrom.upper()
+            if chrom == "M":
+                chrom = "MT"
+            if not raw_pos.isdigit() or not 1 <= int(raw_pos) <= 2_147_483_647:
+                raise ServiceError(400, "invalid_position", "Position must be a supported positive integer.")
+            search = getattr(svc.store, "verified_public_variant_search", None)
+            if search is None:
+                raise CatalogueUnavailableError("The store has no verified public variant search.")
+            matches = await run_in_threadpool(search, chrom, int(raw_pos), ref, alt)
+            return _j({
+                "query": query,
+                "matches": matches,
+                "frequency_policy": "Cohort frequencies are shown only in a separately governed aggregate release.",
+                "annotation_available": False,
+            })
+
+        matches = []
         if id_match:
             idx = int(id_match.group(1)) - 1
             if 0 <= idx < len(svc.ds.coords):
@@ -736,39 +853,30 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("GET", "/catalogue/datasets", "Local dataset catalogue with source-backed provenance", "public")
     async def catalogue_datasets(request):
-        """Describe the in-memory cohort without inventing source provenance."""
+        """List only approved manifests whose normalized data rows reconcile."""
         svc = S()
-        provenance = getattr(svc, "provenance", {})
-        genotype_kind = provenance.get("genotypes", "unknown")
-        datasets: list[dict] = []
-        if genotype_kind == "real_vcf":
-            import re
-            source_sha256 = provenance.get("source_vcf_sha256")
-            checksum_recorded = isinstance(source_sha256, str) and bool(
-                re.fullmatch(r"[0-9a-f]{64}", source_sha256)
-            )
-            datasets = [{
-                "dataset_key": svc.dataset_id,
-                "source_name": provenance.get("genotype_source") or provenance.get("genotypes_label") or "Unknown source",
-                "source_release": provenance.get("source_release") or "Not recorded",
-                "reference_assembly": provenance.get("reference_assembly") or "Not recorded",
-                "file_sha256": source_sha256 if checksum_recorded else None,
-                "source_checksum_recorded": checksum_recorded,
-                "sample_count": int(svc.ds.n_donors),
-                "variant_count": int(svc.ds.n_variants),
-                "genotype_call_count": int(svc.ds.n_donors * svc.ds.n_variants),
-                "source_url": provenance.get("source_url"),
-                "imported_at": provenance.get("imported_at"),
-                "variant_data_loaded": bool(svc.ds.n_donors and svc.ds.n_variants),
-                "genotype_provenance": genotype_kind,
-                "consent_basis": provenance.get("consent_basis", "unknown"),
-            }]
+        catalogue = getattr(svc.store, "verified_public_datasets", None)
+        if catalogue is None:
+            raise CatalogueUnavailableError("The store has no verified dataset catalogue.")
+        imported = await run_in_threadpool(catalogue)
+        datasets = [{
+            **item,
+            "source_checksum_recorded": True,
+            "variant_data_loaded": True,
+            "genotype_provenance": "real_vcf",
+            "consent_basis": "dataset_policy",
+            "consent_records_matched": 0,
+            "dataset_policy_samples_scoped": item["sample_count"],
+            "policy_description": (
+                "Dataset-level public research terms; no individual consent records are represented."
+            ),
+        } for item in imported]
         return _j({
             "datasets": datasets,
             "dataset_count": len(datasets),
             "provenance_note": (
-                "Only source-supplied checksums and metadata are reported; missing provenance is shown as unavailable, never synthesized. "
-                "Dataset-level public-research approval is not participant-specific consent or clinical authorization."
+                "Only approved public manifests with reconciled normalized sample, variant, and genotype-call counts are listed. "
+                "Dataset-level policy is not participant-specific consent or clinical authorization."
             ),
         })
 
@@ -779,8 +887,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if assembly not in ("GRCh37", "GRCh38"):
             raise ServiceError(400, "invalid_assembly", "Choose GRCh37 or GRCh38.")
         svc = S()
-        provenance = getattr(svc, "provenance", {})
-        dataset_assembly = provenance.get("reference_assembly")
+        coverage_method = getattr(svc.store, "verified_public_chromosome_coverage", None)
+        if coverage_method is None:
+            raise CatalogueUnavailableError("The store has no verified chromosome-coverage query.")
+        coverage = await run_in_threadpool(coverage_method, assembly)
+        positions_by_chromosome = {row["chromosome"]: row for row in coverage}
         # Standard human chromosome sizes for GRCh38 / GRCh37 (bp).
         GRCH38 = [
             ("1", "autosome", 248956422), ("2", "autosome", 242193529),
@@ -811,33 +922,24 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             ("X", "sex", 155270560), ("Y", "sex", 59373566), ("MT", "mitochondrial", 16571),
         ]
         ref = GRCH38 if assembly == "GRCh38" else GRCH37
-        def normalize_chromosome(value):
-            chrom = str(value).upper().removeprefix("CHR")
-            return "MT" if chrom == "M" else chrom
-        # Coverage is derived from actual coordinates and withheld if assembly is unknown/mismatched.
-        positions_by_chrom: dict[str, list[int]] = {}
-        if dataset_assembly == assembly:
-            for coord in svc.ds.coords or []:
-                chrom, position = coord[0], int(coord[1])
-                positions_by_chrom.setdefault(normalize_chromosome(chrom), []).append(position)
         rows = []
         for chrom, kind, length_bp in ref:
-            positions = positions_by_chrom.get(chrom, [])
-            loaded = bool(positions)
+            coordinates = positions_by_chromosome.get(chrom)
+            loaded = coordinates is not None
             rows.append({
                 "chromosome": chrom, "kind": kind, "length_bp": length_bp,
                 "data_coverage": {
-                    "variant_count": len(positions),
-                    "first_position": min(positions) if loaded else None,
-                    "last_position": max(positions) if loaded else None,
+                    "variant_count": coordinates["variant_count"] if loaded else 0,
+                    "first_position": coordinates["first_position"] if loaded else None,
+                    "last_position": coordinates["last_position"] if loaded else None,
                     "variant_data_loaded": loaded,
                 },
             })
         return _j({
             "reference_assembly": assembly, "chromosome_count": len(rows), "chromosomes": rows,
             "provenance_note": (
-                "Reference lengths are from the Genome Reference Consortium. Local coverage is reported only when "
-                "the loaded dataset reference assembly matches the requested assembly; absent or mismatched provenance is not treated as coverage."
+                "Reference lengths are from the Genome Reference Consortium. Coverage comes only from normalized rows "
+                "belonging to approved, reconciled public manifests with the exact requested assembly."
             ),
         })
     @route("GET", "/openapi.json", "Machine-readable endpoint list", "public")

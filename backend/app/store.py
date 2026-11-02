@@ -22,6 +22,11 @@ from app.core.audit_chain import GENESIS, entry_hash, jsonable
 from app.core.consent import DonorView
 from app.core.dataset import Dataset
 
+
+class CatalogueUnavailableError(RuntimeError):
+    """A normalized, verified public dataset catalogue could not be read."""
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cohort_metadata(id INTEGER PRIMARY KEY CHECK(id=1), dataset_id TEXT NOT NULL, metadata_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS donors(id INTEGER PRIMARY KEY, cohort_id TEXT, population TEXT,
@@ -97,6 +102,14 @@ class Store:
         if not row:
             return None
         return {"dataset_id": row["dataset_id"], **json.loads(row["metadata_json"])}
+
+    def verified_public_datasets(self) -> list[dict]:
+        """SQLite cohorts are not normalized, steward-approved dataset imports."""
+        return []
+
+    def verified_public_chromosome_coverage(self, assembly: str) -> list[dict]:
+        """Return no imported coverage unless a normalized manifest backs the rows."""
+        return []
 
     def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None) -> None:
         """Write a cohort and its provenance. Genotypes are encrypted before database storage."""
@@ -216,11 +229,12 @@ class Store:
     def update_decision(self, req_id: int, **fields: Any) -> None:
         cols = {"outcome": "outcome", "needs_human": "needs_human", "reviewed_by": "reviewed_by",
                 "reviewed_at": "reviewed_at", "release": "release_json",
-                "explanation": "explanation_text", "reasons": "reasons_json"}
+                "explanation": "explanation_text", "reasons": "reasons_json",
+                "risk": "risk_json"}
         sets, args = [], []
         for k, v in fields.items():
             sets.append(f"{cols[k]}=?")
-            args.append(json.dumps(jsonable(v)) if k in ("release", "reasons") else v)
+            args.append(json.dumps(jsonable(v)) if k in ("release", "reasons", "risk") else v)
         self.x(f"UPDATE decisions SET {', '.join(sets)} WHERE request_id=?", (*args, req_id))
 
     def _decision_view(self, r: dict, with_release: bool) -> dict:

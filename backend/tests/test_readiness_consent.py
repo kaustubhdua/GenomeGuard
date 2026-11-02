@@ -20,3 +20,28 @@ def test_dataset_policy_is_not_misreported_as_participant_consent():
     assert response.status_code == 503
     assert body["checks"]["participant_consent_records_verified"] is False
     assert body["ready"] is False
+
+
+def test_policy_scope_is_never_reported_as_matched_participant_consent():
+    svc, client = make_client()
+    svc.provenance = {
+        "genotypes": "real_vcf",
+        "consent": "source_policy",
+        "consent_basis": "dataset_policy",
+        "consent_records_matched": svc.ds.n_donors,
+        "consent_source": "policy.json",
+        "consent_records_sha256": "a" * 64,
+        "dataset_policy_samples_scoped": svc.ds.n_donors,
+    }
+
+    response = client.get("/health")
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["participant_consent_records_matched"] == 0
+    assert body["participant_consent_records_verified"] is False
+    assert body["consent_provenance_consistent"] is False
+    assert body["provenance"]["consent_records_matched"] == 0
+    assert body["provenance"]["consent_source"] is None
+    assert body["provenance"]["consent_records_sha256"] is None
+    assert body["dataset_policy_samples_scoped"] == svc.ds.n_donors

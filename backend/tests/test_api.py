@@ -178,9 +178,51 @@ def test_review_endpoint_requires_admin_and_works():
     assert invalid.status_code == 422 and invalid.json()["error"] == "invalid_review"
     out = c.post(f"/requests/{d['id']}/review", json={"approve": True, "reviewer": "carol"},
                  headers=ADMIN).json()
-    assert out["status"] == "released" and out["reviewed_by"] == "carol"
+    assert out["status"] == "approved_pending_release" and out["reviewed_by"] == "carol"
+    assert not out.get("release")
+    assert c.post(f"/requests/{d['id']}/release", json={"reviewer": "carol"},
+                  headers=ADMIN).status_code == 200
+    released = c.get(f"/requests/{d['id']}", headers=ADMIN).json()
+    assert released["status"] == "released" and released["release"]["level"] != "record"
     assert c.post(f"/requests/{d['id']}/review", json={"approve": True},
                   headers=ADMIN).status_code == 409
+
+
+def test_steward_can_request_information_without_releasing():
+    _, c = make_client()
+    request = {"purpose": "general_research", "data_level": "record",
+               "variant_filter": {"min_maf": 0.2, "limit": 5}}
+    submitted = c.post("/requests", json=request, headers=H("demo-controlled")).json()
+    response = c.post(
+        f"/requests/{submitted['id']}/review",
+        json={"action": "request_information", "reviewer": "steward"},
+        headers=ADMIN,
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["status"] == "needs_information"
+    assert result["reviewed_by"] == "steward"
+    assert result["needs_human"] is False
+    assert not result.get("release")
+    assert c.post(f"/requests/{submitted['id']}/release", json={}, headers=ADMIN).status_code == 409
+
+
+def test_release_is_separately_gated_when_active_data_is_not_linked():
+    svc, c = make_client()
+    request = {"purpose": "general_research", "data_level": "record",
+               "variant_filter": {"min_maf": 0.2, "limit": 5}}
+    submitted = c.post("/requests", json=request, headers=H("demo-controlled")).json()
+    approved = c.post(
+        f"/requests/{submitted['id']}/review", json={"approve": True}, headers=ADMIN,
+    )
+    assert approved.json()["status"] == "approved_pending_release"
+    svc.release_enabled = False
+    released = c.post(
+        f"/requests/{submitted['id']}/release", json={}, headers=ADMIN,
+    )
+    assert released.status_code == 503
+    assert released.json()["error"] == "governed_release_unavailable"
+    assert c.post("/requests", json=DEMO_REQ, headers=H(RESEARCHER)).status_code == 503
 
 
 def test_audit_endpoints_and_tamper_demo_over_http():
@@ -372,13 +414,12 @@ def test_catalogue_endpoints():
     assert chr22["data_coverage"]["variant_data_loaded"] is False
     assert chr22["data_coverage"]["variant_count"] == 0
 
-    # Coverage is shown only for the assembly explicitly recorded on the cohort.
+    # In-memory cohort coordinates are not evidence of a normalized public import.
     svc.provenance["reference_assembly"] = "GRCh37"
     matching = c.get("/catalogue/chromosomes?assembly=GRCh37").json()
     chr22_matching = next(ch for ch in matching["chromosomes"] if ch["chromosome"] == "22")
-    assert chr22_matching["data_coverage"]["variant_data_loaded"] is True
-    expected_chr22_count = sum(1 for coord in svc.ds.coords if str(coord[0]).upper().removeprefix("CHR") == "22")
-    assert chr22_matching["data_coverage"]["variant_count"] == expected_chr22_count
+    assert chr22_matching["data_coverage"]["variant_data_loaded"] is False
+    assert chr22_matching["data_coverage"]["variant_count"] == 0
     mismatched = c.get("/catalogue/chromosomes?assembly=GRCh38").json()
     chr22_mismatched = next(ch for ch in mismatched["chromosomes"] if ch["chromosome"] == "22")
     assert chr22_mismatched["data_coverage"]["variant_data_loaded"] is False

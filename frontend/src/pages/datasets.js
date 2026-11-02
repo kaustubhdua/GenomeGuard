@@ -13,12 +13,12 @@ const date = (value) => {
   }).format(parsed);
 };
 
-function sourceLink(url) {
+function sourceLink(url, label = "Open source (new tab)") {
   if (!url) return null;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return h("span", { class: "muted" }, "Source link unavailable");
-    return h("a", { href: parsed.href, target: "_blank", rel: "noopener noreferrer", class: "dataset-source-link" }, "Open source (new tab)");
+    return h("a", { href: parsed.href, target: "_blank", rel: "noopener noreferrer", class: "dataset-source-link" }, label);
   } catch {
     return h("span", { class: "muted" }, "Source link unavailable");
   }
@@ -119,7 +119,10 @@ async function renderCatalogue(sample) {
       h("th", { scope: "row" },
         h("span", { class: "dataset-name" }, d.source_name || d.dataset_key || "Unnamed dataset"),
         h("div", { class: "fine" }, d.dataset_key || "No dataset key"),
-        sourceLink(d.source_url)),
+        sourceLink(d.source_url),
+        sourceLink(d.reuse_statement_url, "Read reuse terms"),
+        h("div", { class: "fine" }, d.policy_description || "Dataset-level policy; no participant consent records are implied."),
+        d.citation ? h("div", { class: "fine", title: d.citation }, d.citation) : null),
       h("td", {}, d.source_release || "Unknown"),
       h("td", {}, h("span", { class: "dataset-assembly" }, d.reference_assembly || "Unknown")),
       h("td", {}, h("button", {

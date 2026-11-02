@@ -1026,9 +1026,11 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
 .population-frequency-table td { overflow-wrap: anywhere; }
 .popfreq-checksum { display: inline-block; max-width: 260px; overflow-wrap: anywhere; }
 
-.qc-upload { max-width: 760px; }
-.qc-upload label { display: grid; gap: 7px; }
-.qc-upload input[type="file"] { display: block; width: 100%; min-width: 0; max-width: 100%; }
+.qc-upload { max-width: 760px; min-width: 0; }
+.qc-upload label, .qc-report-preview-label { display: grid; gap: 7px; min-width: 0; }
+.qc-upload input[type="file"], .qc-report-preview-label input[type="file"] {
+  display: block; width: 100%; min-width: 0; max-width: 100%;
+}
 .qc-upload progress { display: block; width: min(100%, 520px); height: 10px; accent-color: var(--permit); }
 .qc-report { min-width: 0; }
 .qc-report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }

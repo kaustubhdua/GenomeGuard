@@ -11,8 +11,8 @@ Outcome precedence once the anomaly monitor has spoken:
   monitor says freeze         -> account frozen, escalate to a human ("requester_frozen")
   ladder deny / escalate      -> deny / escalate
   monitor says throttle       -> hold for a human ("requester_throttled")
-  controlled + record level   -> hold for a human ("record_level_needs_approval"); even after
-                                 approval only transformed AGGREGATES are returned, never rows
+  controlled + record level   -> hold for a human ("record_level_needs_approval"); approval is
+                                 recorded separately from a later governed aggregate release
   otherwise                   -> release (with protections if the ladder applied any)
 
 Every step writes to the hash-chained audit log.
@@ -86,10 +86,13 @@ class GenomeGuardService:
     def __init__(self, store: Store, ds: Dataset, p: Params = DEFAULT, *, master: bytes | None = None,
                  llm: LLM | None = None, llm_roles: set[str] | None = None,
                  allow_tamper: bool = False, admin_key: str = "demo-admin-key",
+                 release_enabled: bool = True,
                  clock: Callable[[], float] = time.time) -> None:
         self.store, self.ds, self.p, self.clock = store, ds, p, clock
         self.master = master
         self.dataset_id = ds.dataset_id
+        self.release_enabled = release_enabled
+        self.provenance: dict = {}
         self.admin_hash = hash_key(admin_key)
         self.audit = AuditChain(AuditStore(store), allow_tamper=allow_tamper)
         self.monitor = AnomalyMonitor(AnomalyConfig.from_params(p))
@@ -397,7 +400,11 @@ class GenomeGuardService:
             "level": ladder.plan.level, "variant_idx": list(ladder.plan.variant_idx),
             "bin_width": ladder.plan.bin_width, "epsilon": ladder.plan.epsilon},
             "subjects": self._carriers(elig.donor_ids, vidx)[:200], "cohort_filter":
-            clean["cohort_filter"]}
+            clean["cohort_filter"],
+            "dataset_version": self.provenance.get("source_vcf_sha256") or self.dataset_id,
+            "policy_version": (self.provenance.get("consent_policy_source_sha256")
+                               or self.provenance.get("consent_records_sha256")
+                               or self.provenance.get("consent_basis", "unknown"))}
 
         if a.blocked and a.action != "freeze":
             return finish("deny", ["differencing_guard"], **kw)
@@ -424,6 +431,9 @@ class GenomeGuardService:
     # ------------------------------------------------------------------ release
     def _release(self, rid: int, req_id: int, donor_ids: list[int], plan_d: dict,
                  eps: float) -> dict:
+        if not self.release_enabled:
+            raise ServiceError(503, "governed_release_unavailable",
+                               "the active dataset is not linked to a verified normalized import")
         plan = TransformPlan(plan_d["level"], tuple(plan_d["variant_idx"]), plan_d["bin_width"],
                              plan_d["epsilon"])
         assert plan.level != "record", "genotype rows are never returned"
@@ -459,7 +469,8 @@ class GenomeGuardService:
 
     # ================================================================== human actions
     @transactional
-    def review(self, req_id: int, reviewer: str, approve: bool) -> dict:
+    def review(self, req_id: int, reviewer: str, approve: bool,
+               action: str | None = None) -> dict:
         d = self.store.decision(req_id)
         if not d:
             raise ServiceError(404, "not_found", "no such request")
@@ -468,43 +479,133 @@ class GenomeGuardService:
         priv = self.store.private(req_id)
         rid = d["requester_id"]
         now = now_iso()
-        self.audit.append(f"human:{reviewer}", "review.approved" if approve else "review.denied",
+        action = action or ("approve" if approve else "deny")
+        if action not in {"approve", "deny", "request_information"}:
+            raise ServiceError(422, "invalid_review", "unsupported steward review action")
+        if priv.get("kind") == "account" and action == "request_information":
+            raise ServiceError(422, "invalid_review", "account reviews cannot request information")
+        audit_action = {
+            "approve": "review.approved",
+            "deny": "review.denied",
+            "request_information": "review.information_requested",
+        }[action]
+        self.audit.append(f"human:{reviewer}", audit_action,
                           {"request_id": req_id, "kind": priv.get("kind")})
         if priv.get("kind") == "account":
-            if approve:
+            if action == "approve":
                 self.unfreeze(rid, reviewer)
             self.store.update_decision(req_id, reviewed_by=reviewer, reviewed_at=now,
                                        needs_human=0)
-            self.store.set_request_status(req_id, "reviewed")
+            self.store.set_request_status(req_id, "reviewed" if action == "approve" else "denied")
             return self.store.decision(req_id)
-        if not approve:
+        if action == "request_information":
+            self.store.update_decision(
+                req_id, reviewed_by=reviewer, reviewed_at=now, needs_human=0,
+                reasons=list(d["reasons"]) + ["more_information_requested"],
+            )
+            self.store.set_request_status(req_id, "needs_information")
+            return self.store.decision(req_id)
+        if action == "deny":
             self.store.update_decision(req_id, outcome="deny", reviewed_by=reviewer,
                                        reviewed_at=now, needs_human=0)
             self.store.set_request_status(req_id, "denied")
             return self.store.decision(req_id)
-        # approve: re-check consent NOW (it may have changed), then release the stored plan
+        self.store.update_decision(req_id, reviewed_by=reviewer, reviewed_at=now,
+                                   needs_human=0)
+        self.store.set_request_status(req_id, "approved_pending_release")
+        return self.store.decision(req_id)
+
+    @transactional
+    def release_approved(self, req_id: int, reviewer: str) -> dict:
+        """Re-evaluate policy and risk after approval; release is a separate steward action."""
+        d = self.store.decision(req_id)
+        if not d:
+            raise ServiceError(404, "not_found", "no such request")
+        if d["status"] != "approved_pending_release":
+            raise ServiceError(409, "not_approved_for_release",
+                               "request is not approved and awaiting governed release")
+        if not self.release_enabled:
+            raise ServiceError(503, "governed_release_unavailable",
+                               "the active dataset is not linked to a verified normalized import")
+
+        priv = self.store.private(req_id)
+        dataset_version = self.provenance.get("source_vcf_sha256") or self.dataset_id
+        policy_version = (
+            self.provenance.get("consent_policy_source_sha256")
+            or self.provenance.get("consent_records_sha256")
+            or self.provenance.get("consent_basis", "unknown")
+        )
+
+        def block(reason: str) -> dict:
+            self.store.update_decision(req_id, outcome="deny", needs_human=0, reasons=[reason])
+            self.store.set_request_status(req_id, "release_blocked")
+            self.audit.append(f"human:{reviewer}", "release.blocked", {
+                "request_id": req_id, "reason": reason})
+            return self.store.decision(req_id)
+
+        if (priv.get("dataset_version") != dataset_version
+                or priv.get("policy_version") != policy_version):
+            return block("dataset_or_policy_version_changed")
+        rid = d["requester_id"]
+        requester = self.store.requester(rid)
+        if not requester or rid in self.monitor.frozen:
+            return block("requester_unavailable_or_frozen")
         r = d["request"]
+        tier = requester.get("credential_level", "anonymous")
+        if ((r["data_level"] == "record" and tier != "controlled")
+                or (tier == "anonymous" and r["data_level"] not in ("boolean", "count"))):
+            return block("credential_insufficient")
+
         pop = r["cohort_filter"].get("population")
         creq = ConsentRequest(r["purpose"], r["disease"], r["is_commercial"], r["data_level"],
                               pop if isinstance(pop, str) else None, r["cohort_filter"])
         elig = eligible_cohort(creq, self.ds.donors)
-        plan = priv["plan"]
-        eps = plan["epsilon"] or 0.0
         if elig.n < self.p.k_min:
-            self.store.update_decision(req_id, outcome="deny", reviewed_by=reviewer,
-                                       reviewed_at=now, needs_human=0, reasons=["below_k_min"])
-            self.store.set_request_status(req_id, "denied")
-            return self.store.decision(req_id)
+            return block("below_k_min")
+
+        variants = self.resolve_variants(r["variant_filter"])
+        if not variants:
+            return block("no_variants")
+
+        ladder = run_ladder(
+            self.ds, elig.donor_ids, variants, r["data_level"], self.p,
+            epsilon_available=self._remaining(rid), build_release=False,
+            rng=np.random.default_rng(req_id),
+        )
+        if ladder.outcome not in {"permit", "permit_with_transform"}:
+            return block("risk_recheck_failed")
+        if ladder.plan.level == "record":
+            return block("record_rows_never_released")
+
+        now = self.clock()
+        anomaly = self.monitor.observe(
+            rid, QueryEvent(now, frozenset(variants), r["cohort_filter"],
+                            frozenset(elig.donor_ids), ladder.epsilon_spent))
+        self._record_timeline(rid, now, anomaly, elig.n)
+        self.audit.append("system:anomaly", "release.anomaly_rechecked", {
+            "request_id": req_id, **anomaly.to_json()})
+        if anomaly.action != "ok" or anomaly.blocked:
+            return block("release_anomaly_recheck_failed")
+
+        eps = ladder.epsilon_spent
         if eps > self._remaining(rid) + 1e-12:
-            self.store.update_decision(req_id, outcome="deny", reviewed_by=reviewer,
-                                       reviewed_at=now, needs_human=0,
-                                       reasons=["epsilon_budget_exhausted"])
-            self.store.set_request_status(req_id, "denied")
-            return self.store.decision(req_id)
+            return block("epsilon_budget_exhausted")
+
+        plan = {
+            "level": ladder.plan.level, "variant_idx": list(ladder.plan.variant_idx),
+            "bin_width": ladder.plan.bin_width, "epsilon": ladder.plan.epsilon,
+        }
         release = self._release(rid, req_id, elig.donor_ids, plan, eps)
-        self.store.update_decision(req_id, outcome="permit_with_transform", reviewed_by=reviewer,
-                                   reviewed_at=now, needs_human=0, release=release)
+        self.store.update_decision(
+            req_id, outcome=ladder.outcome, needs_human=0,
+            risk={"consent": elig.counts_only(), "assessment": ladder.risk_after,
+                  "before": ladder.risk_before},
+            release=release,
+        )
         self.store.set_request_status(req_id, "released")
+        self.audit.append(f"human:{reviewer}", "release.approved", {
+            "request_id": req_id, "dataset_version": dataset_version,
+            "policy_version": policy_version})
         return self.store.decision(req_id)
 
     # ================================================================== steward copilot
@@ -1109,7 +1210,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     api_key = s.gemini_api_key or s.anthropic_api_key or s.openai_api_key
     llm = llm or LLM(api_key, s.llm_model, provider=s.llm_provider)
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
-                             admin_key=s.admin_api_key, **kwargs)
+                             admin_key=s.admin_api_key, release_enabled=s.demo_mode, **kwargs)
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:

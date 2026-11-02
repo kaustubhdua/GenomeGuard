@@ -25,7 +25,9 @@ export async function render([id]) {
     h("p", { class: "verdict o-" + d.outcome }, OUTCOME_LABEL[d.outcome] || d.outcome),
     h("p", {}, d.explanation),
     (d.reasons || []).length ? h("ul", { class: "plain" }, d.reasons.map((r) => h("li", {}, reasonText(r)))) : null,
-    d.status === "held" ? notice("warn", "A human steward must approve or deny this before anything is released.") : null));
+    d.status === "held" ? notice("warn", "A human steward must review this request before anything is released.") : null,
+    d.status === "approved_pending_release" ? notice("warn", "A steward approved the request. Data remains withheld until a separate governed release is re-validated.") : null,
+    d.status === "needs_information" ? notice("warn", "The steward requested more information. No data was released.") : null));
 
   if (considered != null) {
     const out_ = Object.values(ex).reduce((a, b) => a + b, 0);
@@ -87,10 +89,24 @@ export async function render([id]) {
 function stewardPanel(d, before, after, tr) {
   const rel = before.relatives_exposed || {}, notes = tr.agent_notes || {};
   const msg = h("div", {});
-  const review = async (approve) => {
-    const r = await api(`/requests/${d.id}/review`, { method: "POST", body: { reviewer: "steward", approve } });
+  const review = async (action) => {
+    const r = await api(`/requests/${d.id}/review`, { method: "POST", body: { reviewer: "steward", action } });
     if (r.ok) location.reload(); else msg.replaceChildren(notice("err", errorText(r)));
   };
+  const release = async () => {
+    const r = await api(`/requests/${d.id}/release`, { method: "POST", body: { reviewer: "steward" } });
+    if (r.ok) location.reload(); else msg.replaceChildren(notice("err", errorText(r)));
+  };
+  const controls = d.status === "held" && d.needs_human
+    ? h("div", { style: "margin-top:12px;display:flex;gap:10px;flex-wrap:wrap" },
+      h("button", { onclick: () => review("approve") }, "Approve for separate release"),
+      h("button", { class: "ghost", onclick: () => review("request_information") }, "Request more information"),
+      h("button", { class: "danger", onclick: () => review("deny") }, "Deny"))
+    : d.status === "approved_pending_release"
+      ? h("div", { style: "margin-top:12px" },
+        notice("warn", "This is a distinct release operation. Current policy, cohort size, risk and privacy budget will be checked again."),
+        h("button", { onclick: release }, "Re-check and release governed aggregate"))
+      : null;
   return row("Steward detail", "Not shown to researchers",
     h("dl", { class: "facts" },
       h("dt", {}, "Rare variants requested"), h("dd", {}, String(before.rare_variants ?? 0)),
@@ -99,7 +115,7 @@ function stewardPanel(d, before, after, tr) {
       h("dt", {}, "Expected shared DNA, summed"), h("dd", {}, rel.expected_shared_dna != null ? Number(rel.expected_shared_dna).toFixed(2) : "n/a")),
     rel.total ? h("p", {}, h("a", { href: "#/family/" + d.id }, "Open the family tree"), " to see which relatives would be exposed.") : null,
     Object.keys(notes).length ? h("div", {}, h("h3", { style: "margin-top:12px" }, "Agent notes (advisory)"), h("ul", { class: "plain" }, Object.entries(notes).filter(([, t]) => t).map(([k, t]) => h("li", {}, h("b", {}, k + ": "), t)))) : null,
-    d.status === "held" && d.needs_human ? h("div", { style: "margin-top:12px;display:flex;gap:10px" }, h("button", { onclick: () => review(true) }, "Approve release"), h("button", { class: "danger", onclick: () => review(false) }, "Deny")) : null,
+    controls,
     d.reviewed_by ? h("p", { class: "muted" }, `Reviewed by ${d.reviewed_by} on ${when(d.reviewed_at)}.`) : null, msg);
 }
 

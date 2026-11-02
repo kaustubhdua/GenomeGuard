@@ -364,7 +364,7 @@ export async function render() {
     uploadForm));
   root.append(card("Preview an existing JSON QC report", "Local preview",
     h("p", { class: "muted" }, "Choose a locally generated report JSON to inspect it in this browser. The report is read locally, not uploaded; unsigned reports may have been edited."),
-    h("label", {}, "Choose QC report JSON (maximum 5 MiB)", reportFile),
+    h("label", { class: "qc-report-preview-label" }, "Choose QC report JSON (maximum 5 MiB)", reportFile),
     h("p", { class: "fine" }, "Downloads redact the source filename. Report content is aggregate-only and does not include participant rows.")));
   const result = await api("/admin/dataset-qc");
   if (!result.ok) { root.append(notice("err", errorText(result))); return root; }
