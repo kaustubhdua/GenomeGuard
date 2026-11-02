@@ -54,7 +54,12 @@ async function render() {
     h("span", {}, "Preparing workspace"), h("small", {}, "Loading secure research view")));
   let page;
   try {
-    if (hit && !state.demo && ["donor", "redteam", "federated"].includes(hit[0].nav)) {
+    if (hit && state.authToken && ["variants", "dataset-qc", "family", "anomalies", "audit", "donor", "redteam", "federated"].includes(hit[0].nav)) {
+      page = h("section", { class: "card empty-state" },
+        h("h1", {}, "This workflow is not connected to Supabase Auth"),
+        h("p", { class: "muted" }, "This legacy workflow still depends on the separate Render API and is intentionally disabled in Supabase Auth mode. Use the supported request, steward review, dataset discovery, source discovery, and chromosome-reference workflows."),
+        h("a", { class: "btn ghost", href: "#/overview" }, "Return to overview"));
+    } else if (hit && !state.demo && ["donor", "redteam", "federated"].includes(hit[0].nav)) {
       page = h("section", { class: "card empty-state" },
         h("h1", {}, "This workflow is not enabled for this deployment"),
         h("p", { class: "muted" }, "This page uses demo personas or simulated federated data. It is disabled outside demo mode rather than presenting simulated results as real participant workflows."),
