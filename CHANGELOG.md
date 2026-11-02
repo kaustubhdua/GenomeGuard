@@ -16,6 +16,9 @@
 - Added explicit per-source lifecycle statuses from discovery through permitted-use
   availability. The source page distinguishes registered metadata from downloaded,
   checksum-verified, QC-validated, steward-approved, imported, and available data.
+- Documented the official-guidance screen for additional genomic resources, including
+  why public access or a broad platform policy alone is not enough to list an artifact
+  as reusable or import-ready.
 - Added a curated public genomic source-discovery endpoint and page for IGSR/1000 Genomes,
   gnomAD aggregate reference data, and ClinVar summary metadata. The index links to official
   source and policy references, marks exact-artifact review as pending, and never claims a

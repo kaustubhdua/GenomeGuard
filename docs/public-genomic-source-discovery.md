@@ -51,3 +51,39 @@ Official references:
 - [gnomAD terms](https://gnomad.broadinstitute.org/terms)
 - [NCBI: ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/)
 - [NCBI: data usage policies](https://www.ncbi.nlm.nih.gov/home/about/policies/)
+
+## Candidate-source screen
+
+The following official guidance was reviewed on 2026-11-02. It supports discovery
+research, not automatic import approval:
+
+- **HPRC:** its data page describes public access to sequencing data, assemblies,
+  and pangenomes, and directs users to data-use best practices. These include file
+  types and workflows outside GenomeGuard's current VCF/aggregate-reference import
+  contracts, so no HPRC artifact is listed as importable.
+- **UCSC Genome Browser:** its data policy permits broad use of many browser data
+  files but explicitly identifies track- and source-specific restrictions. A source
+  name alone is not enough to approve an assembly track or annotation artifact.
+- **EMBL-EBI and Ensembl:** EMBL-EBI's general terms defer to data-owner terms and
+  resource-specific conditions. The Ensembl legal page retrieved during this review
+  was an archived snapshot and did not establish blanket reuse terms for a selected
+  genomic data artifact. The exact dataset and its attribution/reuse conditions must
+  be pinned before adding it.
+- **GEO, SRA, and Human Cell Atlas:** this review did not establish current,
+  artifact-specific access and reuse conditions for a candidate that fits the
+  existing importer. No source was added on the basis of an unverified policy page.
+- **GTEx:** the portal provides a distinct protected-data-access path. No data from
+  that path is included or treated as available to GenomeGuard.
+
+These resources are not represented in the current catalogue as imported or
+integration-ready. Adding a source requires a compatible parser/import contract,
+an exact artifact and assembly, verified checksum, source-specific reuse review,
+and the existing steward approval and reconciliation steps.
+
+Additional official references:
+
+- [HPRC data availability](https://humanpangenome.org/data/)
+- [UCSC data and software use policy](https://genome.ucsc.edu/license/)
+- [EMBL-EBI terms of use](https://www.ebi.ac.uk/about/terms-of-use)
+- [Ensembl legal information](https://www.ensembl.org/info/about/legal/index.html)
+- [GTEx protected data access](https://gtexportal.org/home/protectedDataAccess)
