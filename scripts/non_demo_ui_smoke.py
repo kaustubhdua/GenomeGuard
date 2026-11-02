@@ -326,6 +326,10 @@ def main() -> int:
         page.locator("#supabase-password").fill("correct-horse-battery")
         page.locator("#supabase-signin").click()
         page.get_by_text("Your organization membership is active", exact=False).wait_for(timeout=5000)
+        check("legacy steward routes are hidden in Supabase Auth mode",
+              page.locator('nav a[href="#/audit"]').count() == 0)
+        page.goto(base + "/#/audit", wait_until="domcontentloaded")
+        page.get_by_text("not connected to Supabase Auth", exact=False).wait_for(timeout=5000)
         page.goto(base + "/#/requests", wait_until="domcontentloaded")
         page.get_by_text("Test Researcher", exact=False).wait_for(timeout=5000)
         check("reviewer role shows steward queue, not researcher request form",
