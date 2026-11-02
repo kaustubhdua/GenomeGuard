@@ -254,7 +254,21 @@ Deno.serve(async (request: Request) => {
     const user = await authenticatedUser(request, url, serviceKey);
     if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
     try {
-      return json({ requests: await rpc(url, serviceKey, "gg_list_my_requests", { p_auth_user_id: user.id }) });
+      const rows = await rpc(url, serviceKey, "gg_list_my_requests", { p_auth_user_id: user.id });
+      return json({ requests: (Array.isArray(rows) ? rows : []).map((row: Record<string, unknown>) => ({
+        id: row.id,
+        ts: row.created_at,
+        requester: user.email ?? "Researcher",
+        request: {
+          purpose: row.purpose,
+          disease: row.disease,
+          is_commercial: row.is_commercial,
+          data_level: row.data_level,
+        },
+        outcome: row.outcome ?? "pending",
+        status: row.status,
+        needs_human: row.needs_human ?? true,
+      })) });
     } catch { return error(503, "database_unavailable", "Requests could not be loaded. Try again later."); }
   }
   if (path.endsWith("/requests") && request.method === "POST") {
