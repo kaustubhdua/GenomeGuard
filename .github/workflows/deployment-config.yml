@@ -48,6 +48,10 @@ jobs:
           NODE
       - name: Validate Supabase migration and Edge Function source files exist
         run: |
+          test -s supabase/functions/genomeguard-api/index.ts
+          grep -q 'path.endsWith("/steward/requests")' supabase/functions/genomeguard-api/index.ts
+          grep -q 'gg_list_review_queue' supabase/functions/genomeguard-api/index.ts
+          grep -q 'authenticatedUser(request, url, serviceKey)' supabase/functions/genomeguard-api/index.ts
           test -s supabase/functions/genomeguard-health/index.ts
           test -s supabase/migrations/20261027000000_genomeguard_schema.sql
           test -s supabase/migrations/20261027001000_index_donor_access_request.sql
