@@ -98,7 +98,9 @@ def check_vcf_qc_workflow(browser, base: str) -> None:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(base + "/#/overview")
     page.wait_for_selector("#who option[value='steward']", timeout=30000)
-    page.locator("#menu").click()
+    menu_button = page.locator("#menu")
+    if menu_button.is_visible():
+        menu_button.click()
     page.locator("#who").select_option("steward")
     page.goto(base + "/#/dataset-qc")
     page.wait_for_selector(".qc-upload", timeout=15000)
@@ -113,6 +115,10 @@ def check_vcf_qc_workflow(browser, base: str) -> None:
         file_input = page.get_by_label("Select VCF or gzip-compressed VCF")
         page.get_by_label("Reference assembly").select_option("GRCh38")
         file_input.set_input_files(str(valid_vcf))
+        page.wait_for_function(
+            "() => !document.querySelector('.qc-upload button[type=\"submit\"]')?.disabled",
+            timeout=10000,
+        )
         page.get_by_role("button", name="Run VCF QC").click()
         page.wait_for_selector(".qc-report", timeout=60000)
         report_status = page.locator(".qc-report-head h2").inner_text()
@@ -152,6 +158,10 @@ def check_vcf_qc_workflow(browser, base: str) -> None:
             encoding="utf-8",
         )
         file_input.set_input_files(str(invalid_vcf))
+        page.wait_for_function(
+            "() => !document.querySelector('.qc-upload button[type=\"submit\"]')?.disabled",
+            timeout=10000,
+        )
         page.get_by_role("button", name="Run VCF QC").click()
         page.wait_for_function(
             "() => document.querySelector('.qc-report-head h2')?.textContent.includes('failed')",
@@ -164,6 +174,10 @@ def check_vcf_qc_workflow(browser, base: str) -> None:
         with gzip.open(compressed_vcf, "wt", encoding="utf-8") as stream:
             stream.write(QC_VCF_HEADER + "1\t101\t.\tC\tT\t.\tPASS\t.\tGT\t0/1\t./.\n")
         file_input.set_input_files(str(compressed_vcf))
+        page.wait_for_function(
+            "() => !document.querySelector('.qc-upload button[type=\"submit\"]')?.disabled",
+            timeout=10000,
+        )
         page.get_by_role("button", name="Run VCF QC").click()
         page.wait_for_selector(".qc-report", timeout=60000)
         check("gzip-compressed VCF upload completes",
@@ -174,10 +188,14 @@ def check_vcf_qc_workflow(browser, base: str) -> None:
             stream.write(QC_VCF_HEADER.encode("utf-8"))
             stream.truncate(100 * 1024 * 1024 + 1)
         file_input.set_input_files(str(oversized_vcf))
+        page.wait_for_function(
+            "() => document.querySelector('.qc-upload > [role=\"status\"]')?.textContent.includes('exceeds the 100 MiB upload limit')",
+            timeout=10000,
+        )
         upload_disabled = page.get_by_role("button", name="Run VCF QC").is_disabled()
         check("oversized VCF is rejected before upload",
               upload_disabled and "exceeds the 100 MiB upload limit"
-              in page.locator('.qc-upload [role="status"]').inner_text())
+              in page.locator('.qc-upload > [role="status"]').inner_text())
 
     check("no JavaScript errors during VCF QC workflow", not errors, "; ".join(errors)[:160])
     context.close()
@@ -332,6 +350,20 @@ def main() -> None:
                     check(f"{hsh} axe critical/serious", not blocking,
                           str(blocking)[:260] if blocking else f"{len(axe_violations)} non-blocking finding(s)")
                 r = pg.evaluate(AUDIT_JS)
+                if hsh == "#/sources":
+                    lifecycle_count = pg.locator("article.source-card details.source-lifecycle").count()
+                    first_lifecycle = pg.locator(
+                        "article.source-card details.source-lifecycle summary"
+                    ).first
+                    first_lifecycle.click()
+                    lifecycle_text = pg.locator(
+                        "article.source-card details.source-lifecycle"
+                    ).first.inner_text()
+                    check(f"{hsh} distinguishes source lifecycle stages",
+                          lifecycle_count == 3 and "Downloaded" in lifecycle_text
+                          and "Not started" in lifecycle_text
+                          and "Pending exact-artifact review" in lifecycle_text
+                          and "Not imported" in lifecycle_text)
                 if hsh == "#/requests":
                     history_layout = pg.evaluate("""() => {
                       const card = document.querySelector(".request-history");

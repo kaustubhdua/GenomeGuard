@@ -19,6 +19,9 @@
 - Documented the official-guidance screen for additional genomic resources, including
   why public access or a broad platform policy alone is not enough to list an artifact
   as reusable or import-ready.
+- Expanded browser smoke coverage to the dataset, chromosome, variant, and QC routes,
+  including valid/malformed VCF uploads, gzip input, oversized-file rejection, and
+  aggregate-only JSON and human-readable QC exports.
 - Added a curated public genomic source-discovery endpoint and page for IGSR/1000 Genomes,
   gnomAD aggregate reference data, and ClinVar summary metadata. The index links to official
   source and policy references, marks exact-artifact review as pending, and never claims a
