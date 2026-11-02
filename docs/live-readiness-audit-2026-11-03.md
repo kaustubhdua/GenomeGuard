@@ -1,12 +1,12 @@
 # GenomeGuard live-readiness audit — 3 November 2026
 
-This audit records read-only checks of the public Vercel deployment and the connected Supabase project. No production data was inserted, modified, or deleted during the checks. The only live database change in this work was the additive steward-queue RPC migration; no organizations, users, memberships, consent records, or genomic data were seeded.
+This audit records read-only checks of the public Vercel deployment and the connected Supabase project. No production data was inserted, modified, or deleted during the checks. The live database changes in this work were additive, schema-only migrations for the steward queue, authenticated membership status, importer privileges/append-only controls, aggregate population-reference tables, and an exact-locus lookup index. No production data rows were inserted, updated, or deleted; no organizations, users, memberships, consent records, or genomic data were seeded.
 
 ## Vercel production deployment
 
 Project: `genome-guard` (`prj_Q2uhnuLdzXTo4JoZUXqzhW6YuICT`)  
-Production deployment: `dpl_5yQmTqq4J2WC8vvbdDhChHPMows4`  
-Observed deployed commit: `7ed416ce53fdbbb5269a867f55bcb8dcfbfb6d4e`  
+Production deployment: `dpl_6D31fP2Fjb4xBf5TgZUArhY5q6i7`  
+Observed deployed commit: `cdf906c83f8fff97dd5aecd96d26770436628482`  
 Latest GitHub mainline at the time of this audit: newer than the deployed commit.
 
 | Request | Result | Interpretation |
@@ -52,7 +52,7 @@ Read-only database inspection found:
 
 ### Steward review queue change
 
-The additive migration `genomeguard_steward_review_queue` was applied. The `genomeguard-api` Edge Function was deployed as version 8.
+The additive migrations `genomeguard_steward_review_queue` and `genomeguard_auth_access_status` were applied. The importer-privilege, importer append-only, population-reference schema, and exact-locus index migrations were also applied. The `genomeguard-api` Edge Function is deployed as version 11.
 
 New route:
 
@@ -67,6 +67,14 @@ Live SQL verification confirmed:
 - A probe using an unprovisioned identity failed closed with SQLSTATE `42501` (`active_reviewer_membership_required`).
 
 A successful authenticated queue read and review lifecycle are not verified because there are no active organizations or memberships. The endpoint does not grant access to genomic data.
+### Authenticated membership status and population-reference schema
+
+- `GET /functions/v1/genomeguard-api/me` verifies the Supabase bearer token and calls the service-role-only `gg_get_my_access_status(uuid)` RPC. It returns only the caller's memberships and distinguishes active, ambiguous, pending/inactive, and no-membership states. The RPC is `SECURITY DEFINER`, uses an empty search path, and is executable only by `service_role`.
+- The `genomeguard_importer` and `genomeguard_reference_importer` roles exist as NOLOGIN roles. Live privilege checks confirm scoped INSERT access and no DELETE grants.
+- The two aggregate population-reference tables exist, are RLS-enabled, and contain zero rows. The exact-locus covering index `population_variant_frequency_exact_lookup_idx` is present.
+- The repository's migration prefixes have been aligned to the live migration versions. The missing identity-foundation migration was reconstructed from duplicated DDL and verified live column/index state; it is explicitly marked for human review. No migration-history repair or `supabase db push` was run. See [the migration reconciliation report](supabase-migration-reconciliation-2026-11-03.md).
+- The future-dated reader migration `20261104000000` remains unapplied pending the planned date and corresponding read-path review.
+
 
 ## Supabase advisor findings
 
@@ -74,7 +82,7 @@ The security advisor reported informational `rls_enabled_no_policy` findings for
 
 ## Release blockers
 
-1. Deploy the latest backend code and verify `/health`, `/catalogue/datasets`, and `/catalogue/sources` against the exact current commit.
+1. Deploy the latest static frontend to Vercel after the daily deployment quota resets, then verify the Supabase Auth and public catalogue browser flows against the exact mainline commit. The existing Render `/catalogue/*` endpoints remain stale and are no longer the intended catalogue path.
 2. Configure a least-privilege server-side PostgreSQL connection for the Render backend. The connection string/password is not available through this session and must not be guessed or placed in the browser.
 3. Resolve the hosted consent/provenance mismatch; the 600 count and hash must not be represented as participant-specific consent.
 4. Provision trusted organization memberships through a separately authorized administrative process, then verify authenticated researcher and steward workflows end to end.
