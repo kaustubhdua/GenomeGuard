@@ -5,7 +5,7 @@
 [![Live acceptance](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-acceptance.yml/badge.svg)](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-acceptance.yml)
 [![License: All rights reserved](https://img.shields.io/badge/License-All%20rights%20reserved-red.svg)](LICENSE)
 
-**Live research instance:** https://genomeguard.onrender.com — built from public 1000 Genomes genotypes with a documented dataset-level policy mapping. This is not participant-specific consent, has no institutional identity provider or durable request/audit storage, and is not for clinical use.
+**Legacy live research API:** https://genomeguard.onrender.com — its public health response reports a 1000 Genomes source, 600 donors, and 3,000 variants, but this provenance is operator-declared and has not been independently authenticated. The same response has an unresolved `consent_records_matched=600` discrepancy despite describing dataset-level policy, not participant-specific consent. The current production frontend is behind GitHub mainline. Do not treat these values as verified participant-consent or dataset evidence.
 
 GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Advisory AI components explain evidence for reviewers; deterministic application code remains responsible for access decisions.
 
@@ -32,7 +32,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | Render still hosts the legacy Python research API; the common 1 Supabase project has an isolated GenomeGuard schema and a deployed Edge Function | The static frontend now has Supabase Auth and request/review API paths plus public source/dataset/chromosome catalogues. The full Python policy/risk engine, normalized cohort import, audit parity, and durable production cutover are not complete. No genomic dataset is loaded in Supabase. |
+| Hosting and persistence | Render still hosts the legacy Python research API; the common 1 Supabase project has an isolated GenomeGuard schema and a deployed Edge Function | GitHub mainline includes Supabase Auth, request/review API paths, and public source/dataset/chromosome catalogues. The Vercel production frontend is not yet updated to that commit. The full Python policy/risk engine, normalized cohort import, audit parity, and durable production cutover are not complete. No genomic dataset is loaded in Supabase. |
 
 These boundaries are intentional and should remain visible in the interface and any exported results.
 
