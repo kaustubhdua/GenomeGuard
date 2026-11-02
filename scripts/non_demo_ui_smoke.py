@@ -310,7 +310,7 @@ def main() -> int:
         page.locator("#supabase-email").fill("pending@example.org")
         page.locator("#supabase-password").fill("correct-horse-battery")
         page.locator("#supabase-signin").click()
-        page.get_by_text("no active organization membership", exact=False).wait_for(timeout=5000)
+        page.get_by_text("not yet authorized for research workflows", exact=False).wait_for(timeout=5000)
         page.goto(base + "/#/requests", wait_until="domcontentloaded")
         page.get_by_text("no active organization membership", exact=False).wait_for(timeout=5000)
         check("unprovisioned Supabase user is blocked from request submission",
