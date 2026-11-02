@@ -217,9 +217,14 @@ def main() -> None:
 
         print("\\n0. Keyboard navigation and command palette")
         keyboard_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        keyboard_ctx.add_init_script("localStorage.setItem('gg_who','steward')")
         keyboard_pg = keyboard_ctx.new_page()
         keyboard_pg.goto(base + "/#/overview")
         keyboard_pg.wait_for_selector("#view h1", timeout=15000)
+        keyboard_pg.wait_for_function(
+            "() => document.querySelector('#who')?.value === 'steward'",
+            timeout=30000,
+        )
         keyboard_pg.keyboard.press("Control+k")
         palette_open = keyboard_pg.locator("#cmdk.open").count() == 1
         keyboard_pg.locator("#cmdk-input").fill("Audit log")
