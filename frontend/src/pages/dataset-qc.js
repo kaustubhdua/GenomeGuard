@@ -35,7 +35,7 @@ export async function render() {
     h("div", { class: "tablewrap" }, h("table", {},
       h("thead", {}, h("tr", {}, h("th", {}, "Chromosome"), h("th", {}, "Variants"))),
       h("tbody", {}, Object.entries(d.chromosome_variant_counts || {}).sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric:true})).map(([chrom,count]) =>
-        h("tr", {}, h("th", {}, chrom), h("td", {}, fmt(count))))))));
+        h("tr", {}, h("th", {}, chrom), h("td", {}, fmt(count)))))))));
   root.append(notice("info", d.missingness_note || "Missingness provenance unavailable."),
     h("p", { class: "fine" }, "Source-file missingness, source citation/reuse terms, file size, import timestamp and independent checksum verification are not exposed by the active service. Do not infer that unavailable checks passed."));
   return root;

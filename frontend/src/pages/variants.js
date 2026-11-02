@@ -58,7 +58,7 @@ export async function render() {
             h("code", { class: "popfreq-checksum" }, "SHA256 " + (m.file_sha256 || "Not recorded"))),
           h("td", {}, m.population), h("td", { class: "num" }, fmt(m.allele_count)),
           h("td", { class: "num" }, fmt(m.allele_number)), h("td", { class: "num" }, fmtAf(m.allele_frequency)),
-          h("td", { class: "num" }, fmt(m.homozygote_count))))));
+          h("td", { class: "num" }, fmt(m.homozygote_count)))))));
     return h("div", { class: "population-frequency-results" },
       result.truncated ? notice("warn", "Showing the first 1,000 rows. Review the source manifest for additional loaded references.") : null,
       notice("info", "Aggregate reference evidence only. These frequencies are not GenomeGuard participant calls, cohort frequencies, or a governance release."),
