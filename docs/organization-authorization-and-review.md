@@ -40,7 +40,7 @@ Participant consent withdrawal must be wired into the full authorization decisio
 
 ## Provisioning and deployment
 
-Membership provisioning must be performed through a separately authorized administrative procedure; there is no public endpoint to create organizations, promote roles, or create consent evidence. The migration is not applied to the live project until its CI checks and review pass. Do not mark production readiness true until the deployed Edge Function, database grants, live negative tests, consent lifecycle and recovery controls are independently verified.
+Membership provisioning must be performed through a separately authorized administrative procedure; there is no public endpoint to create organizations, promote roles, or create consent evidence. The organization, consent, review-history, and steward-queue migrations are applied to the live shared Supabase project. No organizations, memberships, or consent records have been provisioned. Do not mark production readiness true until the deployed Edge Function, database grants, live positive/negative tests, consent lifecycle and recovery controls are independently verified.
 
 
 ## Consent withdrawal API
@@ -53,7 +53,7 @@ Request JSON:
 { "reason": "Withdrawal recorded by the authorized consent steward." }
 ```
 
-The route requires a valid Supabase bearer token and an active reviewer/organization-admin membership for the organization owning the consent record. The database marks the record withdrawn and appends a governance event. Repeated withdrawal is idempotent. This records a governance state change; the data-release policy must still check consent status on every relevant request before any participant-specific release can be enabled.
+The route requires a valid Supabase bearer token and an active `consent_steward` membership for the organization owning the consent record. Reviewer and organization-admin roles do not implicitly grant consent-withdrawal authority. The database marks the record withdrawn and appends a governance event. Repeated withdrawal is idempotent. This records a governance state change; the data-release policy must still check consent status on every relevant request before any participant-specific release can be enabled.
 
 
 ## Steward review queue API
