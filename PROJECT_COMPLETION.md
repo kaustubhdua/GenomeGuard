@@ -77,7 +77,7 @@ deployment were applied; no production genomic or participant data was inserted.
   `README.md`, and `CHANGELOG.md`.
 - Earlier aggregate-frequency implementation: commit `2f7a30c`
   (`Connect aggregate reference frequency lookup`).
-- `supabase/migrations/20261103010000_genomeguard_population_reference_lookup_index.sql`
+- `supabase/migrations/20261102213956_genomeguard_population_reference_lookup_index.sql`
 - Earlier related validation also changed `scripts/ui_smoke.py` and
   `docs/gnomad-population-reference.md`.
 
@@ -145,7 +145,7 @@ deployment were applied; no production genomic or participant data was inserted.
 - The latest Vercel production deployment observed is `dpl_5yQmTqq4J2WC8vvbdDhChHPMows4`, serving commit `7ed416ce53fdbbb5269a867f55bcb8dcfbfb6d4e`. It is behind the current GitHub mainline.
 - The public frontend returned HTTP 200. The proxied `/health` returned HTTP 200 but still reports `storage_backend=sqlite` and `consent_records_matched=600` even though the source policy is dataset-level and not participant-specific. Treat the count as a deployment/data-provenance discrepancy, not participant consent.
 - `/catalogue/datasets` and `/catalogue/sources` returned HTTP 404. `/health/ready` returned HTTP 503, which is the correct fail-closed state while production gates remain incomplete.
-- Supabase project `common 1` is healthy. The GenomeGuard schema has 23 tables, but normalized dataset manifests/samples/variants/genotype calls, organizations, memberships, participant consent, requests, decisions and API events are all empty. The Python Render backend is not yet connected to this PostgreSQL database.
+- Supabase project `common 1` is healthy. The GenomeGuard schema has 25 tables, but normalized dataset manifests/samples/variants/genotype calls, organizations, memberships, participant consent, requests, decisions and API events are all empty. The Python Render backend is not yet connected to this PostgreSQL database.
 - The Supabase security advisor reports informational RLS-enabled/no-policy findings for private GenomeGuard tables and unrelated shared-project tables; direct schema usage and table grants for browser roles remain denied. The Auth advisor also reports leaked-password protection disabled. These findings require deliberate review; do not add broad policies or change shared-project tables to silence the advisor.
 - See [the 3 November live-readiness audit](docs/live-readiness-audit-2026-11-03.md) for the exact checks and boundaries.
 
