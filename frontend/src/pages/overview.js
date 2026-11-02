@@ -114,7 +114,7 @@ export async function render() {
       h("p", {}, "A unified workspace for genomic dataset provenance, privacy-aware access decisions and accountable research operations."),
       h("div", { class: "gg-command-actions" },
         h("a", { class: "gg-primary-action", href: "#/requests" }, isSteward() ? "Open review queue" : "Create access request"),
-        tourAvailable() ? h("button", { class: "gg-secondary-action", "aria-label": "Explore platform — Guided walkthrough", onclick: startTour }, "Explore platform") : null)),
+        tourAvailable() && !state.authToken ? h("button", { class: "gg-secondary-action", "aria-label": "Explore platform — Guided walkthrough", onclick: startTour }, "Explore platform") : null)),
     h("div", { class: "gg-command-art" }, helixGraphic(),
       h("div", { class: "gg-art-label" }, h("span", {}, "REFERENCE BUILD"),
         h("strong", {}, pv.genotypes_label || "Public research cohort")))));
