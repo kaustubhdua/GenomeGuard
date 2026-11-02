@@ -32,9 +32,10 @@ def test_host_liveness_probe_does_not_initialize_service(monkeypatch):
 
     monkeypatch.delenv("RENDER", raising=False)
     monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
-    monkeypatch.setattr(api_module, "bootstrap",
-                        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError(
-                            "liveness must not bootstrap the database or cohort")))
+    def fail_bootstrap(*args, **kwargs):
+        raise AssertionError("liveness must not bootstrap the database or cohort")
+
+    monkeypatch.setattr(api_module, "bootstrap", fail_bootstrap)
     client = TestClient(api_module.create_app())
     response = client.get("/health/live")
     assert response.status_code == 200
@@ -58,6 +59,26 @@ def test_health_reports_render_deployment_commit_without_exposing_other_environm
     body = response.json()
     assert body["deployment"] == {"platform": "render", "git_commit": "a" * 40}
     assert "must-not-be-returned" not in response.text
+
+
+def test_host_liveness_reports_render_commit_without_bootstrapping(monkeypatch):
+    from starlette.testclient import TestClient
+
+    import app.api as api_module
+
+    commit = "b" * 40
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.setenv("RENDER_GIT_COMMIT", commit)
+    def fail_bootstrap(*args, **kwargs):
+        raise AssertionError("liveness must not bootstrap the database or cohort")
+
+    monkeypatch.setattr(api_module, "bootstrap", fail_bootstrap)
+    response = TestClient(api_module.create_app()).get("/health/live")
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "deployment": {"platform": "render", "git_commit": commit},
+    }
 
 
 def test_health_omits_invalid_render_commit(monkeypatch):

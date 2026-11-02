@@ -58,12 +58,21 @@ def main() -> int:
     health_status, health = 0, {}
     current_policy_metadata = False
     current_deployment = False
+    live_status, live = 0, {}
     for attempt in range(max(1, args.retries)):
         health_status, health = call(base, "/health", timeout=args.timeout)
+        live_status, live = call(base, "/health/live", timeout=args.timeout)
         provenance = health.get("provenance") or {}
         deployment = health.get("deployment") or {}
         deployed_commit = str(deployment.get("git_commit") or "").lower()
-        current_deployment = expected_commit is None or deployed_commit == expected_commit
+        live_deployment = live.get("deployment") or {}
+        live_commit = str(live_deployment.get("git_commit") or "").lower()
+        current_deployment = expected_commit is None or (
+            deployed_commit == expected_commit
+            and live_status == 200
+            and live.get("status") == "ok"
+            and live_commit == expected_commit
+        )
         current_policy_metadata = (
             health_status == 200
             and health.get("status") == "ok"
@@ -79,7 +88,9 @@ def main() -> int:
             break
         if attempt + 1 < args.retries:
             reason = ("expected commit " + expected_commit + ", got "
-                      + (deployed_commit or "unknown") if not current_deployment else
+                      + (deployed_commit or "unknown") + " on /health and "
+                      + (live_commit or "unknown") + " on /health/live"
+                      if not current_deployment else
                       "current dataset-policy provenance is unavailable")
             print(f"[WAIT] {reason} ({attempt + 1}/{args.retries})")
             time.sleep(args.retry_delay)
@@ -98,6 +109,11 @@ def main() -> int:
     check("deployed Render commit matches the requested revision",
           current_deployment,
           str((health.get("deployment") or {}).get("git_commit") or "commit not reported"))
+    live_deployment = live.get("deployment") or {}
+    check("cheap liveness endpoint reports the running revision",
+          live_status == 200 and live.get("status") == "ok"
+          and (expected_commit is None or live_deployment.get("git_commit") == expected_commit),
+          f"HTTP {live_status}: {live}")
 
     provenance = health.get("provenance") or {}
     check("demo mode is disabled", health.get("demo_mode") is False)
@@ -122,6 +138,38 @@ def main() -> int:
     check("source genotype file is hashed", len(str(provenance.get("source_vcf_sha256", ""))) == 64)
     check("real cohort has usable variants",
           int(health.get("variants") or 0) > 0 and int(health.get("donors") or 0) > 0)
+
+    status, datasets = call(base, "/catalogue/datasets", timeout=args.timeout)
+    check("dataset catalogue endpoint responds with a dataset list",
+          status == 200 and isinstance(datasets.get("datasets"), list),
+          f"HTTP {status}, dataset_count={datasets.get('dataset_count')}")
+    status, sources = call(base, "/catalogue/sources", timeout=args.timeout)
+    check("source discovery endpoint responds with explicit discovery status",
+          status == 200 and sources.get("discovery_only") is True
+          and isinstance(sources.get("sources"), list),
+          f"HTTP {status}, source_count={sources.get('source_count')}")
+    status, chromosomes = call(base, "/catalogue/chromosomes?assembly=GRCh37",
+                               timeout=args.timeout)
+    check("chromosome catalogue returns assembly-scoped reference metadata",
+          status == 200 and chromosomes.get("reference_assembly") == "GRCh37"
+          and isinstance(chromosomes.get("chromosomes"), list),
+          f"HTTP {status}")
+    status, variants = call(base, "/variants/search?q=v1", timeout=args.timeout)
+    check("variant search returns metadata-only lookup results",
+          status == 200 and variants.get("query") == "v1"
+          and isinstance(variants.get("matches"), list)
+          and variants.get("annotation_available") is False,
+          f"HTTP {status}")
+    status, population = call(
+        base,
+        "/variants/population-frequency?chromosome=22&position=1"
+        "&reference_allele=A&alternate_allele=G&assembly=GRCh37",
+        timeout=args.timeout,
+    )
+    check("population-reference endpoint returns an explicit availability state",
+          status == 200 and population.get("status") in {"available", "empty", "unavailable"}
+          and isinstance(population.get("matches"), list),
+          f"HTTP {status}, state={population.get('status')}")
 
     status, ready = call(base, "/health/ready", timeout=args.timeout)
     check("production readiness fails closed while infrastructure gaps remain",
