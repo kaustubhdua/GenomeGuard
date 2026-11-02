@@ -421,6 +421,20 @@ svg.chart text { paint-order: stroke; stroke: var(--pane); stroke-width: 4px; st
 .dataset-result-count { color: var(--ink-3); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dataset-table { min-width: 880px; }
 .dataset-table th { white-space: nowrap; }
+.source-grid { align-items: stretch; }
+.source-card { display: flex; flex-direction: column; gap: 12px; }
+.source-card h2, .source-card p { margin: 0; }
+.source-card-top, .source-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.source-card-top { justify-content: space-between; }
+.source-card-top .tag { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.source-status { color: var(--ink-2); font-size: 12px; font-weight: 650; }
+.source-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 10px; margin: 0; }
+.source-facts > div { min-width: 0; }
+.source-facts dt { color: var(--ink-3); font-size: 11px; font-weight: 650; }
+.source-facts dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.source-review-note { padding-left: 12px; border-left: 2px solid var(--warn); }
+.source-links { margin-top: auto; padding-top: 6px; }
+.source-link { min-height: 24px; }
 .dataset-name { display: block; margin-bottom: 2px; color: var(--ink); font-weight: 600; }
 .dataset-source-link { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 400; }
 .dataset-assembly { display: inline-flex; padding: 1px 7px; border: 1px solid var(--control); border-radius: 3px; font: 500 12.5px var(--mono); white-space: nowrap; }

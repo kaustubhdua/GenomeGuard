@@ -304,16 +304,10 @@ def test_catalogue_endpoints():
     data = resp.json()
     assert "datasets" in data
     assert "dataset_count" in data
-    assert data["dataset_count"] >= 1
-    ds = data["datasets"][0]
-    assert ds["dataset_key"] == svc.dataset_id
-    assert ds["sample_count"] == svc.ds.n_donors
-    assert ds["variant_count"] == svc.ds.n_variants
-    # Synthetic fixtures have no source checksum or assembly metadata.
-    # The API must not invent a file hash or silently label coordinates GRCh38.
-    assert ds["file_sha256"] is None
-    assert ds["source_checksum_recorded"] is False
-    assert ds["reference_assembly"] == "Not recorded"
+    # Synthetic fixtures are not source-reviewed imports and must not be presented
+    # as verified research datasets or measured imported individuals.
+    assert data["dataset_count"] == 0
+    assert data["datasets"] == []
 
     c_resp = c.get("/catalogue/chromosomes?assembly=GRCh38")
     assert c_resp.status_code == 200
@@ -337,6 +331,38 @@ def test_catalogue_endpoints():
 
     bad = c.get("/catalogue/chromosomes?assembly=invalid")
     assert bad.status_code == 400
+
+
+def test_public_source_catalogue_is_discovery_only_and_keeps_review_boundaries():
+    _, c = make_client()
+    response = c.get("/catalogue/sources")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["discovery_only"] is True
+    assert data["source_count"] == len(data["sources"]) == 3
+    assert "do not establish reuse authorization" in data["provenance_note"]
+
+    sources = {source["source_id"]: source for source in data["sources"]}
+    assert set(sources) == {
+        "igsr-1000-genomes-phase-3",
+        "gnomad-v4-1-grch38",
+        "ncbi-clinvar-variant-summary",
+    }
+    for source in sources.values():
+        assert source["source_url"].startswith("https://")
+        assert source["terms_url"].startswith("https://")
+        assert source["terms_review_status"] == "pending_exact_artifact_review"
+        assert source["import_status"] == "not_imported_by_catalogue"
+
+    assert "sample-level" in sources["igsr-1000-genomes-phase-3"]["data_type"].casefold()
+    assert "Aggregate" in sources["gnomad-v4-1-grch38"]["data_type"]
+    assert "participant genotype cohort" in sources["ncbi-clinvar-variant-summary"]["summary"]
+    assert "GET /catalogue/sources" in {
+        f"{endpoint['method']} {endpoint['path']}"
+        for endpoint in c.get("/openapi.json").json()["endpoints"]
+    }
+
+
 def test_preview_is_non_consuming_and_returns_only_risk_utility_summary():
     svc, c = make_client()
     before_budget = svc.budget(svc.authenticate(RESEARCHER)["id"])

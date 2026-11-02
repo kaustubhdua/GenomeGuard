@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a curated public genomic source-discovery endpoint and page for IGSR/1000 Genomes,
+  gnomAD aggregate reference data, and ClinVar summary metadata. The index links to official
+  source and policy references, marks exact-artifact review as pending, and never claims a
+  source is approved, downloaded, or imported. Synthetic demo cohorts are no longer listed
+  as verified imported datasets.
 - Added a database-free local VCF QC command, local JSON report preview, and steward-only
   temporary server-side VCF QC upload. The upload is bounded, does not persist or import the
   source file, and runs only on the configured GenomeGuard server. Reports include parser,

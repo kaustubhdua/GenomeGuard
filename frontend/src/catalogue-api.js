@@ -3,7 +3,7 @@
 // Now calls the same Python backend that serves all other pages — zero external dependencies.
 
 export async function loadPublicCatalogue(resource, options = {}) {
-  if (!["datasets", "chromosomes"].includes(resource)) {
+  if (!["datasets", "chromosomes", "sources"].includes(resource)) {
     throw new TypeError("Unsupported public catalogue resource");
   }
   const assembly = resource === "chromosomes" && ["GRCh37", "GRCh38"].includes(options.assembly)

@@ -73,6 +73,8 @@ For the dataset source review, provenance ledger, and safe import acceptance cri
 
 For the normalized VCF importer, provenance checks, local QC CLI, steward-only temporary VCF upload, and report privacy boundaries, see [Real VCF import pipeline](docs/real-vcf-import.md). Local JSON preview does not upload the report; the VCF upload sends genomic bytes to the configured GenomeGuard server and must only be used with a trusted deployment. Neither QC path approves imports. For server-verified organization membership, human review, and consent-ledger limitations, see [Organization authorization and review](docs/organization-authorization-and-review.md).
 
+For the curated public-source discovery index and its release-specific reuse-review boundaries, see [Public genomic source discovery](docs/public-genomic-source-discovery.md). Listing a source does not approve reuse, import data, or establish participant-specific consent.
+
 ## Architecture
 
 The service applies a deterministic request pipeline: request validation, policy checks, risk assessment, output transformation, anomaly monitoring, decision handling, and audit recording. Advisory agents receive sanitized summaries rather than raw genotypes and do not have authority to approve, deny, freeze, or release data.

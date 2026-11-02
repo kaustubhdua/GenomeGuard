@@ -19,7 +19,8 @@ implementation.
 | Approved aggregate-frequency lookup | COMPLETE AND VERIFIED | API and PostgreSQL query adapter enforce exact allele and assembly matching, `approved_public_research` review, and `loaded` status. Local API/storage tests pass; the browser renders provenance and truthful empty/unavailable states. No live reference import or database connection was verified. |
 | Local VCF QC report | IMPLEMENTED AND LOCALLY VERIFIED | A database-free CLI streams supported VCF/VCF.GZ files and reports parser/checksum checks, metadata counts, genotype missingness, allele-frequency, QUAL, and optional GQ metrics without sample identifiers. The parser validates declared INFO/FORMAT/FILTER fields and supported cardinalities. The report cannot establish source terms or import eligibility, and it does not compare REF alleles to a reference genome. |
 | Steward VCF QC upload/report UI | IMPLEMENTED AND BROWSER-VERIFIED WITH SYNTHETIC DATA | The steward-only endpoint streams a capped raw VCF to the configured backend for temporary QC processing; it does not persist or import the source file. Browser tests exercised a valid checksum-verified upload, a rejected undeclared INFO field, sample-ID omission, and JSON/text export payloads. This is not a browser-only VCF workflow; only use a trusted backend deployment. The browser harness did not confirm the operating-system download event. |
-| Public-source discovery catalogue and expanded per-dataset exploration/comparison | NOT IMPLEMENTED | Existing catalogue endpoints describe local cohort data; they are not the requested discovery catalogue for external genomic resources, nor a persistent imported-dataset explorer/comparison system. |
+| Public-source discovery catalogue | IMPLEMENTED, NOT APPROVAL- OR IMPORT-VERIFIED | `/catalogue/sources` and the Source discovery page list IGSR/1000 Genomes, gnomAD aggregate data, and ClinVar summary metadata with official source/policy links. Exact-artifact review and import remain pending; no source is claimed as licensed for a particular project use, approved, downloaded, or loaded by this index. |
+| Expanded per-dataset exploration/comparison | NOT IMPLEMENTED | The imported-dataset catalogue remains a verified-source listing and is not a persistent dataset explorer/comparison system. |
 | Request evaluation and human review | IMPLEMENTED, NOT VERIFIED | Local backend tests exercise request and review behavior. Institutional identity, organization isolation, and production persistence remain unverified. |
 | VCF ingestion and provenance checks | IMPLEMENTED, NOT VERIFIED | Importer and automated tests exist. No approved public artifact was imported or reconciled in a live database in this work. |
 | Participant-specific consent enforcement | NOT IMPLEMENTED | Current documented operation relies on simulated consent or dataset-level policy mapping; it is not evidence of participant-specific consent for hosted public data. |
@@ -51,6 +52,11 @@ implementation.
   explicit assembly selection, optional expected checksum, cancellation support, and
   aggregate QC reports. Added file-free allowlisted JSON/text exports; QC success remains
   separate from source review and import eligibility.
+- Added a read-only public source-discovery endpoint and lazy-loaded UI page for three
+  official public references. The page records source-specific caveats and leaves
+  exact-artifact reuse review and import status pending.
+- Restricted the verified imported-dataset catalogue to source-backed real VCF cohorts;
+  synthetic demo fixtures are no longer reported as imported research datasets.
 - Updated the API and aggregate-reference documentation.
 
 ## Relevant files and commits
@@ -58,6 +64,8 @@ implementation.
 - VCF QC: `backend/app/api.py`, `backend/app/data/vcf_import.py`,
   `backend/app/data/vcf_qc.py`, `backend/tests/test_api.py`,
   `backend/tests/test_vcf_import.py`, and `backend/tests/test_vcf_qc.py`.
+- Public-source discovery: `backend/app/data/public_sources.py`,
+  `frontend/src/pages/sources.js`, and `docs/public-genomic-source-discovery.md`.
 - UI/API: `frontend/src/api.js`, `frontend/src/pages/dataset-qc.js`, and
   `frontend/src/gg.css`.
 - Documentation: `docs/real-vcf-import.md`, `docs/api.md`, `docs/architecture.md`,
@@ -70,10 +78,14 @@ implementation.
 
 ## Validation record
 
-- Full `python -m pytest -q` after schema validation: **342 passed, 6 skipped**
-  (Python 3.14.6).
-- `python -m compileall -q backend scripts`, `node --check` for all frontend
-  JavaScript files, and `git diff --check` passed.
+- Full `python -m pytest -q` after source discovery and catalogue-boundary changes:
+  **343 passed, 6 skipped** (Python 3.14.6).
+- `python -m compileall -q backend`, `node --check` for all 20 frontend JavaScript
+  files, and `git diff --check` passed.
+- Browser verification on a local synthetic-only instance: all three public source
+  cards rendered, external links used `noopener`, and the imported-dataset link showed
+  the honest empty verified state rather than counting synthetic demo records. At
+  320, 375, and 390 px there was no horizontal overflow or browser page error.
 - Browser verification on a local synthetic-only instance: a valid GRCh38 upload with
   an independently calculated SHA-256 returned HTTP 200 and seven passing checks; a
   synthetic undeclared INFO field returned a visible failed report. Both reports

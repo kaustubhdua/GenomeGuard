@@ -24,6 +24,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies", "#/audit",
+         "#/sources",
          "#/donor", "#/redteam", "#/federated"]
 
 AUDIT_JS = r"""

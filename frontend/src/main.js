@@ -5,6 +5,7 @@ import { startTour, tourAvailable } from "./tour.js";
 const ROUTES = [
   { re: /^#\/chromosomes$/, load: () => import("./pages/chromosomes.js"), nav: "chromosomes", title: "Chromosomes" },
   { re: /^#\/datasets$/, load: () => import("./pages/datasets.js"), nav: "datasets", title: "Datasets" },
+  { re: /^#\/sources$/, load: () => import("./pages/sources.js"), nav: "sources", title: "Source discovery" },
   { re: /^#\/variants(?:\?.*)?$/, load: () => import("./pages/variants.js"), nav: "variants", title: "Variant inspector" },
   { re: /^#\/dataset-qc$/, load: () => import("./pages/dataset-qc.js"), nav: "dataset-qc", title: "Dataset QC" },
   { re: /^#\/overview$/, load: () => import("./pages/overview.js"), nav: "overview", title: "Overview" },
@@ -24,7 +25,7 @@ function prefetchRoute(hash) {
   hit.load().catch(() => { hit.prefetched = false; }); // a failed prefetch must remain retryable
 }
 const NAV = [
-  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["variants", "Variant inspector", "#/variants"], ["datasets", "Datasets", "#/datasets"]]],
+  [null, [["overview", "Overview", "#/overview"], ["chromosomes", "Chromosomes", "#/chromosomes"], ["variants", "Variant inspector", "#/variants"], ["datasets", "Datasets", "#/datasets"], ["sources", "Source discovery", "#/sources"]]],
   ["Researcher", [["requests", "Requests", "#/requests"]]],
   ["Steward", [["dataset-qc", "Dataset QC", "#/dataset-qc", true], ["family", "Family exposure", "#/family/1", true], ["anomalies", "Anomalies", "#/anomalies", true], ["audit", "Audit log", "#/audit", true]]],
   ["Patient", [["donor", "My data", "#/donor"]]],

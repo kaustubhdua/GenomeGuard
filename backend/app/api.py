@@ -705,6 +705,23 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     # These replace the Supabase Edge Function calls that previously required
     # an external publishable key. All data comes from the local backend.
 
+    @route("GET", "/catalogue/sources", "External public genomic sources and review status", "public")
+    async def catalogue_sources(request):
+        """List source references without approving, importing, or loading datasets."""
+        from app.data.public_sources import public_source_catalogue
+
+        sources = public_source_catalogue()
+        return _j({
+            "sources": sources,
+            "source_count": len(sources),
+            "discovery_only": True,
+            "provenance_note": (
+                "Public availability and this catalogue entry do not establish reuse "
+                "authorization, participant-specific consent, or import approval. "
+                "Review the exact artifact and source terms before use."
+            ),
+        })
+
     @route("GET", "/catalogue/datasets", "Local dataset catalogue with source-backed provenance", "public")
     async def catalogue_datasets(request):
         """Describe the in-memory cohort without inventing source provenance."""
@@ -712,7 +729,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         provenance = getattr(svc, "provenance", {})
         genotype_kind = provenance.get("genotypes", "unknown")
         datasets: list[dict] = []
-        if genotype_kind != "unknown":
+        if genotype_kind == "real_vcf":
             import re
             source_sha256 = provenance.get("source_vcf_sha256")
             checksum_recorded = isinstance(source_sha256, str) and bool(

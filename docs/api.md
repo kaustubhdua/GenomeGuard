@@ -49,8 +49,14 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/federated/demo` | Simulated hospitals with secure aggregation (synthetic) | public |
 | GET | `/catalogue/datasets` | Local dataset catalogue (replaces Supabase Edge Function) | public |
 | GET | `/catalogue/chromosomes` | Local chromosome reference (replaces Supabase Edge Function) | public |
+| GET | `/catalogue/sources` | Curated public source references with explicit review/import status | public |
 | GET | `/openapi.json` | Machine-readable endpoint list | public |
 | GET | `/docs` | Human-readable endpoint list | public |
+
+`GET /catalogue/sources` is a static discovery index. It returns official source and
+policy links plus explicit pending-review/not-imported statuses; it does not fetch or
+approve artifacts. `GET /catalogue/datasets` reports only source-backed real VCF
+imports. Synthetic demo cohorts are not presented as verified imported datasets.
 
 ## Aggregate population-reference lookup
 
