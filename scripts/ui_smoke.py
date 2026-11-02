@@ -98,6 +98,7 @@ def check_vcf_qc_workflow(browser, base: str) -> None:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(base + "/#/overview")
     page.wait_for_selector("#who option[value='steward']", timeout=30000)
+    page.locator("#menu").click()
     page.locator("#who").select_option("steward")
     page.goto(base + "/#/dataset-qc")
     page.wait_for_selector(".qc-upload", timeout=15000)
