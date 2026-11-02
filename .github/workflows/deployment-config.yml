@@ -70,8 +70,6 @@ jobs:
           test -s supabase/migrations/20261029084043_genomeguard_organization_consent_workflows.sql
           test -s supabase/migrations/20261029084053_genomeguard_normalized_genotype_storage.sql
           test -s supabase/migrations/20261029084102_genomeguard_request_details.sql
-          test -s supabase/migrations/20261030200000_genomeguard_importer_privileges.sql
-          test -s supabase/migrations/20261102000000_genomeguard_importer_append_only.sql
           grep -q 'SET ROLE genomeguard_importer' backend/app/data/vcf_import.py
           ! grep -q 'INSERT INTO genomeguard.variant_dataset_manifest' backend/app/data/vcf_import.py
           test -s supabase/migrations/20261029090645_genomeguard_audit_append_only_and_consent_indexes.sql
@@ -86,13 +84,15 @@ jobs:
           test -s supabase/migrations/20261029132531_genomeguard_review_history_fk_indexes.sql
           test -s supabase/migrations/20261029132749_genomeguard_assembly_scoped_coverage.sql
           test -s supabase/migrations/20261029132941_genomeguard_assembly_aware_reference_catalogue.sql
-          test -s supabase/migrations/20261103000000_genomeguard_population_reference.sql
           test -s supabase/migrations/20261102212149_genomeguard_steward_review_queue.sql
           test -s supabase/migrations/20261102212425_genomeguard_auth_access_status.sql
           test -s supabase/migrations/20261029045250_genomeguard_supabase_api_identity_foundation.sql
           test -s supabase/migrations/20261102213657_genomeguard_importer_privileges.sql
           test -s supabase/migrations/20261102213711_genomeguard_importer_append_only.sql
           test -s supabase/migrations/20261102213726_genomeguard_population_reference.sql
+          test -s supabase/migrations/20261102213956_genomeguard_population_reference_lookup_index.sql
+          test -s supabase/migrations/20261029061839_genomeguard_chromosome_reference_catalog.sql
+          test -s supabase/migrations/20261029061914_genomeguard_chromosome_variant_coverage.sql
           test -s supabase/migrations/20261104000000_genomeguard_population_reference_reader.sql
 
   postgres-migrations:
@@ -203,6 +203,9 @@ jobs:
           SQL
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_schema_privilege('anon', 'genomeguard', 'USAGE') AND NOT has_schema_privilege('authenticated', 'genomeguard', 'USAGE') AND NOT has_table_privilege('anon', 'genomeguard.donors', 'SELECT') AND NOT has_table_privilege('authenticated', 'genomeguard.donors', 'SELECT') AND NOT has_table_privilege('service_role', 'genomeguard.donors', 'SELECT')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE has_table_privilege('genomeguard_importer', 'genomeguard.dataset_samples', 'INSERT') AND has_table_privilege('genomeguard_importer', 'genomeguard.dataset_variants', 'INSERT') AND has_table_privilege('genomeguard_importer', 'genomeguard.dataset_genotype_calls', 'INSERT') AND NOT has_table_privilege('genomeguard_importer', 'genomeguard.dataset_samples', 'DELETE') AND NOT has_table_privilege('genomeguard_importer', 'genomeguard.dataset_variants', 'DELETE') AND NOT has_table_privilege('genomeguard_importer', 'genomeguard.dataset_genotype_calls', 'DELETE')" | grep -q "(1 row)"
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE has_table_privilege('genomeguard_reference_importer','genomeguard.population_variant_frequency','INSERT') AND NOT has_table_privilege('genomeguard_reference_importer','genomeguard.population_variant_frequency','DELETE') AND NOT has_table_privilege('genomeguard_reference_importer','genomeguard.population_variant_frequency','UPDATE') AND NOT has_table_privilege('anon','genomeguard.population_reference_manifest','SELECT') AND NOT has_table_privilege('authenticated','genomeguard.population_variant_frequency','SELECT')" | grep -q "(1 row)"
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 FROM pg_indexes WHERE schemaname='genomeguard' AND indexname='population_variant_frequency_exact_lookup_idx'" | grep -q "(1 row)"
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE (SELECT relrowsecurity FROM pg_class WHERE oid='genomeguard.population_reference_manifest'::regclass) AND (SELECT relrowsecurity FROM pg_class WHERE oid='genomeguard.population_variant_frequency'::regclass)" | grep -q "(1 row)"
           # Request history must disappear after the authoritative organization membership is revoked.
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL'
           DO $test$
