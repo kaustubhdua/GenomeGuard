@@ -50,3 +50,13 @@ GenomeGuard remains a research prototype. Before production or controlled-data u
 
 Until then, do not upload private participant data or use this service for clinical
 decisions. A public dataset policy mapping is not participant-specific consent.
+
+## Recheck after automatic deployment was enabled
+
+After `render.yaml` enabled automatic deployment from `main`, the public service was
+probed again with the repository at `c6337ed`. `GET /health` still returned HTTP 200
+without a `git_commit` value; `/health/live` returned 404; `/health/ready` returned
+503; and `/catalogue/datasets` and `/catalogue/sources` both returned 404. Automatic
+deployment configuration is not evidence that the current application is running.
+The deployed revision and the reason for the route mismatch remain unknown without
+Render deployment or log access.
