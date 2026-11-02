@@ -7,7 +7,7 @@ import { SUPABASE_EDGE_API, SUPABASE_PUBLISHABLE_KEY } from "./supabase-config.j
 // Defer any remembered identity until the server confirms demo mode.
 export const state = { who: "", adminKey: "", demo: null, health: null, readiness: null, bootError: "", me: null, donors: [], donor: null, authToken: "", authRefreshToken: "", authUser: null, authAccess: null, authRole: "" };
 
-export const isSteward = () => state.who === "steward" || ["reviewer", "organization_admin", "consent_steward"].includes(state.authRole);
+export const isSteward = () => state.who === "steward" || ["reviewer", "organization_admin"].includes(state.authRole);
 
 export function setWho(v) {
   state.who = v;
