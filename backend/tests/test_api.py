@@ -386,7 +386,7 @@ def test_steward_vcf_qc_upload_is_bounded_temporary_and_omits_sample_ids(monkeyp
         "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tPRIVATE_SAMPLE\n"
         "1\t100\t.\tA\tG\t42\tPASS\t.\tGT\t0/1\n"
-    ).encode()
+    )
     headers = {
         **ADMIN,
         "Content-Type": "application/octet-stream",
