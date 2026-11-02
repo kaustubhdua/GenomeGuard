@@ -1,6 +1,6 @@
 # Supabase-only backend migration
 
-Status checked: 2026-10-29. This is an implementation plan and status ledger, not a claim that the migration is complete.
+Status checked: 2026-11-03. This is an implementation plan and status ledger, not a claim that the migration is complete.
 
 ## Target
 
@@ -42,17 +42,18 @@ Port in small, testable slices; the route list below is from `backend/app/api.py
 
 ## Verified endpoint parity snapshot (2026-10-29)
 
-This is an explicit cutover blocker list. It describes the checked-in Edge Function implementation, not a promise that an endpoint is production-ready. The public catalogue routes are the only browser pages intentionally switched to Supabase in the current integration branch.
+This is an explicit cutover blocker list. It describes the checked-in Edge Function implementation, not a promise that an endpoint is production-ready. The public catalogue pages and the authenticated request/review workflow are intentionally switched to Supabase in the current integration branch; this is still a partial migration.
 
 | API contract group | Edge Function state | Release consequence |
 |---|---|---|
 | `GET /health` | Implemented as a liveness/status-store check | Does not prove readiness |
 | `GET /health/ready` | Implemented and deliberately returns HTTP 503 / not-ready | Keep release blocked |
-| `GET /datasets`, `GET /chromosomes` | Implemented as public, read-only catalogues using verified manifest/reference RPCs | Can display empty/unavailable truthfully; no dataset is currently loaded |
+| `GET /datasets`, `GET /chromosomes`, `GET /sources` | Implemented as public, read-only Supabase Edge catalogues | Can display empty/unavailable truthfully; no approved dataset is currently loaded and source discovery is informational only |
 | `POST /requests`, `GET /requests`, `GET /requests/{id}` | Implemented with verified Supabase Auth identity and organization-scoped RPCs | Request creation is queued for review; it is not a completed policy-evaluation or data-release workflow |
 | `POST /requests/{id}/review` | Implemented for an active reviewer/organization-admin membership and request organization | Records a human review outcome; approval explicitly does not release genomic data |
 | `POST /consents/{id}/withdraw` | Implemented for an active consent-steward role | Updates the consent ledger; downstream release paths still need to enforce the withdrawal |
-| `GET /me`, `POST /admin/requesters`, `GET /eval/results`, `GET /openapi.json`, `GET /docs` | Not ported to the Edge Function contract | Do not route these paths to Supabase as if parity existed |
+| `GET /me` | Implemented with verified Supabase Auth identity and a service-role-only membership-status RPC | Returns only the caller's own memberships; it does not provision identity or roles |
+| `POST /admin/requesters`, `GET /eval/results`, `GET /openapi.json`, `GET /docs` | Not ported to the Edge Function contract | Do not route these paths to Supabase as if parity existed |
 | `GET /beacon/g_variants`, `GET /consent/summary` | Not ported | No Beacon or consent summary parity |
 | `GET /requests/{id}/exposure`, `POST /requests/{id}/copilot` | Not ported | Exposure graph and advisory copilot remain legacy-only |
 | `GET /audit`, `GET /audit/verify`, `GET /audit/head` | Not ported as a complete Edge API | Append-only SQL trigger is not a complete audit API or external anchor |
@@ -64,7 +65,8 @@ This is an explicit cutover blocker list. It describes the checked-in Edge Funct
 ### Frontend routing facts
 
 - The legacy shared API client still calls relative API paths through the existing deployment rewrite, and sends the legacy `X-API-Key`, `X-Admin-Key`, and `X-Donor-Key` headers for its current product workflows.
-- Dataset and chromosome catalogue pages now call the public Supabase Edge Function directly through `frontend/src/catalogue-api.js`; this is limited to read-only catalogue information.
+- Dataset, chromosome, and source-discovery pages call the public Supabase Edge Function through `frontend/src/catalogue-api.js`.
+- Supabase Auth mode routes request submission, request detail, steward queue, and reasoned review to the Edge Function. The interface explicitly states that this path does not run the genomic policy/risk engine or release data.
 - No broad Vercel rewrite change has been made. This is intentional: most legacy endpoints do not yet have contract parity, and switching the rewrite now would break core pages or bypass the Python policy engine.
 - The publishable Supabase key in the catalogue client is designed for browser use. It is not a service-role key. All governed Edge routes require a verified bearer token and server-side membership checks.
 - The current Edge Function uses a server-side service key to call tightly scoped RPCs. Review the grants, SECURITY DEFINER functions, input validation, transaction behavior and negative tests before expanding the API surface.
@@ -102,13 +104,13 @@ GenomeGuard remains a research prototype, not a clinical service. Public dataset
 
 - Added `GET /steward/requests?limit=&offset=` and the `public.gg_list_review_queue(uuid,integer,integer)` RPC. The queue is organization-scoped, paginated, rejects users without exactly one active reviewer/organization-admin membership, and returns no participant-level genotype data.
 - Added `GET /me` and the `public.gg_get_my_access_status(uuid)` RPC. It returns only the caller's own membership status and distinguishes active, ambiguous, pending/inactive, and no-membership states.
-- Applied both migrations to Supabase project `common 1` as `genomeguard_steward_review_queue` and `genomeguard_auth_access_status`; deployed `genomeguard-api` Edge Function version 11.
+- Applied the steward queue and authenticated access-status migrations, the importer privilege and append-only migrations, the aggregate population-reference schema, and the exact-locus lookup index. Live migration versions and local filename prefixes are reconciled in [the migration reconciliation report](supabase-migration-reconciliation-2026-11-03.md). Deployed `genomeguard-api` Edge Function version 11.
 - The frontend now includes Supabase email/password sign-in, sign-up, sign-out, in-memory token handling, and explicit no-membership/pending-membership messaging. It routes authenticated request/review calls through the Edge Function and hides legacy-only steward screens in this mode.
 - Public source discovery, verified dataset catalogue, and chromosome reference pages now call the Supabase Edge Function rather than the stale Render catalogue endpoints. The source list is discovery-only; no source is marked approved or imported. The verified dataset catalogue is correctly empty until a real import is reviewed and loaded.
 - Read-only SQL verification confirms both new RPCs are `SECURITY DEFINER`, use an empty search path, grant execution only to `service_role`, and deny `anon` and `authenticated`. A call using an unprovisioned identity fails closed with SQLSTATE `42501` (`active_reviewer_membership_required`); the access-status RPC returns `no_membership` for an unprovisioned user.
-- The project still has zero GenomeGuard organizations, memberships, participant-consent records, normalized dataset samples, variants, genotype calls, requests, and decisions. Therefore the successful authenticated request/review lifecycle cannot yet be exercised end to end.
-- The production Vercel deployment still proxies API calls to Render. A live read-only check on 2 November returned HTTP 200 for `/health`, but the response exposed `storage_backend=sqlite` and an incorrect `consent_records_matched=600` value for a dataset-level policy. `/catalogue/datasets` and `/catalogue/sources` returned 404; `/health/ready` returned 503. Do not treat the Vercel static deployment as proof that the backend is current or durable.
-- CI and security checks for the then-current repository commit passed; the new queue migration and workflow regression checks are running on the latest main commit. The exact results are tracked in GitHub Actions.
+- The project still has zero GenomeGuard organizations, memberships, participant-consent records, normalized dataset samples, variants, genotype calls, requests, and decisions. The two aggregate population-reference tables are also empty. Therefore the positive authenticated request/review lifecycle and any data release cannot yet be exercised end to end.
+- The production Vercel frontend is still behind GitHub mainline. The latest deployed commit is `cdf906c83f8fff97dd5aecd96d26770436628482`; the mainline Supabase Auth/catalogue changes are not live yet. The Vercel deployment API returned the free daily deployment quota error (`api-deployments-free-per-day`, retry-after 86,400 seconds). The last live Render health check reported SQLite and the inconsistent `consent_records_matched=600` dataset-policy count; `/health/ready` correctly returned 503. Do not treat the static deployment as proof that the backend is current or durable.
+- The latest clean-PostgreSQL migration/privilege workflow passed on an earlier mainline commit, including queue and membership RPC checks. The newest frontend/Auth smoke suite and security workflow must pass on the final mainline commit before those changes count as verified; see GitHub Actions for exact run results.
 - The release gate remains closed. The shared Supabase project is not yet connected to the running Render backend, and no real dataset import, authoritative identity provisioning, external audit anchor, or production backup/restore drill has been verified.
 
 ## Latest verified status (29 October 2026)
