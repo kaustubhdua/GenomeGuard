@@ -235,7 +235,7 @@ def main() -> int:
         page.locator("#api-key-input").fill("valid-steward-key")
         page.locator("#connect-key").click()
         page.get_by_text("Connected. This key stays in memory", exact=False).wait_for(timeout=5000)
-        check("steward key is accepted", "Steward credentials are active" in page.locator("#who-note").inner_text())
+        check("steward key is accepted", "Legacy steward API key is active" in page.locator("#who-note").inner_text())
         check("steward navigation appears after authentication",
               page.locator('nav a[href="#/audit"]').count() == 1)
         check("steward key is not persisted to localStorage",
