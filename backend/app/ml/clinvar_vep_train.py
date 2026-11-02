@@ -18,15 +18,22 @@ from collections import Counter
 from pathlib import Path
 
 import joblib
-import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (accuracy_score, average_precision_score,
-    balanced_accuracy_score, brier_score_loss, confusion_matrix, f1_score,
-    precision_score, recall_score, roc_auc_score)
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    balanced_accuracy_score,
+    brier_score_loss,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -150,7 +157,7 @@ def annotate(rows: list[dict], out: Path) -> list[dict]:
     for offset in range(0, len(pending), 200):
         batch = pending[offset:offset + 200]
         response = post_vep(batch)
-        for source, result in zip(batch, response):
+        for source, result in zip(batch, response, strict=True):
             consequences = result.get("transcript_consequences") or []
             impacts = [x.get("impact") for x in consequences if x.get("impact")]
             cadds = [x.get("cadd_phred") for x in consequences
