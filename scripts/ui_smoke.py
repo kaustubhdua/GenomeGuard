@@ -217,25 +217,22 @@ def main() -> None:
 
         print("\\n0. Keyboard navigation and command palette")
         keyboard_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
-        keyboard_ctx.add_init_script("localStorage.setItem('gg_who','steward')")
+        # Real-data mode intentionally does not restore identities from browser storage.
+        # Exercise a public route so this smoke test never relies on a fabricated steward.
         keyboard_pg = keyboard_ctx.new_page()
         keyboard_pg.goto(base + "/#/overview")
         keyboard_pg.wait_for_selector("#view h1", timeout=15000)
-        keyboard_pg.wait_for_function(
-            "() => document.querySelector('#who')?.value === 'steward'",
-            timeout=30000,
-        )
         keyboard_pg.keyboard.press("Control+k")
         palette_open = keyboard_pg.locator("#cmdk.open").count() == 1
-        keyboard_pg.locator("#cmdk-input").fill("Audit log")
+        keyboard_pg.locator("#cmdk-input").fill("Datasets")
         keyboard_pg.keyboard.press("ArrowDown")
         keyboard_pg.keyboard.press("Enter")
-        keyboard_pg.wait_for_url("**/#/audit", timeout=15000)
+        keyboard_pg.wait_for_url("**/#/datasets", timeout=15000)
         keyboard_pg.keyboard.press("Control+k")
         keyboard_pg.keyboard.press("Escape")
         palette_closes = keyboard_pg.locator("#cmdk.open").count() == 0
         check("Ctrl+K opens command palette", palette_open)
-        check("keyboard search can navigate to Audit log", "#/audit" in keyboard_pg.url)
+        check("keyboard search can navigate to Dataset catalogue", "#/datasets" in keyboard_pg.url)
         check("Escape closes command palette", palette_closes)
         keyboard_ctx.close()
 
