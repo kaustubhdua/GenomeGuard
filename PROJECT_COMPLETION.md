@@ -133,6 +133,12 @@ deployment were applied; no production genomic or participant data was inserted.
 - Added a clean-PostgreSQL migration regression test for queue pagination, organization isolation, researcher denial, ambiguous multi-organization denial, and function grants. GitHub Actions is running the new checks on the current mainline; do not mark the suite complete until that run finishes.
 - Live SQL inspection confirmed `SECURITY DEFINER`, an empty search path, execute permission for `service_role` only, and denial for `anon` and `authenticated`. A request using an unprovisioned identity failed closed with SQLSTATE `42501`.
 - A successful queue response and review lifecycle are **not verified**: the live GenomeGuard organization, membership, request, decision, and review-history tables are empty. No test identity has been provisioned.
+- Added authenticated `GET /me` backed by `gg_get_my_access_status(uuid)`; it exposes only the signed-in user's memberships and fails closed for ambiguous, pending, inactive, or absent memberships. The RPC's live grants were verified.
+- Added a Supabase Auth email/password sign-in, sign-up, and sign-out panel to the frontend. Tokens are held in tab memory and are not persisted to browser storage. The UI clearly reports that account creation does not grant organization access.
+- Routed authenticated request submission, request detail, steward queue, and review actions through the Supabase Edge Function. The request/review interface explicitly states that this API path stores governance requests and human review only; it does not run the genomic risk engine or release data.
+- Routed public source discovery, verified dataset catalogue, and chromosome-reference pages through the Supabase Edge Function. Live SQL confirms 25 GRCh38 chromosome-reference records and zero verified public datasets; the empty dataset state is truthful.
+- Deployed `genomeguard-api` Edge Function version 11. The current frontend changes are in GitHub mainline; Vercel must finish deploying the matching frontend commit before browser acceptance can be claimed.
+- Supabase Auth account creation, email confirmation delivery, successful sign-in in a real browser, positive request submission, and positive steward review are **not verified**. The live project has two Auth users but zero GenomeGuard organizations and memberships; no account was selected or promoted without the owner's instruction.
 
 ### Current hosted deployment evidence
 
