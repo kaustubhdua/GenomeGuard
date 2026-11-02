@@ -369,3 +369,56 @@ def test_variant_inspector_and_steward_qc_are_metadata_only_and_authorized():
     assert data["matches"][0]["variant_id"] == 1
     assert "maf" not in str(data).lower()
     assert "donor" not in str(data).lower()
+
+
+def test_steward_vcf_qc_upload_is_bounded_temporary_and_omits_sample_ids(monkeypatch, tmp_path):
+    import hashlib
+
+    import app.api as api_module
+
+    _, client = make_client()
+    content = (
+        "##fileformat=VCFv4.2\n"
+        "##reference=GRCh38\n"
+        "##contig=<ID=1,length=248956422>\n"
+        "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Read depth\">\n"
+        "##FILTER=<ID=PASS,Description=\"All filters passed\">\n"
+        "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tPRIVATE_SAMPLE\n"
+        "1\t100\t.\tA\tG\t42\tPASS\t.\tGT\t0/1\n"
+    ).encode()
+    headers = {
+        **ADMIN,
+        "Content-Type": "application/octet-stream",
+        "X-Filename": "C:\\private\\PRIVATE_SAMPLE.vcf",
+        "X-Reference-Assembly": "GRCh38",
+        "X-Expected-Sha256": hashlib.sha256(content).hexdigest(),
+    }
+
+    assert client.post("/admin/vcf-qc", content=content, headers={
+        key: value for key, value in headers.items() if key != "X-Admin-Key"
+    }).status_code == 401
+    response = client.post("/admin/vcf-qc", content=content, headers=headers)
+    assert response.status_code == 200
+    report = response.json()
+    assert report["status"] == "PASSED"
+    assert report["import_eligibility"] == "NOT_ESTABLISHED"
+    assert report["file"]["name"] == "[uploaded VCF]"
+    assert report["file"]["sha256"] == hashlib.sha256(content).hexdigest()
+    assert report["statistics"]["split_variant_count"] == 1
+    assert "PRIVATE_SAMPLE" not in json.dumps(report)
+
+    monkeypatch.setattr(api_module, "MAX_UPLOAD_BYTES", 8)
+    too_large = client.post("/admin/vcf-qc", content=b"x" * 9, headers={
+        **ADMIN, "Content-Type": "application/octet-stream",
+        "X-Filename": "large.vcf", "X-Reference-Assembly": "GRCh38",
+    })
+    assert too_large.status_code == 413
+    assert too_large.json()["error"] == "file_too_large"
+
+    wrong_type = client.post("/admin/vcf-qc", content=b"xx", headers={
+        **ADMIN, "Content-Type": "application/octet-stream",
+        "X-Filename": "sample.vcf.gz", "X-Reference-Assembly": "GRCh38",
+    })
+    assert wrong_type.status_code == 400
+    assert wrong_type.json()["error"] == "file_type_mismatch"

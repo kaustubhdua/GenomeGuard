@@ -13,42 +13,72 @@ export function setWho(v) {
   try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
 }
 
-async function call(path, { method = "GET", body, headers = {} } = {}) {
+async function call(path, {
+  method = "GET", body, rawBody, headers = {}, signal, timeoutMs = 30000,
+} = {}) {
   const hd = { Accept: "application/json", ...headers };
+  if (body !== undefined && rawBody !== undefined) {
+    throw new TypeError("request cannot contain both JSON and raw bodies");
+  }
   if (body !== undefined) hd["Content-Type"] = "application/json";
   let res;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", abort, { once: true });
   try {
     res = await fetch(path, {
-      method, headers: hd, body: body === undefined ? undefined : JSON.stringify(body),
+      method, headers: hd,
+      body: rawBody !== undefined ? rawBody : body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (error) {
     const timedOut = error?.name === "AbortError";
     return { ok: false, status: 0, data: {
-      error: timedOut ? "timeout" : "network",
-      message: timedOut
-        ? "The API is taking longer than 30 seconds to respond. The service may be starting up; please retry."
+      error: signal?.aborted ? "cancelled" : timedOut ? "timeout" : "network",
+      message: signal?.aborted
+        ? "The upload was cancelled."
+        : timedOut
+        ? timeoutMs > 30000
+          ? "The browser request timed out. Server-side QC may still be running; wait before retrying or use local processing."
+          : "The API is taking longer than 30 seconds to respond. The service may be starting up; please retry."
         : "Cannot reach the GenomeGuard API. Check your connection and try again.",
     } };
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
   }
   let data = null;
   try { data = await res.json(); } catch { /* empty body */ }
   return { ok: res.ok, status: res.status, data };
 }
 
+function authHeaders() {
+  if (isSteward() && state.demo) return { "X-Admin-Key": state.demo.admin_key };
+  if (isSteward() && state.adminKey) return { "X-Admin-Key": state.adminKey };
+  if (state.who) return { "X-API-Key": state.who };
+  return {};
+}
+
 // `opts.key` sends that requester key instead of the "acting as" choice (the guided tour uses it).
 export function api(path, opts = {}) {
-  const headers = {};
-  if (opts.key) headers["X-API-Key"] = opts.key;
-  else if (isSteward() && state.demo) headers["X-Admin-Key"] = state.demo.admin_key;
-  else if (isSteward() && state.adminKey) headers["X-Admin-Key"] = state.adminKey;
-  else if (state.who) headers["X-API-Key"] = state.who;
+  const headers = opts.key ? { "X-API-Key": opts.key } : authHeaders();
   const { key, ...rest } = opts; // eslint-disable-line no-unused-vars
   return call(path, { ...rest, headers });
+}
+
+export function uploadVcfQc(file, assembly, expectedSha256, signal) {
+  const headers = {
+    ...authHeaders(),
+    "Content-Type": "application/octet-stream",
+    "X-Filename": encodeURIComponent(file.name),
+    "X-Reference-Assembly": assembly,
+  };
+  if (expectedSha256) headers["X-Expected-Sha256"] = expectedSha256;
+  return call("/admin/vcf-qc", {
+    method: "POST", rawBody: file, headers, signal, timeoutMs: 30 * 60 * 1000,
+  });
 }
 
 // steward-level call regardless of who the app is acting as (admin key from the demo accounts)

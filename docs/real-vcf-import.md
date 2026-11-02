@@ -46,6 +46,78 @@ python -m app.data.vcf_import \
 
 Replace all example values with the actual source metadata. The example domain is deliberately non-operational and must not be used as source provenance.
 
+## Quality-control reports
+
+For structural validation and measured QC without importing data, use the database-free
+`genomeguard-vcf-qc` command locally (available after installing the project) or run the
+module from an environment where `backend` is on `PYTHONPATH`:
+
+```bash
+genomeguard-vcf-qc \
+  --vcf /secure/path/cohort.vcf.gz \
+  --assembly GRCh37 \
+  --expected-sha256 "<64 lowercase hex characters>" \
+  --output /secure/path/cohort-qc.json
+```
+
+The checksum option is optional; when omitted, the report marks the calculated checksum
+as not independently verified. The CLI accepts plain `.vcf` and gzip-compressed
+`.vcf.gz`, streams through the existing importer parser, and does not connect to a
+database or import records.
+
+The Dataset QC page has two separate report workflows:
+
+1. **Local JSON preview.** Selecting an existing report reads it in the browser; it
+   does not upload the JSON or a VCF. The preview treats the file as unsigned and
+   omits its free-text details and filename. JSON and text exports redact the filename
+   and include only allowlisted aggregate fields.
+2. **Steward-only VCF upload.** Selecting a VCF sends its raw bytes to the configured
+   GenomeGuard backend at `POST /admin/vcf-qc` for temporary processing. The upload is
+   not processed solely in the browser. The service does not call a commercial or other
+   third-party analysis API, but the file is transmitted to and processed by that
+   configured server; use only a deployment you trust for genomic information. The
+   backend stages the file in a temporary directory and removes it when request
+   processing exits normally. A host/process failure may require operator cleanup of
+   temporary files.
+
+   The upload response uses a generic `[uploaded VCF]` label rather than echoing the
+   source filename. The filename is used only to validate the extension and compression
+   type.
+
+The upload requires a steward credential, an explicit `GRCh37` or `GRCh38` selection,
+and a `.vcf` or `.vcf.gz` filename whose compression matches the file. The optional
+expected SHA-256 must come from an independent source. Server limits are 100 MiB
+compressed upload, 1 GiB decompressed input, 16 MiB per VCF line, 10,000 sample
+columns, and 10 million sample-by-split-ALT genotype cells. The browser request has a
+30-minute timeout and can be cancelled; cancelling the browser request does not
+guarantee that validation already running on the server stops immediately.
+
+The CLI and server upload use the shared constrained VCF parser. It requires a VCF
+fileformat header and validates the expected assembly against recognized header labels,
+column structure, sample-column count, record coordinates/order, DNA alleles, QUAL,
+basic INFO/FILTER syntax, FORMAT value counts, supported GT ploidy, and optional GQ
+values. The local JSON preview validates the report format but does not parse a VCF.
+It does not validate INFO field semantics against all declared types/cardinalities,
+compare REF alleles to a reference genome, normalize variants, or prove that a header's
+assembly claim is true. An explicitly selected assembly plus a matching header label
+is not reference-sequence verification.
+
+Reports include file size/hash, header metadata counts, raw source-record and
+split-ALT counts, chromosome/type counts, genotype-cell counts, fully and partially
+missing calls, missing-allele rate, ALT-frequency summaries, QUAL, and GQ when
+available. A genotype cell with unknown ploidy is counted separately and excluded from
+the missing-allele denominator. Frequency, QUAL, and GQ summaries are unweighted over
+their measured split-ALT rows/cells; multi-ALT records therefore contribute more than
+one observation. Missing quality values and insufficient metadata evidence are
+reported rather than silently treated as passing. No universal clinical or scientific
+acceptance thresholds are applied.
+
+The backend report omits sample identifiers and raw genotype rows, but aggregate
+genomic metadata can still be sensitive. Store reports under the same controls as the
+source file. Neither report path establishes licensing, consent, source authenticity,
+or steward approval; `import_eligibility` always remains `NOT_ESTABLISHED`. QC success
+does not authorize an import.
+
 ## Register the reviewed manifest first
 
 The importer refuses to create or approve a manifest. A trusted data steward must review the exact source artifact and create a manifest entry using an administrative database session. Example only—replace every placeholder with independently verified values:

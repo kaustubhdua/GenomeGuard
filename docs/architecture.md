@@ -78,10 +78,22 @@ recommend `approve`, `deny` or `more_info`. Its guardrails are code, not instruc
 | `core/federated.py` | Secure aggregation by additive secret sharing; federated allele frequencies and logistic regression across simulated hospitals. |
 | `data/synth.py`, `data/pedigree.py` | Synthetic cohort with real Mendelian transmission and a derived relationship graph. |
 | `data/real.py`, `data/duo.py` | Optional: build a cohort from real 1000 Genomes files; compare our rules with the official DUO. |
+| `data/vcf_import.py`, `data/vcf_qc.py` | Shared constrained VCF parser, provenance-gated normalized import, and aggregate-only local or temporary steward QC. |
 | `service.py`, `api.py`, `store.py` | Orchestration, Starlette HTTP layer, SQLite store. Also the FHIR R4 `Consent` export (`GET /donor/{id}/consent.fhir.json`, pseudonymous, tagged simulated). |
 | `frontend/` | Vanilla JS, no build step. `tour.js` is a guided tour whose two action steps call the real API. |
 | `scripts/` | `demo.py` (scripted scenario), `bench.py` (measured throughput), `ui_smoke.py` (headless-browser regression test: contrast, names, overflow, tour). |
 | `redteam/` | Attacks, benign traffic and the evaluation behind `make eval`. |
+
+### VCF QC trust boundary
+
+The standalone QC CLI reads a local VCF without database access. The Dataset QC
+browser's JSON preview is also local, but its VCF upload sends raw bytes to the
+configured GenomeGuard backend at `POST /admin/vcf-qc`. That route is steward-only,
+applies explicit size/processing limits, stages data in a temporary directory, returns
+aggregate metrics, and does not import or persist the source VCF. It is not a
+third-party analysis service; deployment operators still control where the file is
+transmitted and processed. Neither successful parsing nor an assembly label proves
+source authorization, reference-sequence identity, consent, or import eligibility.
 
 ## Tiers and levels
 

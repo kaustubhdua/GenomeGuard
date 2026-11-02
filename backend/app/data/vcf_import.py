@@ -5,11 +5,13 @@ import argparse
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from contextlib import contextmanager
 from urllib.parse import urlparse
 
 import psycopg
@@ -54,6 +56,21 @@ def open_vcf(path: Path):
     return gzip.open(path, "rt", encoding="utf-8") if compressed else path.open("rt", encoding="utf-8")
 
 
+def bounded_lines(stream, max_line_bytes: int | None, max_total_bytes: int | None):
+    total_bytes = 0
+    while True:
+        raw = stream.readline(max_line_bytes + 1 if max_line_bytes is not None else -1)
+        if not raw:
+            return
+        line_bytes = len(raw.encode("utf-8"))
+        if max_line_bytes is not None and line_bytes > max_line_bytes:
+            raise ImportValidationError("VCF line exceeds the configured size limit")
+        total_bytes += line_bytes
+        if max_total_bytes is not None and total_bytes > max_total_bytes:
+            raise ImportValidationError("decompressed VCF exceeds the configured size limit")
+        yield raw
+
+
 def infer_assembly(headers: list[str]) -> str | None:
     text = "\n".join(headers).lower()
     matches = set()
@@ -80,7 +97,11 @@ def parse_gt(gt: str, alt_index: int, max_allele_index: int) -> tuple[int | None
     for allele in alleles:
         if allele == ".":
             continue
-        if not allele.isdigit() or int(allele) > max_allele_index:
+        if (
+            not allele.isdigit()
+            or len(allele) > len(str(max_allele_index))
+            or int(allele) > max_allele_index
+        ):
             raise ImportValidationError("invalid genotype allele index")
         called.append(int(allele))
     if not called:
@@ -88,14 +109,26 @@ def parse_gt(gt: str, alt_index: int, max_allele_index: int) -> tuple[int | None
     return sum(a == alt_index for a in called), len(called), phased
 
 
-def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str]]:
+def inspect_header(
+    path: Path,
+    expected_assembly: str,
+    *,
+    max_line_bytes: int | None = None,
+    max_total_bytes: int | None = None,
+    max_samples: int | None = None,
+) -> tuple[list[str], list[str], dict]:
     headers: list[str] = []
     with open_vcf(path) as stream:
-        for raw in stream:
+        for raw in bounded_lines(stream, max_line_bytes, max_total_bytes):
             line = raw.rstrip("\r\n")
             if line.startswith("##"):
                 headers.append(line)
             elif line.startswith("#CHROM"):
+                versions = [line.partition("=")[2] for line in headers if line.startswith("##fileformat=")]
+                if len(versions) != 1 or not re.fullmatch(r"VCFv4\.[0-9]+", versions[0]):
+                    raise ImportValidationError("VCF must declare exactly one supported fileformat version")
+                if not headers or headers[0] != f"##fileformat={versions[0]}":
+                    raise ImportValidationError("VCF fileformat declaration must be the first metadata line")
                 actual = infer_assembly(headers)
                 if actual is None:
                     raise ImportValidationError("VCF header lacks recognizable assembly metadata")
@@ -116,11 +149,62 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
                     or len(samples) != len(set(samples))
                 ):
                     raise ImportValidationError("invalid, empty, or duplicate sample identifiers")
-                return headers, samples
+                if max_samples is not None and len(samples) > max_samples:
+                    raise ImportValidationError("sample count exceeds the configured limit")
+                definitions: dict[str, set[str]] = {"INFO": set(), "FORMAT": set(), "FILTER": set(), "contig": set()}
+                for header in headers:
+                    match = re.match(r"^##(INFO|FORMAT|FILTER|contig)=<ID=([^,>]+)", header)
+                    if match:
+                        section, identifier = match.groups()
+                        if identifier in definitions[section]:
+                            raise ImportValidationError(f"duplicate {section} header definition")
+                        definitions[section].add(identifier)
+                reference = [actual] if any(
+                    header.startswith(("##reference=", "##assembly=")) for header in headers
+                ) else []
+                metadata = {
+                    "vcf_version": versions[0],
+                    "sample_count": len(samples),
+                    "reference_declarations": reference,
+                    "reference_declaration_present": bool(reference),
+                    "metadata_line_count": len(headers),
+                    "contig_definition_count": len(definitions["contig"]),
+                    "info_definition_count": len(definitions["INFO"]),
+                    "format_definition_count": len(definitions["FORMAT"]),
+                    "filter_definition_count": len(definitions["FILTER"]),
+                    "format_definitions": sorted(definitions["FORMAT"]),
+                    "info_definitions": sorted(definitions["INFO"]),
+                    "filter_definitions": sorted(definitions["FILTER"]),
+                }
+                return headers, samples, metadata
     raise ImportValidationError("VCF is missing a #CHROM header")
 
 
-def iter_records(path: Path, samples: list[str], assembly: str):
+def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str]]:
+    headers, samples, _ = inspect_header(path, expected_assembly)
+    return headers, samples
+
+
+def _validate_info(info: str) -> None:
+    if info == ".":
+        return
+    entries = info.split(";")
+    if any(not entry or entry.count("=") > 1 for entry in entries):
+        raise ImportValidationError("invalid INFO field structure")
+    for entry in entries:
+        key, separator, value = entry.partition("=")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key) or (separator and not value):
+            raise ImportValidationError("invalid INFO field structure")
+
+
+def iter_records(
+    path: Path,
+    samples: list[str],
+    assembly: str,
+    *,
+    max_line_bytes: int | None = None,
+    max_total_bytes: int | None = None,
+):
     # Keep duplicate-detection memory bounded: require coordinate-sorted VCF input and
     # retain only keys at the current chromosome/position, not every variant in the file.
     chrom_order = {str(i): i for i in range(1, 23)} | {"X": 23, "Y": 24, "MT": 25}
@@ -129,21 +213,45 @@ def iter_records(path: Path, samples: list[str], assembly: str):
     seen_at_coordinate: set[tuple[str, str]] = set()
     source_index = 0
     variant_index = 0
+    header_seen = False
     with open_vcf(path) as stream:
-        for raw in stream:
+        for raw in bounded_lines(stream, max_line_bytes, max_total_bytes):
             line = raw.rstrip("\r\n")
             if not line or line.startswith("#"):
+                if line.startswith("#CHROM"):
+                    if header_seen:
+                        raise ImportValidationError("duplicate VCF column header")
+                    header_seen = True
                 continue
             fields = line.split("\t")
             if len(fields) != 9 + len(samples):
                 raise ImportValidationError("VCF row has the wrong number of columns")
-            chrom, pos_text, _, ref, alt_text, _, _, _, fmt = fields[:9]
+            chrom, pos_text, _, ref, alt_text, quality_text, filter_text, info_text, fmt = fields[:9]
+            if filter_text != "." and (
+                not filter_text or any(
+                    not re.fullmatch(r"[A-Za-z0-9_.:]+", value)
+                    for value in filter_text.split(";")
+                ) or len(set(filter_text.split(";"))) != len(filter_text.split(";"))
+            ):
+                raise ImportValidationError("invalid FILTER field")
+            _validate_info(info_text)
+            if quality_text == ".":
+                quality = None
+            else:
+                try:
+                    quality = float(quality_text)
+                except ValueError as exc:
+                    raise ImportValidationError("invalid QUAL score") from exc
+                if not math.isfinite(quality) or quality < 0:
+                    raise ImportValidationError("invalid QUAL score")
             chrom = chrom.removeprefix("chr").upper()
             if chrom == "M":
                 chrom = "MT"
             if not re.fullmatch(r"(?:[1-9]|1[0-9]|2[0-2]|X|Y|M|MT)", chrom):
                 raise ImportValidationError(f"unsupported chromosome: {chrom}")
             if not re.fullmatch(r"[0-9]+", pos_text):
+                raise ImportValidationError("invalid position")
+            if len(pos_text) > 9:
                 raise ImportValidationError("invalid position")
             pos = int(pos_text)
             if pos < 1 or pos > CHROM_LENGTHS[assembly].get(chrom, 0) or not ALLELE_RE.fullmatch(ref):
@@ -170,14 +278,42 @@ def iter_records(path: Path, samples: list[str], assembly: str):
             ):
                 raise ImportValidationError("FORMAT must contain exactly one GT field and no duplicates")
             gt_index = formats.index("GT")
+            gq_index = formats.index("GQ") if "GQ" in formats else None
             genotypes = []
+            genotype_qualities: list[int] = []
             for sample_cell in fields[9:]:
                 values = sample_cell.split(":")
+                if sample_cell != "." and len(values) != len(formats):
+                    raise ImportValidationError("sample FORMAT value count does not match FORMAT fields")
+                if sample_cell == ".":
+                    values = ["."] * len(formats)
                 if gt_index >= len(values):
                     raise ImportValidationError("sample has no GT value")
                 genotypes.append(values[gt_index])
+                if gq_index is not None and values[gq_index] != ".":
+                    if (
+                        len(values[gq_index]) > 10
+                        or not re.fullmatch(r"[0-9]+", values[gq_index])
+                    ):
+                        raise ImportValidationError("invalid genotype quality (GQ)")
+                    quality_value = int(values[gq_index])
+                    if quality_value > 2_147_483_647:
+                        raise ImportValidationError("invalid genotype quality (GQ)")
+                    genotype_qualities.append(quality_value)
             for alt_index, alt in enumerate(alts, start=1):
                 calls = [parse_gt(gt, alt_index, len(alts)) for gt in genotypes]
+                partial_missing_cells = 0
+                missing_alleles = 0
+                total_alleles = 0
+                unknown_ploidy_cells = 0
+                for gt, (_, called, _) in zip(genotypes, calls, strict=True):
+                    ploidy = 0 if gt in {"", "."} else len(re.split(r"[|/]", gt))
+                    if ploidy == 0:
+                        unknown_ploidy_cells += 1
+                    total_alleles += ploidy
+                    missing_alleles += ploidy - called
+                    if 0 < called < ploidy:
+                        partial_missing_cells += 1
                 called_alleles = sum(called for _, called, _ in calls)
                 alt_copies = sum(dosage or 0 for dosage, called, _ in calls if called)
                 yield {
@@ -187,10 +323,25 @@ def iter_records(path: Path, samples: list[str], assembly: str):
                     "position": pos,
                     "reference_allele": ref,
                     "alternate_allele": alt,
+                    "quality_score": quality,
+                    "filter": filter_text,
+                    "info": info_text,
                     "variant_key": f"{chrom}:{pos}:{ref}:{alt}",
                     "alt_allele_frequency": alt_copies / called_alleles if called_alleles else None,
                     "called_allele_count": called_alleles,
                     "calls": calls,
+                    "partially_missing_genotype_cells": partial_missing_cells,
+                    "missing_alleles": missing_alleles,
+                    "total_alleles": total_alleles,
+                    "unknown_ploidy_genotype_cells": unknown_ploidy_cells,
+                    "genotype_quality": {
+                        "minimum": min(genotype_qualities) if genotype_qualities else None,
+                        "sum": sum(genotype_qualities),
+                        "mean": sum(genotype_qualities) / len(genotype_qualities) if genotype_qualities else None,
+                        "maximum": max(genotype_qualities) if genotype_qualities else None,
+                        "measured_cells": len(genotype_qualities),
+                        "missing_cells": len(samples) - len(genotype_qualities) if gq_index is not None else None,
+                    },
                 }
                 variant_index += 1
             source_index += 1

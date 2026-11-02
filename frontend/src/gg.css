@@ -1006,3 +1006,28 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
 .population-frequency-table table { min-width: 760px; }
 .population-frequency-table td { overflow-wrap: anywhere; }
 .popfreq-checksum { display: inline-block; max-width: 260px; overflow-wrap: anywhere; }
+
+.qc-upload { max-width: 760px; }
+.qc-upload label { display: grid; gap: 7px; }
+.qc-upload input[type="file"] { max-width: 100%; }
+.qc-upload progress { display: block; width: min(100%, 520px); height: 10px; accent-color: var(--permit); }
+.qc-report { min-width: 0; }
+.qc-report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.qc-report-head h2 { margin: 0 0 7px; text-transform: capitalize; }
+.qc-report-head p { margin: 0; }
+.qc-report .entry summary { display: flex; align-items: center; gap: 8px; min-height: 36px; font-weight: 650; }
+.qc-report .entry summary::marker { color: var(--mint); }
+.qc-report .entry[open] > summary { margin-bottom: 8px; }
+.qc-check-list { display: grid; gap: 8px; padding-left: 20px; }
+.qc-check-passed::marker { color: var(--permit); }
+.qc-check-failed::marker { color: var(--deny); }
+.qc-check-warning::marker, .qc-check-insufficient_evidence::marker { color: var(--transform); }
+.qc-check-not_assessed::marker { color: var(--ink-3); }
+.qc-report .facts { margin-top: 6px; }
+@media(max-width:560px) {
+  .qc-report-head { display: grid; }
+  .qc-report .facts { grid-template-columns: minmax(0, 1fr); }
+  .qc-report .facts dt { padding: 10px 0 0; border-bottom: 0; }
+  .qc-report .facts dd { padding: 2px 0 10px; }
+  .qc-report .facts > :last-child { border-bottom: 0; }
+}

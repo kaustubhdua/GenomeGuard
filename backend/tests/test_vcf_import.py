@@ -78,6 +78,43 @@ def test_vcf_rejects_duplicate_format_fields(tmp_path):
         list(iter_records(path, samples, "GRCh37"))
 
 
+def test_vcf_rejects_non_finite_quality_scores(tmp_path):
+    path = _vcf(tmp_path).with_name("invalid-quality.vcf")
+    path.write_text(
+        _vcf(tmp_path).read_text(encoding="utf-8").replace("\t.\tPASS\t", "\tNaN\tPASS\t", 1),
+        encoding="utf-8",
+    )
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="invalid QUAL score"):
+        list(iter_records(path, samples, "GRCh37"))
+
+
+def test_vcf_rejects_malformed_info_and_sample_format_values(tmp_path):
+    path = _vcf(tmp_path).with_name("malformed-info.vcf")
+    text = _vcf(tmp_path).read_text(encoding="utf-8").replace("\t.\tGT\t", "\tDP=1=2\tGT\t", 1)
+    path.write_text(text, encoding="utf-8")
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="invalid INFO"):
+        list(iter_records(path, samples, "GRCh37"))
+
+    text = _vcf(tmp_path).read_text(encoding="utf-8").replace(
+        "\tGT\t", "\tGT:GQ\t", 1
+    )
+    path.write_text(text, encoding="utf-8")
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="FORMAT value count"):
+        list(iter_records(path, samples, "GRCh37"))
+
+
+def test_vcf_header_requires_one_leading_fileformat_declaration(tmp_path):
+    path = _vcf(tmp_path).with_name("missing-version.vcf")
+    path.write_text(_vcf(tmp_path).read_text(encoding="utf-8").replace(
+        "##fileformat=VCFv4.2\n", "", 1
+    ), encoding="utf-8")
+    with pytest.raises(ImportValidationError, match="fileformat version"):
+        read_header(path, "GRCh37")
+
+
 def test_vcf_rejects_conflicting_assembly_metadata(tmp_path):
     path = _vcf(tmp_path)
     text = path.read_text(encoding="utf-8").replace(
@@ -462,4 +499,3 @@ def test_import_refuses_to_create_or_self_approve_a_manifest(tmp_path, monkeypat
         vcf_import.import_to_database(args, digest, ["SAMPLE_A", "SAMPLE_B"])
     assert any("SELECT id, source_name, source_url" in sql for sql in conn.cur.statements)
     assert not any("INSERT INTO genomeguard.variant_dataset_manifest" in sql for sql in conn.cur.statements)
-

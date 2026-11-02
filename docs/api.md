@@ -17,6 +17,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/variants/search` | Metadata-only variant lookup by ID or exact chromosome coordinate | public |
 | GET | `/variants/population-frequency` | Exact-allele lookup in approved, loaded aggregate references; includes source provenance | public |
 | GET | `/admin/dataset-qc` | Steward-only aggregate dataset QC and provenance summary | admin |
+| POST | `/admin/vcf-qc` | Steward-only, bounded QC of a VCF uploaded as a raw request body; processed temporarily and not imported | admin |
 | GET | `/beacon/g_variants` | GA4GH Beacon v2 style allele lookup, governed by the same consent, risk and audit pipeline | requester |
 | GET | `/requests` | List requests (own; all with admin key) | requester or admin |
 | GET | `/requests/{id:int}` | One decision in detail | requester or admin |
@@ -56,3 +57,14 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 GET /variants/population-frequency accepts chromosome, position, reference_allele, alternate_allele, and assembly (GRCh37 or GRCh38) as query parameters. It returns only exact-locus aggregate rows from manifests whose data-use review is approved_public_research and import status is loaded. Each row identifies the source, release, URL, checksum, assembly, population, AC, AN, AF, and homozygote count.
 
 The status is available, empty, or unavailable. An empty result means no approved loaded reference matched; unavailable means the serving database, migration, or reader role is not configured. Neither state is filled with estimated values. This public reference endpoint is separate from participant-level cohort evidence and does not create or bypass a governed release.
+
+`POST /admin/vcf-qc` requires `Content-Type: application/octet-stream`,
+`X-Filename`, and `X-Reference-Assembly: GRCh37|GRCh38`; `X-Expected-Sha256` is
+optional. The raw body must be one `.vcf` or `.vcf.gz`, up to 100 MiB compressed.
+Validation also caps decompressed input at 1 GiB, VCF lines at 16 MiB, sample columns
+at 10,000, and sample-by-split-ALT genotype cells at 10 million. The service processes
+the file in a temporary directory, returns an aggregate QC report, and does not import
+or persist the VCF. The configured GenomeGuard server receives the genomic file; use
+only a trusted deployment. The response uses `[uploaded VCF]` rather than echoing the
+source filename. Assembly selection is compared with recognized VCF header labels and
+is not a reference-sequence or REF-allele verification.

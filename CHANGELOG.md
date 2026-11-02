@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a database-free local VCF QC command, local JSON report preview, and steward-only
+  temporary server-side VCF QC upload. The upload is bounded, does not persist or import the
+  source file, and runs only on the configured GenomeGuard server. Reports include parser,
+  checksum, metadata, genotype-missingness, allele-frequency, QUAL, and optional GQ measures;
+  they omit sample identifiers and do not establish licensing, consent, or import approval.
 - UI redesign: a biology and medical research-instrument look. The request pipeline is drawn as a
   banded chromosome with the decision as the centromere, audit hashes and checksums get banded
   fingerprints, the chromosome explorer gains coverage bars, and outcome colours are named after

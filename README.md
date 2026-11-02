@@ -71,7 +71,7 @@ For the latest evidence-based status of hosting, Supabase RLS, persistence and r
 
 For the dataset source review, provenance ledger, and safe import acceptance criteria, see [Genomic dataset provenance and import gate](docs/genomic-dataset-provenance-import-gate.md).
 
-For the normalized VCF importer, checksum/assembly validation, genotype-call mapping, and bounded import workflow, see [Real VCF import pipeline](docs/real-vcf-import.md). For server-verified organization membership, human review, and consent-ledger limitations, see [Organization authorization and review](docs/organization-authorization-and-review.md).
+For the normalized VCF importer, provenance checks, local QC CLI, steward-only temporary VCF upload, and report privacy boundaries, see [Real VCF import pipeline](docs/real-vcf-import.md). Local JSON preview does not upload the report; the VCF upload sends genomic bytes to the configured GenomeGuard server and must only be used with a trusted deployment. Neither QC path approves imports. For server-verified organization membership, human review, and consent-ledger limitations, see [Organization authorization and review](docs/organization-authorization-and-review.md).
 
 ## Architecture
 

@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
+import tempfile
 from pathlib import Path
+from urllib.parse import unquote
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
@@ -22,6 +25,7 @@ from starlette.staticfiles import StaticFiles
 
 from app.config import get_settings, validate_settings
 from app.core.audit_chain import jsonable
+from app.data.vcf_qc import MAX_UPLOAD_BYTES, validate_vcf
 from app.service import DEMO_REQUESTERS, GenomeGuardService, ServiceError, bootstrap
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
@@ -477,6 +481,67 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "consent_basis": provenance.get("consent_label") or "Unknown",
             "review_status": "Inspection only — not an import acceptance or production-readiness approval",
         })
+
+    @route("POST", "/admin/vcf-qc", "Steward-only bounded VCF QC; file is processed temporarily and not retained", "admin")
+    async def vcf_qc(request):
+        admin(request)
+        if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/octet-stream":
+            raise ServiceError(415, "unsupported_media_type", "send one VCF as application/octet-stream")
+        try:
+            filename = unquote(request.headers.get("x-filename", ""), errors="strict")
+        except UnicodeError:
+            raise ServiceError(400, "invalid_filename", "filename must be valid UTF-8") from None
+        safe_name = filename.replace("\\", "/").rsplit("/", 1)[-1]
+        if (
+            len(safe_name) > 200
+            or not re.fullmatch(r"(?i)[^<>:\"/\\|?*\x00-\x1f]+\.vcf(?:\.gz)?", safe_name)
+        ):
+            raise ServiceError(400, "invalid_filename", "filename must end in .vcf or .vcf.gz")
+        assembly = request.headers.get("x-reference-assembly", "")
+        expected_sha256 = request.headers.get("x-expected-sha256") or None
+        if assembly not in {"GRCh37", "GRCh38"}:
+            raise ServiceError(400, "invalid_assembly", "select GRCh37 or GRCh38 explicitly")
+        if expected_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+            raise ServiceError(400, "invalid_checksum", "expected SHA-256 must be 64 lowercase hexadecimal characters")
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                raise ServiceError(400, "invalid_content_length", "invalid Content-Length header") from None
+            if declared_length < 0:
+                raise ServiceError(400, "invalid_content_length", "invalid Content-Length header")
+            if declared_length > MAX_UPLOAD_BYTES:
+                raise ServiceError(413, "file_too_large", "maximum VCF upload is 100 MiB")
+
+        suffix = ".vcf.gz" if safe_name.lower().endswith(".vcf.gz") else ".vcf"
+        with tempfile.TemporaryDirectory(prefix="genomeguard-vcf-qc-") as temporary_directory:
+            staged_path = Path(temporary_directory) / ("input" + suffix)
+            received = 0
+            try:
+                with staged_path.open("xb") as staged:
+                    async for chunk in request.stream():
+                        received += len(chunk)
+                        if received > MAX_UPLOAD_BYTES:
+                            raise ServiceError(413, "file_too_large", "maximum VCF upload is 100 MiB")
+                        staged.write(chunk)
+            except OSError:
+                log.exception("Unable to stage temporary VCF for QC")
+                raise ServiceError(500, "qc_staging_failed", "could not stage the file for temporary QC processing") from None
+            if content_length and received != declared_length:
+                raise ServiceError(400, "incomplete_upload", "uploaded byte count did not match Content-Length")
+            try:
+                with staged_path.open("rb") as staged:
+                    is_gzip = staged.read(2) == b"\x1f\x8b"
+            except OSError:
+                raise ServiceError(400, "invalid_vcf", "could not read the uploaded file") from None
+            if is_gzip != suffix.endswith(".gz"):
+                raise ServiceError(400, "file_type_mismatch", "file extension does not match VCF compression")
+            report = await run_in_threadpool(
+                validate_vcf, staged_path, assembly, expected_sha256,
+                display_name="[uploaded VCF]", max_file_bytes=MAX_UPLOAD_BYTES,
+            )
+            return _j(report)
 
     @route("GET", "/audit", "Audit log (newest first) with chain verification", "admin")
     async def audit(request):
