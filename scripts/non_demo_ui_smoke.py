@@ -349,6 +349,7 @@ def main() -> int:
               review_state["status"] == "approved_pending_release")
 
         page.locator("#supabase-signout").click()
+        page.get_by_text("Signed out. Your session was cleared", exact=False).wait_for(timeout=5000)
         check("Supabase sign-out clears active session",
               "Signed out" in page.locator("#supabase-auth-status").inner_text())
         check("demo evaluation remains unfetched", not eval_calls)
