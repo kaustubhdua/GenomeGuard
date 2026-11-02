@@ -56,6 +56,19 @@ Request JSON:
 The route requires a valid Supabase bearer token and an active reviewer/organization-admin membership for the organization owning the consent record. The database marks the record withdrawn and appends a governance event. Repeated withdrawal is idempotent. This records a governance state change; the data-release policy must still check consent status on every relevant request before any participant-specific release can be enabled.
 
 
+## Steward review queue API
+
+`GET /steward/requests?limit=50&offset=0` returns the active review queue for the caller's single active organization. The Edge Function verifies the Supabase bearer token, then calls the service-role-only `gg_list_review_queue` RPC with the verified Auth user ID. The database resolves the organization and reviewer role from `organization_memberships`; it never trusts an organization ID or role supplied by the browser.
+
+- Pagination is bounded to 1–100 rows and offsets from 0–100,000.
+- Only `pending_review` and `needs_more_information` requests are returned.
+- Requester name and institution are visible only to an authorized reviewer in the same active organization.
+- A researcher, a user without an active reviewer/admin membership, or a reviewer with multiple active organizations is rejected.
+- The RPC is `SECURITY DEFINER` with an empty search path and is executable only by `service_role`; browser roles cannot call it directly.
+- Approval remains `approved_pending_release`; this queue does not release genomic data.
+
+The migration and Edge Function are deployed to Supabase project `common 1` as migration `genomeguard_steward_review_queue` and Edge Function version 8. The live RPC's privilege boundary and fail-closed response for an unprovisioned user were verified. A successful queue read and review action remain unverified because the project currently has no provisioned organizations or memberships.
+
 ## Request detail and history API
 
 `GET /requests/{request_id}` requires a valid Supabase bearer token and an active membership in the request's organization. Researchers can retrieve their own requests; reviewers and organization administrators can inspect requests in their organization. A cross-organization or otherwise unauthorized request returns the same not-found response as an unavailable request.
