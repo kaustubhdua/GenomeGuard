@@ -182,7 +182,7 @@ label.f input, label.f select { font-weight: 400; color: var(--ink); }
 .g-main { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
 .split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 24px; }
 
-.card { padding: 20px 22px; background: var(--pane); border: 1px solid var(--rule); border-radius: var(--r-pane); }
+.card { min-width: 0; padding: 20px 22px; background: var(--pane); border: 1px solid var(--rule); border-radius: var(--r-pane); }
 .card.flush { padding: 0; overflow: hidden; }
 .card-h {
   display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
@@ -1027,7 +1027,7 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
 .popfreq-checksum { display: inline-block; max-width: 260px; overflow-wrap: anywhere; }
 
 .qc-upload { max-width: 760px; min-width: 0; }
-.qc-upload label, .qc-report-preview-label { display: grid; gap: 7px; min-width: 0; }
+.qc-upload label, .qc-report-preview-label { display: grid; width: 100%; max-width: 100%; gap: 7px; min-width: 0; }
 .qc-upload input[type="file"], .qc-report-preview-label input[type="file"] {
   display: block; width: 100%; min-width: 0; max-width: 100%;
 }
