@@ -1,5 +1,16 @@
 """Curated public genomic data sources; discovery is separate from import approval."""
 
+NOT_IMPORTED_LIFECYCLE = {
+    "discovered": "complete",
+    "metadata_registered": "complete",
+    "downloaded": "not_started",
+    "checksum_verified": "not_started",
+    "qc_validated": "not_started",
+    "steward_approved": "pending",
+    "imported": "not_imported",
+    "available_for_research": "not_available",
+}
+
 PUBLIC_GENOMIC_SOURCES = (
     {
         "source_id": "igsr-1000-genomes-phase-3",
@@ -21,6 +32,7 @@ PUBLIC_GENOMIC_SOURCES = (
         "terms_url": "https://www.internationalgenome.org/IGSR_disclaimer/",
         "terms_review_status": "pending_exact_artifact_review",
         "import_status": "not_imported_by_catalogue",
+        "lifecycle_status": NOT_IMPORTED_LIFECYCLE,
         "workflow": "Steward VCF QC and the normalized VCF importer are available; no source artifact is approved or imported by this listing.",
     },
     {
@@ -43,6 +55,7 @@ PUBLIC_GENOMIC_SOURCES = (
         "terms_url": "https://gnomad.broadinstitute.org/terms",
         "terms_review_status": "pending_exact_artifact_review",
         "import_status": "not_imported_by_catalogue",
+        "lifecycle_status": NOT_IMPORTED_LIFECYCLE,
         "workflow": "An aggregate-frequency importer and exact-locus lookup are available; no source artifact is approved or loaded by this listing.",
     },
     {
@@ -64,11 +77,15 @@ PUBLIC_GENOMIC_SOURCES = (
         "terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
         "terms_review_status": "pending_exact_artifact_review",
         "import_status": "not_imported_by_catalogue",
+        "lifecycle_status": NOT_IMPORTED_LIFECYCLE,
         "workflow": "A research-only baseline workflow is available; it has not been run or approved by this listing.",
     },
 )
 
 
-def public_source_catalogue() -> list[dict[str, str]]:
+def public_source_catalogue() -> list[dict[str, object]]:
     """Return fresh source records so API consumers cannot mutate the registry."""
-    return [dict(source) for source in PUBLIC_GENOMIC_SOURCES]
+    return [
+        {**source, "lifecycle_status": dict(source["lifecycle_status"])}
+        for source in PUBLIC_GENOMIC_SOURCES
+    ]

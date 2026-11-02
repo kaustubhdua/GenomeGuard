@@ -13,6 +13,9 @@
   lag from application/provenance failures without exposing configuration secrets.
   Live acceptance also checks the actual dataset, source, chromosome, variant-search,
   and population-reference routes instead of relying only on the UI shell.
+- Added explicit per-source lifecycle statuses from discovery through permitted-use
+  availability. The source page distinguishes registered metadata from downloaded,
+  checksum-verified, QC-validated, steward-approved, imported, and available data.
 - Added a curated public genomic source-discovery endpoint and page for IGSR/1000 Genomes,
   gnomAD aggregate reference data, and ClinVar summary metadata. The index links to official
   source and policy references, marks exact-artifact review as pending, and never claims a

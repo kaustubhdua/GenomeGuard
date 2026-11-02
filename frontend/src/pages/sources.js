@@ -1,6 +1,24 @@
 import { h, card, notice } from "../ui.js";
 import { loadPublicCatalogue } from "../catalogue-api.js";
 
+const LIFECYCLE_STAGES = [
+  ["discovered", "Discovered"],
+  ["metadata_registered", "Metadata registered"],
+  ["downloaded", "Downloaded"],
+  ["checksum_verified", "Checksum verified"],
+  ["qc_validated", "QC validated"],
+  ["steward_approved", "Steward approved"],
+  ["imported", "Imported"],
+  ["available_for_research", "Available for permitted research"],
+];
+const LIFECYCLE_LABELS = {
+  complete: "Complete",
+  not_started: "Not started",
+  pending: "Pending exact-artifact review",
+  not_imported: "Not imported",
+  not_available: "Not available",
+};
+
 function externalLink(url, label) {
   try {
     const parsed = new URL(url);
@@ -17,6 +35,7 @@ function externalLink(url, label) {
 }
 
 function sourceCard(source) {
+  const lifecycle = source.lifecycle_status || {};
   return h("article", { class: "card source-card" },
     h("div", { class: "source-card-top" },
       h("span", { class: "tag" }, source.data_type || "Data source"),
@@ -30,6 +49,15 @@ function sourceCard(source) {
     h("p", {}, source.summary || "Source description unavailable."),
     h("p", { class: "source-review-note" }, source.reuse_review || "Review applicable source terms before use."),
     h("p", { class: "fine" }, source.workflow || "No local workflow recorded."),
+    h("details", { class: "source-lifecycle" },
+      h("summary", {}, "Dataset lifecycle status"),
+      h("ol", { class: "source-lifecycle-list" },
+        ...LIFECYCLE_STAGES.map(([key, label]) => {
+          const status = lifecycle[key] || "not_started";
+          return h("li", {},
+            h("span", {}, label),
+            h("span", { class: "source-lifecycle-state" }, LIFECYCLE_LABELS[status] || "Not recorded"));
+        }))),
     h("div", { class: "source-links" },
       externalLink(source.source_url, "Open source"),
       externalLink(source.terms_url, "Review terms and policy")));

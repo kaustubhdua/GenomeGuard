@@ -407,6 +407,19 @@ def test_public_source_catalogue_is_discovery_only_and_keeps_review_boundaries()
         assert source["terms_url"].startswith("https://")
         assert source["terms_review_status"] == "pending_exact_artifact_review"
         assert source["import_status"] == "not_imported_by_catalogue"
+        assert source["lifecycle_status"] == {
+            "discovered": "complete",
+            "metadata_registered": "complete",
+            "downloaded": "not_started",
+            "checksum_verified": "not_started",
+            "qc_validated": "not_started",
+            "steward_approved": "pending",
+            "imported": "not_imported",
+            "available_for_research": "not_available",
+        }
+
+    sources["igsr-1000-genomes-phase-3"]["lifecycle_status"]["downloaded"] = "complete"
+    assert c.get("/catalogue/sources").json()["sources"][0]["lifecycle_status"]["downloaded"] == "not_started"
 
     assert "sample-level" in sources["igsr-1000-genomes-phase-3"]["data_type"].casefold()
     assert "Aggregate" in sources["gnomad-v4-1-grch38"]["data_type"]

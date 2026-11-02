@@ -433,6 +433,11 @@ svg.chart text { paint-order: stroke; stroke: var(--pane); stroke-width: 4px; st
 .source-facts dt { color: var(--ink-3); font-size: 11px; font-weight: 650; }
 .source-facts dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .source-review-note { padding-left: 12px; border-left: 2px solid var(--warn); }
+.source-lifecycle { border-top: 1px solid var(--line); padding-top: 8px; }
+.source-lifecycle summary { color: var(--ink-2); cursor: pointer; font-size: 13px; font-weight: 650; }
+.source-lifecycle-list { display: grid; gap: 6px; margin: 10px 0 0; padding-left: 20px; }
+.source-lifecycle-list li { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.source-lifecycle-state { color: var(--ink-3); text-align: right; }
 .source-links { margin-top: auto; padding-top: 6px; }
 .source-link { min-height: 24px; }
 .dataset-name { display: block; margin-bottom: 2px; color: var(--ink); font-weight: 600; }

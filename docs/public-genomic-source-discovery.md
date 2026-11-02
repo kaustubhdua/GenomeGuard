@@ -13,6 +13,12 @@ catalogue. Each entry reports exact-artifact terms review as pending and import 
 not completed. Public access must not be interpreted as participant-specific consent,
 legal authorization, or permission for every intended use.
 
+The API also exposes a `lifecycle_status` object for discovery, metadata registration,
+download, checksum verification, QC validation, steward approval, import, and permitted
+research availability. For the current curated entries, only discovery and metadata
+registration are complete. No source artifact is recorded as downloaded, checksum
+verified, QC validated, approved, imported, or available for research use.
+
 ## Source review notes
 
 - **IGSR:** IGSR describes 1000 Genomes data as unembargoed, but warns that rights and
