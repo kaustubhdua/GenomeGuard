@@ -296,6 +296,10 @@ def main() -> int:
         page.get_by_text("No dataset has been verified yet", exact=False).wait_for(timeout=5000)
         check("empty verified dataset catalogue is shown honestly",
               any(call["path"] == "/datasets" for call in edge_calls))
+        page.goto(base + "/#/chromosomes", wait_until="domcontentloaded")
+        page.get_by_text("Chromosome explorer", exact=False).wait_for(timeout=5000)
+        check("chromosome reference explorer uses Supabase Edge API",
+              any(call["path"].startswith("/chromosomes") for call in edge_calls))
 
         # Sign-up without a returned session must explain email verification and membership provisioning.
         page.locator("#supabase-signout").click()
