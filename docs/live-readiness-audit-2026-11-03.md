@@ -44,7 +44,7 @@ Project state: `ACTIVE_HEALTHY`
 
 Read-only database inspection found:
 
-- 23 tables in the private `genomeguard` schema.
+- 25 tables in the private `genomeguard` schema.
 - Zero normalized dataset manifests, dataset samples, dataset variants, or genotype calls.
 - Zero organizations, organization memberships, participant-consent records, requests, decisions, review-history records, and API events.
 - No schema `USAGE` for `anon`, `authenticated`, or `service_role`; no direct browser access to private GenomeGuard tables.
