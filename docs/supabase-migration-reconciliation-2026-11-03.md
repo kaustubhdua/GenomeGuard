@@ -44,6 +44,7 @@ The local migration filenames previously used independent timestamps and did not
 | 20261102213657 | genomeguard_importer_privileges | `20261102213657_genomeguard_importer_privileges.sql` |
 | 20261102213711 | genomeguard_importer_append_only | `20261102213711_genomeguard_importer_append_only.sql` |
 | 20261102213726 | genomeguard_population_reference | `20261102213726_genomeguard_population_reference.sql` |
+| 20261102213956 | genomeguard_population_reference_lookup_index | `20261102213956_genomeguard_population_reference_lookup_index.sql` |
 
 The live history also contains four BharatSim migrations (`20261027054905`, `20261027061609`, `20261030181640`, `20261101042942`). They are intentionally not represented or modified by this GenomeGuard repository.
 
@@ -63,8 +64,9 @@ The following previously unrecorded repository migrations were applied in depend
 - Importer role privileges: `20261102213657`.
 - Importer append-only restrictions: `20261102213711`.
 - Aggregate population-reference manifest/frequency schema: `20261102213726`.
+- Exact-locus lookup index: `20261102213956`.
 
-Read-only verification confirms both importer roles exist, importer roles can insert into their scoped tables, and DELETE is not granted. The two population-reference tables exist and are empty. The `genomeguard` schema now has 25 tables. No dataset artifact has been imported.
+Read-only verification confirms both importer roles exist, importer roles can insert into their scoped tables, and DELETE is not granted. The two population-reference tables exist and are empty. The exact-locus covering index is present. The `genomeguard` schema now has 25 tables. No dataset artifact has been imported.
 
 ## Remaining migration
 
