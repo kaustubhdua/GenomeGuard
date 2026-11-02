@@ -8,9 +8,8 @@ Updated: 2 November 2026
 contains a functioning research prototype and substantial workflow foundations. It is
 not verified for private or controlled-access participant data, clinical use, or
 production governance. Do not infer completion from local tests or a reachable hosted
-frontend. The [live readiness audit](docs/live-readiness-audit-2026-10-29.md) describes
-the known deployment boundary; live infrastructure was not checked or changed for this
-implementation.
+frontend. The [live readiness audit](docs/live-readiness-audit-2026-11-02.md) records
+the latest read-only checks; no live infrastructure was changed.
 
 ## Current evidence
 
@@ -58,6 +57,9 @@ implementation.
 - Restricted the verified imported-dataset catalogue to source-backed real VCF cohorts;
   synthetic demo fixtures are no longer reported as imported research datasets.
 - Updated the API and aggregate-reference documentation.
+- Made the embedded-cohort Docker build cache key explicit and passed the commit SHA
+  from the CI image build. Expanded deployed UI smoke coverage for chromosome, dataset,
+  and source-discovery routes with page-specific heading and mobile overflow assertions.
 
 ## Relevant files and commits
 
@@ -107,6 +109,12 @@ implementation.
 - Live PostgreSQL/Supabase integration, migration application, public artifact import,
   production deployment, and the complete Playwright smoke suite were **not run**.
   The local Python environment does not have Ruff or the Playwright package installed.
+- A read-only check of `https://genomeguard.onrender.com` on 2 November 2026 found
+  deployment drift: the health response still reports 600 matched consent records for
+  a dataset-level policy (the current source reports zero participant records), and
+  both current source/dataset catalogue API routes return 404. `/health/ready` remains
+  HTTP 503; the hosted overview heading also differs from the current repository UI.
+  See the [live readiness audit](docs/live-readiness-audit-2026-11-02.md).
 - Pytest emitted existing warnings for development-key use in local fixtures and an
   `httpx`/Starlette test-client deprecation; they did not fail the suite.
 

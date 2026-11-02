@@ -15,7 +15,17 @@ from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
 PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies",
-         "#/audit", "#/donor", "#/redteam", "#/federated", "#/variants", "#/dataset-qc"]
+         "#/audit", "#/donor", "#/redteam", "#/federated", "#/variants", "#/dataset-qc",
+         "#/chromosomes", "#/datasets", "#/sources"]
+EXPECTED_HEADINGS = {
+    "#/overview": "Research access, governed with evidence.",
+    "#/variants": "Locus & variant inspector",
+    "#/dataset-qc": "Dataset QC & import review",
+    "#/chromosomes": "Chromosome explorer",
+    "#/datasets": "Dataset catalogue",
+    "#/sources": "Public source discovery",
+}
+MOBILE_PAGES = ("#/overview", "#/chromosomes", "#/datasets", "#/sources", "#/variants")
 FAILURES: list[str] = []
 
 
@@ -79,7 +89,12 @@ def main() -> int:
                     if route in ("#/request/1", "#/family/1") and ("no such request" in content or "no request #" in content):
                         check(f"{theme} {route} explicit empty-data state", True)
                     else:
-                        check(f"{theme} {route}", page.locator("#view h1").count() == 1)
+                        heading = page.locator("#view h1").inner_text().strip()
+                        expected = EXPECTED_HEADINGS.get(route)
+                        check(f"{theme} {route}", page.locator("#view h1").count() == 1
+                              and (expected is None or heading == expected),
+                              "" if expected is None or heading == expected
+                              else f"expected {expected!r}, got {heading!r}")
                 except Exception as exc:
                     check(f"{theme} {route}", False, f"{type(exc).__name__}: {str(exc)[:160]}")
             check(f"no JavaScript errors ({theme})", not errors, "; ".join(errors)[:240])
@@ -90,12 +105,22 @@ def main() -> int:
             ctx.add_init_script("localStorage.setItem(\"gg_who\", \"steward\")")
             page = ctx.new_page()
             page.set_default_timeout(args.timeout)
-            page.goto(base + "/#/overview", wait_until="domcontentloaded")
-            page.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
-            layout = page.evaluate("""() => ({viewport: document.documentElement.clientWidth,
-              width: document.documentElement.scrollWidth,
-              overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1})""")
-            check(f"{width}px overview has no horizontal overflow", not layout["overflow"], str(layout))
+            for route in MOBILE_PAGES:
+                try:
+                    page.goto(base + "/" + route, wait_until="domcontentloaded")
+                    page.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
+                    heading = page.locator("#view h1").inner_text().strip()
+                    expected = EXPECTED_HEADINGS[route]
+                    check(f"{width}px {route} loads its expected page",
+                          heading == expected, f"expected {expected!r}, got {heading!r}")
+                    layout = page.evaluate("""() => ({viewport: document.documentElement.clientWidth,
+                      width: document.documentElement.scrollWidth,
+                      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1})""")
+                    check(f"{width}px {route} has no horizontal overflow",
+                          not layout["overflow"], str(layout))
+                except Exception as exc:
+                    check(f"{width}px {route}", False,
+                          f"{type(exc).__name__}: {str(exc)[:160]}")
             ctx.close()
         browser.close()
     print("\n" + ("LIVE UI SMOKE PASSED" if not FAILURES else f"LIVE UI SMOKE FAILED ({len(FAILURES)} checks)"))

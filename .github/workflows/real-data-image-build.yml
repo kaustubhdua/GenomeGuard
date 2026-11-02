@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build image and fetch the official public genotype source
-        run: docker build --tag genomeguard-real-research:ci .
+        run: docker build --build-arg GENOMEGUARD_COHORT_BUILD_REV="$GITHUB_SHA" --tag genomeguard-real-research:ci .
       - name: Verify image contains real genotype provenance and explicit source policy
         run: |
           docker run --rm --entrypoint python genomeguard-real-research:ci -c '

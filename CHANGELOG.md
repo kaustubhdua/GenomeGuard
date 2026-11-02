@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Made the real-cohort Docker build cache key explicit and consumed by the cohort
+  build step. The CI image build passes its commit SHA so each relevant build verifies
+  fresh dataset-policy provenance rather than relying on Dockerfile comments.
+- Expanded read-only live UI smoke checks to cover chromosome, dataset, and source
+  discovery routes, assert their intended page headings, and check responsive overflow
+  at phone widths. Added a dated audit documenting the observed hosted API drift.
 - Added a curated public genomic source-discovery endpoint and page for IGSR/1000 Genomes,
   gnomAD aggregate reference data, and ClinVar summary metadata. The index links to official
   source and policy references, marks exact-artifact review as pending, and never claims a

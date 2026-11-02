@@ -6,12 +6,15 @@ COPY backend ./backend
 RUN pip install -e .
 COPY frontend ./frontend
 COPY docs ./docs
-# Rebuild the public cohort image whenever its provenance generator or policy changes.
-# This marker also forces a fresh Render image so stale embedded cohort metadata is replaced.
+# Bump this default when a rebuild must refresh the embedded public cohort. It is
+# consumed by the RUN instruction below, so it participates in Docker's cache key.
+ARG GENOMEGUARD_COHORT_BUILD_REV=2026-11-02-live-policy-metadata
 # Build a small cohort from the official public 1000 Genomes VCF at image-build time.
 # Only the derived cohort is retained in the image; the downloaded source VCF and panel are removed.
 # The policy is dataset-level public-release provenance, not participant-specific consent.
-RUN python -m app.data.real build \
+RUN test -n "$GENOMEGUARD_COHORT_BUILD_REV" \
+    && printf 'Building public cohort for revision %s\n' "$GENOMEGUARD_COHORT_BUILD_REV" \
+    && python -m app.data.real build \
       --consent-policy-json docs/policies/igsr-1000-genomes-public-release.json \
       --out /app/data_real/1000g_phase3_chr22.npz --samples 600 --variants 3000 \
     && rm -f /app/data_real/chr22.vcf.gz /app/data_real/samples.ped
