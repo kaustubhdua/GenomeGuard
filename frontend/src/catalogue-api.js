@@ -1,6 +1,6 @@
-// Public catalogue endpoints served by the local GenomeGuard backend.
-// Previously called Supabase Edge Functions with a hardcoded publishable key.
-// Now calls the same Python backend that serves all other pages — zero external dependencies.
+// Public catalogue endpoints are served by the Supabase Edge Function. These routes are
+// read-only and expose no participant-level records or privileged database credentials.
+import { SUPABASE_EDGE_API, SUPABASE_PUBLISHABLE_KEY } from "./supabase-config.js";
 
 export async function loadPublicCatalogue(resource, options = {}) {
   if (!["datasets", "chromosomes", "sources"].includes(resource)) {
@@ -9,11 +9,11 @@ export async function loadPublicCatalogue(resource, options = {}) {
   const assembly = resource === "chromosomes" && ["GRCh37", "GRCh38"].includes(options.assembly)
     ? options.assembly : "GRCh38";
   const query = resource === "chromosomes" ? `?assembly=${encodeURIComponent(assembly)}` : "";
-  const path = `/catalogue/${resource}${query}`;
+  const path = `${SUPABASE_EDGE_API}/${resource}${query}`;
   try {
     const response = await fetch(path, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", apikey: SUPABASE_PUBLISHABLE_KEY },
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
     });
