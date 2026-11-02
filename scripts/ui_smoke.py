@@ -296,7 +296,6 @@ def main() -> None:
               nav_pg.locator("#nav a[href='#/audit'], #nav a[href='#/anomalies'], "
                              "#nav a[href='#/dataset-qc']").count() == 0)
         nav_ctx.close()
-        nav_ctx.close()
 
         print("\n1. The guided tour, with its two live actions (fresh database expected)")
         ctx = browser.new_context(viewport={"width": 1280, "height": 900})
