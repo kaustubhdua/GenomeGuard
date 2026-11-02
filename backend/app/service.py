@@ -1072,12 +1072,36 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         raise ValueError("database dataset ID does not match GG_DATASET_ID; use a separate database "
                          "or the matching dataset ID")
     if s.real_cohort_file and not stored_meta.get("provenance_unknown"):
+        # A persistent database may predate the explicit dataset-policy provenance fields.
+        # Refresh metadata only when the exact genotype VCF and sample metadata fingerprints
+        # match the configured cohort; never infer participant consent from a dataset policy.
         for key in ("source_vcf_sha256", "source_sample_metadata_sha256",
-                    "consent_records_sha256", "source_vcf_file", "consent_source_file",
-                    "genotypes_real", "consent_simulated", "consent_records_matched"):
+                    "source_vcf_file", "genotypes_real"):
             if stored_meta.get(key) != source_meta.get(key):
                 raise ValueError("configured real cohort does not match the cohort already stored in "
                                  "the database; use a fresh database path or restore its matching source")
+        policy_mode = source_meta.get("consent_basis") == "dataset_policy"
+        if policy_mode:
+            policy = source_meta.get("consent_policy") or {}
+            if (policy.get("not_individual_consent") is not True
+                    or policy.get("scope") != "dataset"
+                    or policy.get("review_status") != "source_documented_not_legal_review"
+                    or policy.get("withdrawal_supported") is not False
+                    or not source_meta.get("consent_policy_source_file")
+                    or not re.fullmatch(r"[0-9a-f]{64}",
+                                        str(source_meta.get("consent_policy_source_sha256") or ""))
+                    or int(source_meta.get("consent_records_matched") or 0) != 0
+                    or int(source_meta.get("dataset_policy_samples_scoped") or 0)
+                       != int(source_meta.get("samples") or 0)):
+                raise ValueError("configured dataset policy provenance is incomplete or inconsistent")
+        # Update only the provenance row. The cohort genotype/donor rows remain untouched.
+        if any(stored_meta.get(key) != source_meta.get(key) for key in (
+                "consent_basis", "consent_policy", "consent_policy_source_file",
+                "consent_policy_source_sha256", "consent_records_matched",
+                "dataset_policy_samples_scoped", "consent_records_sha256")):
+            store.x("UPDATE cohort_metadata SET metadata_json=? WHERE id=1",
+                    (json.dumps(source_meta),))
+            stored_meta = {"dataset_id": s.dataset_id, **source_meta}
     if not s.demo_mode and (stored_meta.get("consent_simulated") is not False
                             or stored_meta.get("genotypes_real") is not True):
         raise ValueError("stored cohort is not verified real-genotype data with source-matched consent")
