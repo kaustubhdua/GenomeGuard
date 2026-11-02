@@ -10,9 +10,10 @@ on:
         default: false
   push:
     branches:
-      - ml/public-annotations-retraining
+      - main
     paths:
       - .github/workflows/public-variant-retraining.yml
+      - backend/app/ml/clinvar_vep_train.py
 
 permissions:
   contents: read
@@ -34,7 +35,7 @@ jobs:
           python -m pip install -e ".[ml]"
       - name: Download, integrate, train and evaluate public annotations
         run: |
-          PYTHONPATH=backend python -m app.ml.clinvar_vep_train --max-variants 10000
+          PYTHONPATH=backend python -m app.ml.clinvar_vep_train --max-variants 20000
       - name: Upload model, metrics, provenance and annotation cache
         uses: actions/upload-artifact@v4
         with:
