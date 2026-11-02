@@ -443,6 +443,53 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         )
         return _j({"variant": variant, **result})
 
+    @route(
+        "GET", "/variants/clinical-annotations",
+        "Exact-allele lookup in approved ClinVar summary snapshots",
+        "public",
+    )
+    async def clinical_annotations(request):
+        q = request.query_params
+        chromosome = q.get("chromosome", "").strip().upper().removeprefix("CHR")
+        if chromosome == "M":
+            chromosome = "MT"
+        allowed_chromosomes = {str(n) for n in range(1, 23)} | {"X", "Y", "MT"}
+        if chromosome not in allowed_chromosomes:
+            raise ServiceError(400, "invalid_chromosome", "Use a chromosome from 1-22, X, Y, or MT.")
+        raw_position = q.get("position", "")
+        if not raw_position.isdigit() or int(raw_position) < 1:
+            raise ServiceError(400, "invalid_position", "Position must be a positive integer.")
+        position = int(raw_position)
+        reference = q.get("reference_allele", "").strip().upper()
+        alternate = q.get("alternate_allele", "").strip().upper()
+        import re
+        if (len(reference) > 50 or len(alternate) > 50
+                or not re.fullmatch(r"[ACGTN]+", reference)
+                or not re.fullmatch(r"[ACGTN]+", alternate)
+                or reference == alternate):
+            raise ServiceError(400, "invalid_alleles", "Reference and alternate alleles must be distinct DNA alleles.")
+        if len(reference) != len(alternate):
+            raise ServiceError(422, "unsupported_variant", "ClinVar lookup currently supports exact SNV and MNV substitutions; indels are not normalized.")
+        assembly = q.get("assembly", "").strip()
+        if assembly not in {"GRCh37", "GRCh38"}:
+            raise ServiceError(400, "invalid_assembly", "Choose GRCh37 or GRCh38.")
+        variant = {
+            "chromosome": chromosome, "position": position,
+            "reference_allele": reference, "alternate_allele": alternate,
+            "reference_assembly": assembly,
+        }
+        svc = S()
+        lookup = getattr(svc.store, "lookup_clinvar_annotations", None)
+        if getattr(svc.store, "backend", "sqlite") != "postgresql" or lookup is None:
+            return _j({
+                "status": "unavailable", "variant": variant, "matches": [],
+                "message": "Approved ClinVar evidence is not configured for this service.",
+            })
+        result = await run_in_threadpool(
+            lookup, chromosome, position, reference, alternate, assembly,
+        )
+        return _j({"variant": variant, **result})
+
     @route("GET", "/admin/dataset-qc", "Steward-only aggregate dataset QC and provenance summary", "admin")
     async def dataset_qc(request):
         admin(request)

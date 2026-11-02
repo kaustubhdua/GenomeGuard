@@ -369,3 +369,26 @@ def test_variant_inspector_and_steward_qc_are_metadata_only_and_authorized():
     assert data["matches"][0]["variant_id"] == 1
     assert "maf" not in str(data).lower()
     assert "donor" not in str(data).lower()
+
+
+def test_clinvar_lookup_is_explicitly_unavailable_without_postgres_and_validates_exact_alleles():
+    svc, c = make_client()
+    result = c.get(
+        "/variants/clinical-annotations?chromosome=1&position=123&reference_allele=A"
+        "&alternate_allele=G&assembly=GRCh38"
+    )
+    assert result.status_code == 200
+    assert result.json()["status"] == "unavailable"
+    assert result.json()["matches"] == []
+
+    invalid_chrom = c.get(
+        "/variants/clinical-annotations?chromosome=24&position=123&reference_allele=A"
+        "&alternate_allele=G&assembly=GRCh38"
+    )
+    assert invalid_chrom.status_code == 400
+    unsupported_indel = c.get(
+        "/variants/clinical-annotations?chromosome=1&position=123&reference_allele=A"
+        "&alternate_allele=AT&assembly=GRCh38"
+    )
+    assert unsupported_indel.status_code == 422
+

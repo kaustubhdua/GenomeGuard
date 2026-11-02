@@ -16,6 +16,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | POST | `/requests/preview` | Non-consuming privacy and utility preview | requester |
 | GET | `/variants/search` | Metadata-only variant lookup by ID or exact chromosome coordinate | public |
 | GET | `/variants/population-frequency` | Exact-allele lookup in approved, loaded aggregate references; includes source provenance | public |
+| GET | `/variants/clinical-annotations` | Exact-allele lookup in approved, loaded ClinVar summary snapshots | public |
 | GET | `/admin/dataset-qc` | Steward-only aggregate dataset QC and provenance summary | admin |
 | GET | `/beacon/g_variants` | GA4GH Beacon v2 style allele lookup, governed by the same consent, risk and audit pipeline | requester |
 | GET | `/requests` | List requests (own; all with admin key) | requester or admin |
@@ -56,3 +57,9 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 GET /variants/population-frequency accepts chromosome, position, reference_allele, alternate_allele, and assembly (GRCh37 or GRCh38) as query parameters. It returns only exact-locus aggregate rows from manifests whose data-use review is approved_public_research and import status is loaded. Each row identifies the source, release, URL, checksum, assembly, population, AC, AN, AF, and homozygote count.
 
 The status is available, empty, or unavailable. An empty result means no approved loaded reference matched; unavailable means the serving database, migration, or reader role is not configured. Neither state is filled with estimated values. This public reference endpoint is separate from participant-level cohort evidence and does not create or bypass a governed release.
+
+## ClinVar variant-level evidence
+
+GET /variants/clinical-annotations accepts chromosome, position, reference_allele, alternate_allele, and assembly (GRCh37 or GRCh38). It returns exact matches from approved, loaded ClinVar snapshot manifests, including the reported classification, review status, last-evaluated date, associated phenotype labels, source release and checksum. The initial GRCh38 importer supports equal-length substitutions only; indels are rejected until their coordinate representation can be normalized safely.
+
+These are aggregate variant-level archive assertions, not GenomeGuard predictions or diagnoses. Conflicting and uncertain source labels remain visible. The phenotype list is associated metadata, not a classification for each listed condition. Lookup is unavailable until a steward approves, imports and reconciles a snapshot. See docs/clinvar-reference-annotations.md for setup and data limits.

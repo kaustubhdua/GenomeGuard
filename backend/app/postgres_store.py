@@ -180,6 +180,65 @@ class PostgresStore(Store):
                 "message": "Approved aggregate population-reference lookup is unavailable in this database.",
             }
 
+    def lookup_clinvar_annotations(
+        self, chromosome: str, position: int, reference: str, alternate: str, assembly: str,
+    ) -> dict:
+        """Read exact variant-level ClinVar evidence under a narrowly scoped database role."""
+        statement = """
+            SELECT
+                m.dataset_key, m.source_name, m.source_release, m.source_url, m.file_sha256,
+                m.reference_assembly, a.variation_id, a.clinical_significance, a.review_status,
+                a.last_evaluated, a.conditions, a.gene_symbols, a.submitter_count
+            FROM genomeguard.clinvar_variant_annotation AS a
+            JOIN genomeguard.clinvar_annotation_manifest AS m ON m.id = a.dataset_id
+            WHERE a.chromosome = %s AND a.position = %s
+              AND a.reference_allele = %s AND a.alternate_allele = %s
+              AND m.reference_assembly = %s
+              AND m.data_use_review = 'approved_public_research'
+              AND m.import_status = 'loaded'
+            ORDER BY a.clinical_significance, a.variation_id
+            LIMIT 101
+        """
+        try:
+            with self.lock, self.connection.transaction():
+                self.connection.execute("SET TRANSACTION READ ONLY")
+                self.connection.execute("SET LOCAL ROLE genomeguard_clinvar_reader")
+                self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
+                rows = self.connection.execute(
+                    statement, (chromosome, position, reference, alternate, assembly),
+                ).fetchall()
+            truncated = len(rows) > 100
+            matches = [{
+                "dataset_key": row["dataset_key"],
+                "source_name": row["source_name"],
+                "source_release": row["source_release"],
+                "source_url": row["source_url"],
+                "file_sha256": row["file_sha256"],
+                "reference_assembly": row["reference_assembly"],
+                "variation_id": int(row["variation_id"]),
+                "clinical_significance": row["clinical_significance"],
+                "review_status": row["review_status"],
+                "last_evaluated": (
+                    row["last_evaluated"].isoformat() if row["last_evaluated"] else None
+                ),
+                "conditions": row["conditions"] or [],
+                "gene_symbols": row["gene_symbols"] or [],
+                "submitter_count": (
+                    int(row["submitter_count"]) if row["submitter_count"] is not None else None
+                ),
+                "clinvar_record_url": (
+                    "https://www.ncbi.nlm.nih.gov/clinvar/variation/"
+                    + str(row["variation_id"]) + "/"
+                ),
+            } for row in rows[:100]]
+            return {"status": "available" if matches else "empty", "matches": matches,
+                    "truncated": truncated}
+        except psycopg.Error:
+            return {
+                "status": "unavailable", "matches": [],
+                "message": "Approved ClinVar evidence is unavailable in this database.",
+            }
+
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:
             rows = list(self.connection.execute(_translate(sql), args).fetchall())

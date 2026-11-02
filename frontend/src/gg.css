@@ -1006,3 +1006,23 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
 .population-frequency-table table { min-width: 760px; }
 .population-frequency-table td { overflow-wrap: anywhere; }
 .popfreq-checksum { display: inline-block; max-width: 260px; overflow-wrap: anywhere; }
+
+/* ClinVar aggregate evidence in the Variant Inspector. */
+.clinvar-controls { display: grid; justify-items: start; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--rule-2); }
+.clinvar-controls button { width: auto; }
+.clinvar-results { width: 100%; display: grid; gap: 12px; }
+.clinvar-record { min-width: 0; padding: 14px; border: 1px solid var(--rule); border-radius: var(--r-pane); background: var(--pane-2); }
+.clinvar-record-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-bottom: 10px; }
+.clinvar-classification { display: inline-flex; max-width: 100%; padding: 5px 9px; border: 1px solid var(--control); border-radius: 999px; font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+.clinvar-classification.conflict { border-color: var(--deny); color: var(--deny); }
+.clinvar-classification.uncertain { border-color: var(--transform); color: var(--transform); }
+.clinvar-classification.reported { border-color: var(--control); color: var(--ink-2); }
+.clinvar-facts { display: grid; grid-template-columns: max-content minmax(0,1fr); gap: 5px 14px; margin: 10px 0; }
+.clinvar-facts dt { color: var(--ink-3); font-size: 13px; }
+.clinvar-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.clinvar-checksum { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .clinvar-facts { grid-template-columns: minmax(0,1fr); gap: 2px; }
+  .clinvar-facts dd { margin-bottom: 6px; }
+}
+
