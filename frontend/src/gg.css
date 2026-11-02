@@ -1028,7 +1028,7 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
 
 .qc-upload { max-width: 760px; }
 .qc-upload label { display: grid; gap: 7px; }
-.qc-upload input[type="file"] { max-width: 100%; }
+.qc-upload input[type="file"] { display: block; width: 100%; min-width: 0; max-width: 100%; }
 .qc-upload progress { display: block; width: min(100%, 520px); height: 10px; accent-color: var(--permit); }
 .qc-report { min-width: 0; }
 .qc-report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
