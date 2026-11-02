@@ -304,7 +304,7 @@ def main() -> int:
         page.locator("#supabase-full-name").fill("New User")
         page.locator("#supabase-signup").click()
         page.get_by_text("Check your email for the verification link", exact=False).wait_for(timeout=5000)
-        check("new account is not treated as authorized before verification and membership", not state if False else True)
+        check("new account is not treated as authorized before verification and membership", page.locator("#supabase-signout").is_hidden())
 
         # An authenticated but unprovisioned account must not see a request form.
         page.locator("#supabase-email").fill("pending@example.org")
