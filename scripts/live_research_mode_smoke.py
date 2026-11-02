@@ -48,15 +48,29 @@ def main() -> int:
     args = parser.parse_args()
     base = args.base.rstrip("/")
 
-    # Wait for the hosting provider to finish its auto-deploy and wake a free instance.
+    # Wait for Render to finish deploying the commit, not merely for an older healthy
+    # instance. A previous release can return HTTP 200 while still serving stale provenance.
     health_status, health = 0, {}
+    current_policy_metadata = False
     for attempt in range(max(1, args.retries)):
         health_status, health = call(base, "/health", timeout=args.timeout)
-        if (health_status == 200 and health.get("status") == "ok"
-                and health.get("demo_mode") is False
-                and (health.get("provenance") or {}).get("consent") == "source_policy"):
+        provenance = health.get("provenance") or {}
+        current_policy_metadata = (
+            health_status == 200
+            and health.get("status") == "ok"
+            and health.get("demo_mode") is False
+            and provenance.get("consent") == "source_policy"
+            and len(str(provenance.get("consent_policy_source_sha256") or "")) == 64
+            and int(provenance.get("consent_records_matched") or 0) == 0
+            and provenance.get("consent_records_sha256") is None
+            and int(provenance.get("dataset_policy_samples_scoped") or 0)
+                == int(health.get("donors") or -1)
+        )
+        if current_policy_metadata:
             break
         if attempt + 1 < args.retries:
+            print(f"[WAIT] deployment has not exposed current dataset-policy provenance "
+                  f"({attempt + 1}/{args.retries})")
             time.sleep(args.retry_delay)
     check("public application starts and health is HTTP 200",
           health_status == 200 and health.get("status") == "ok",
@@ -64,6 +78,11 @@ def main() -> int:
 
     if health_status != 200 or health.get("status") != "ok":
         print("\nLIVE RESEARCH MODE SMOKE FAILED (application unavailable)")
+        return 1
+    if not current_policy_metadata:
+        check("deployed app exposes current dataset-policy provenance", False,
+              "deployment did not become current before the retry window expired")
+        print("\nLIVE RESEARCH MODE SMOKE FAILED (stale deployment)")
         return 1
 
     provenance = health.get("provenance") or {}
