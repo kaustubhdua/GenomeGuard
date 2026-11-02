@@ -2,13 +2,14 @@ import { api, isSteward, state } from "../api.js";
 import { h, row, badge, lane, when, notice, errorText, reasonText, stepText, OUTCOME_LABEL, pct, workflow, timeline, pipeline } from "../ui.js";
 
 export async function render([id]) {
-  if (!state.demo && !state.who && !state.adminKey) {
+  if (!state.demo && !state.authToken && !state.who && !state.adminKey) {
     return h("div", {}, h("h1", {}, "Request #" + id),
       notice("warn", "Connect with an issued researcher API key or steward key in the sign-in panel before viewing request details."),
       h("a", { href: "#/requests" }, "Back to requests"));
   }
   const res = await api("/requests/" + id);
   if (!res.ok) { const r = h("div", {}, h("h1", {}, "Request #" + id), notice("err", errorText(res)), h("a", { href: "#/requests" }, "Back to requests")); return r; }
+  if (state.authToken) return renderSupabaseRequest(res.data, id);
   const d = res.data, q = d.request || {}, risk = d.risk || {}, tr = d.transform || {};
   const root = h("div", {});
   root.dataset.title = "Request #" + id;
@@ -83,6 +84,80 @@ export async function render([id]) {
 
   if (isSteward()) ledger.append(copilotRow(d), stewardPanel(d, before, after, tr));
   root.append(ledger);
+  return root;
+}
+
+
+function renderSupabaseRequest(data, id) {
+  const request = data.request || {};
+  const decision = data.decision || {};
+  const status = request.status || "pending_review";
+  const statusText = {
+    pending_review: "Waiting for steward review",
+    needs_more_information: "More information requested",
+    approved_pending_release: "Approved for review; release remains blocked",
+    denied: "Denied",
+  }[status] || status.replaceAll("_", " ");
+  const root = h("div", {});
+  root.dataset.title = "Request #" + id;
+  root.append(
+    h("a", { href: "#/requests" }, "All requests"),
+    h("h1", { style: "margin-top:8px" }, "Request #" + id),
+    h("p", { class: "lede" }, `${isSteward() ? "Organization request" : "Your request"} · ${(request.purpose || "").replaceAll("_", " ")} · ${request.data_level || "unspecified"} · ${when(request.created_at)}`),
+    notice(status === "denied" ? "err" : status === "approved_pending_release" ? "warn" : "info", statusText),
+    h("section", { class: "card" },
+      h("h2", {}, "Request details"),
+      h("dl", { class: "facts" },
+        h("dt", {}, "Research purpose"), h("dd", {}, (request.purpose || "—").replaceAll("_", " ")),
+        h("dt", {}, "Research topic"), h("dd", {}, request.disease || "Not specified"),
+        h("dt", {}, "Data level"), h("dd", {}, request.data_level || "—"),
+        h("dt", {}, "Commercial use"), h("dd", {}, request.is_commercial ? "Yes" : "No"),
+        h("dt", {}, "Organization"), h("dd", {}, request.organization_id || "Verified membership"))),
+    h("section", { class: "card", style: "margin-top:14px" },
+      h("h2", {}, "Decision"),
+      h("p", {}, decision.outcome ? OUTCOME_LABEL[decision.outcome] || decision.outcome : "No steward decision recorded yet."),
+      h("p", { class: "muted" }, decision.explanation || "This request is stored for human review. The Supabase request API does not run the genomic policy engine or release data."),
+      (decision.reasons || []).length ? h("ul", { class: "plain" }, decision.reasons.map((reason) => h("li", {}, reasonText(reason)))) : null,
+      notice("warn", "No genomic data has been released by this request workflow. An approval is not a data-release authorization.")),
+  );
+
+  const history = data.review_history || [];
+  root.append(h("section", { class: "card", style: "margin-top:14px" },
+    h("h2", {}, "Review history"),
+    history.length ? h("ol", { class: "plain" }, history.map((entry) =>
+      h("li", {}, `${entry.outcome.replaceAll("_", " ")} · ${when(entry.created_at)} · ${entry.reason}`)))
+      : h("p", { class: "muted" }, "No review actions have been recorded.")));
+
+  if (isSteward() && ["pending_review", "needs_more_information"].includes(status)) {
+    const reason = h("textarea", { rows: 3, maxlength: 2000, placeholder: "Explain the review decision (3–2000 characters)." });
+    const message = h("div", { "aria-live": "polite" });
+    const submitReview = async (outcome, button) => {
+      const value = reason.value.trim();
+      if (value.length < 3 || value.length > 2000) {
+        message.replaceChildren(notice("err", "Enter a review reason between 3 and 2,000 characters."));
+        return;
+      }
+      button.disabled = true;
+      message.replaceChildren(notice("info", "Saving the review decision…"));
+      const result = await api(`/requests/${id}/review`, {
+        method: "POST", body: { outcome, reason: value },
+      });
+      button.disabled = false;
+      if (!result.ok) {
+        message.replaceChildren(notice("err", errorText(result)));
+        return;
+      }
+      location.reload();
+    };
+    root.append(h("section", { class: "card", style: "margin-top:14px" },
+      h("h2", {}, "Steward review"),
+      h("label", { class: "f" }, "Reason", reason),
+      h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;margin-top:12px" },
+        h("button", { onclick: (event) => submitReview("approved", event.target) }, "Approve for separate release review"),
+        h("button", { class: "ghost", onclick: (event) => submitReview("needs_more_information", event.target) }, "Request more information"),
+        h("button", { class: "danger", onclick: (event) => submitReview("denied", event.target) }, "Deny")),
+      message));
+  }
   return root;
 }
 
