@@ -277,42 +277,25 @@ def main() -> None:
 
         print("\n0. Product navigation and demo-only research lab")
         nav_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
-        nav_ctx.add_init_script("localStorage.setItem('gg_who','steward')")
         nav_pg = nav_ctx.new_page()
         nav_pg.goto(base + "/#/overview")
-        nav_pg.wait_for_selector("#who option[value='steward']", timeout=30000)
+        nav_pg.wait_for_selector("#view h1", timeout=15000)
         nav_pg.wait_for_function(
-            "() => document.querySelectorAll('#nav .nav-label').length >= 5",
+            "() => document.querySelector('#auth-panel') && !document.querySelector('#auth-panel').hidden",
             timeout=15000,
         )
-        steward_sections = nav_pg.locator("#nav .nav-label").all_text_contents()
-        check("steward navigation groups core workflows and separates the research lab",
-              steward_sections == ["Overview", "Dataset Explorer", "Steward Review",
-                                   "Audit & Security", "Research Lab"],
-              ", ".join(steward_sections))
-        review_links = nav_pg.locator(
-            "#nav .nav-group", has=nav_pg.locator(".nav-label", has_text="Steward Review")
-        ).locator("a").all_text_contents()
-        check("steward request queue stays under Steward Review",
-              any("Request review queue" in text for text in review_links))
-        researcher_keys = nav_pg.locator("#who option:not([value='steward'])").evaluate_all(
-            "(options) => options.map((option) => option.value).filter(Boolean)"
-        )
-        if researcher_keys:
-            nav_pg.locator("#who").select_option(researcher_keys[0])
-            nav_pg.wait_for_function(
-                "() => [...document.querySelectorAll('#nav .nav-label')].some("
-                "(label) => label.textContent === 'Research Requests')",
-                timeout=15000,
-            )
-            researcher_sections = nav_pg.locator("#nav .nav-label").all_text_contents()
-            check("researcher navigation hides steward tools and keeps the lab separate",
-                  researcher_sections == ["Overview", "Dataset Explorer",
-                                          "Research Requests", "Research Lab"],
-                  ", ".join(researcher_sections))
-        else:
-            check("researcher navigation can be checked", False,
-                  "demo server did not provide a researcher persona")
+        public_sections = nav_pg.locator("#nav .nav-label").all_text_contents()
+        check("public navigation exposes only real-data workflows",
+              public_sections == ["Overview", "Dataset Explorer", "Research Requests"],
+              ", ".join(public_sections))
+        check("demo persona selector stays hidden outside demo mode",
+              nav_pg.locator("#who").is_hidden())
+        check("institutional credential panel is available",
+              nav_pg.locator("#auth-panel").is_visible())
+        check("steward-only routes are not exposed to an unauthenticated visitor",
+              nav_pg.locator("#nav a[href='#/audit'], #nav a[href='#/anomalies'], "
+                             "#nav a[href='#/dataset-qc']").count() == 0)
+        nav_ctx.close()
         nav_ctx.close()
 
         print("\n1. The guided tour, with its two live actions (fresh database expected)")
