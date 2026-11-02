@@ -60,3 +60,22 @@ without a `git_commit` value; `/health/live` returned 404; `/health/ready` retur
 deployment configuration is not evidence that the current application is running.
 The deployed revision and the reason for the route mismatch remain unknown without
 Render deployment or log access.
+
+## Recheck after the navigation milestone
+
+After pushing `a4f2b563f99aeb363ef4fccd658b3eb02d779b2f` to `main`, the public service
+was probed again without credentials or state-changing requests:
+
+- `/health` returned HTTP 200 and reported 600 donors, 3,000 variants, and
+  operator-declared 1000 Genomes VCF provenance. It did not include a runtime commit.
+- The policy metadata again said dataset-level public-release terms are not
+  participant-specific consent, while also reporting `consent_records_matched=600`
+  and a consent-record hash. This remains an unresolved hosted discrepancy; the count
+  and hash are not evidence of participant consent.
+- `/health/live` returned 404; `/health/ready` returned 503; and
+  `/catalogue/datasets` and `/catalogue/sources` returned 404.
+
+The public service therefore still does not demonstrate that the pushed revision is
+deployed. No Render credentials, deployment logs, or control-plane access were
+available to diagnose or correct the mismatch. Keep readiness closed and do not use
+the hosted response as proof of consent or current repository behavior.
