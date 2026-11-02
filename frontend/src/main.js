@@ -96,6 +96,7 @@ function visibleNav() {
   const steward = isSteward();
   return NAV.map(([label, items]) => [label, items.filter(([id]) => {
     if (id === "requests") return label === (steward ? "Steward Review" : "Research Requests");
+    if (state.authToken && ["dataset-qc", "family", "anomalies", "audit", "donor", "redteam", "federated"].includes(id)) return false;
     if (["dataset-qc", "family", "anomalies", "audit"].includes(id)) return steward;
     if (["donor", "redteam", "federated"].includes(id)) return state.demo;
     return true;
