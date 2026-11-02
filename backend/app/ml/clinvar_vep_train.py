@@ -20,6 +20,8 @@ from pathlib import Path
 import joblib
 import pandas as pd
 import sklearn
+from sklearn.base import clone
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -226,26 +228,41 @@ def main() -> int:
         ("numeric", Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())]), numeric),
         ("categorical", OneHotEncoder(handle_unknown="ignore"), categorical),
     ])
-    model = Pipeline([("features", pre), ("classifier", LogisticRegression(
-        class_weight="balanced", max_iter=3000, random_state=args.seed))])
-    model.fit(X.iloc[train_idx], y.iloc[train_idx])
-    probs = model.predict_proba(X.iloc[test_idx])[:, 1]
-    pred = (probs >= .5).astype(int)
-    yt = y.iloc[test_idx]
-    metrics = {
-        "accuracy": float(accuracy_score(yt, pred)),
-        "balanced_accuracy": float(balanced_accuracy_score(yt, pred)),
-        "precision": float(precision_score(yt, pred, zero_division=0)),
-        "recall": float(recall_score(yt, pred, zero_division=0)),
-        "f1": float(f1_score(yt, pred, zero_division=0)),
-        "auroc": float(roc_auc_score(yt, probs)),
-        "average_precision": float(average_precision_score(yt, probs)),
-        "brier_score": float(brier_score_loss(yt, probs)),
-        "confusion_matrix_tn_fp_fn_tp": confusion_matrix(yt, pred).ravel().tolist(),
+    candidates = {
+        "logistic_regression": LogisticRegression(
+            class_weight="balanced", max_iter=3000, random_state=args.seed),
+        "random_forest": RandomForestClassifier(
+            n_estimators=400, min_samples_leaf=2, class_weight="balanced_subsample",
+            n_jobs=-1, random_state=args.seed),
+        "extra_trees": ExtraTreesClassifier(
+            n_estimators=400, min_samples_leaf=2, class_weight="balanced",
+            n_jobs=-1, random_state=args.seed),
     }
-    model_path = args.output_dir / "clinvar_vep_research.joblib"
-    joblib.dump(model, model_path)
-    (args.output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
+    models = {}
+    yt = y.iloc[test_idx]
+    all_metrics = {}
+    for name, estimator in candidates.items():
+        candidate = Pipeline([("features", clone(pre)), ("classifier", estimator)])
+        candidate.fit(X.iloc[train_idx], y.iloc[train_idx])
+        probs = candidate.predict_proba(X.iloc[test_idx])[:, 1]
+        pred = (probs >= .5).astype(int)
+        all_metrics[name] = {
+            "accuracy": float(accuracy_score(yt, pred)),
+            "balanced_accuracy": float(balanced_accuracy_score(yt, pred)),
+            "precision": float(precision_score(yt, pred, zero_division=0)),
+            "recall": float(recall_score(yt, pred, zero_division=0)),
+            "f1": float(f1_score(yt, pred, zero_division=0)),
+            "auroc": float(roc_auc_score(yt, probs)),
+            "average_precision": float(average_precision_score(yt, probs)),
+            "brier_score": float(brier_score_loss(yt, probs)),
+            "confusion_matrix_tn_fp_fn_tp": confusion_matrix(yt, pred).ravel().tolist(),
+        }
+        models[name] = candidate
+    # Keep all candidates: do not pick a winner from a single holdout.
+    model_path = args.output_dir / "clinvar_vep_research_models.joblib"
+    joblib.dump(models, model_path)
+    (args.output_dir / "metrics.json").write_text(json.dumps({"models": all_metrics}, indent=2) + "\n")
+    metrics = {"models": all_metrics}
     metadata = {
         "model": "clinvar_vep_research", "version": "0.2.0",
         "sources": [
