@@ -174,13 +174,21 @@ export function disconnectKey() {
 }
 
 export async function boot() {
-  // /health already includes the readiness summary. Avoid a duplicate request during
-  // startup; the shell can render immediately while this single request hydrates state.
+  // Local development keeps the Python demo backend. Hosted deployments use the
+  // Supabase liveness/readiness endpoints so stale Render metadata cannot be shown
+  // as current provenance or participant consent.
   state.bootError = "";
-  const h = await call("/health");
+  const localBackend = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const publicHeaders = localBackend ? {} : { apikey: SUPABASE_PUBLISHABLE_KEY };
+  const healthUrl = localBackend ? "/health" : SUPABASE_EDGE_API + "/health";
+  const readyUrl = localBackend ? "/health/ready" : SUPABASE_EDGE_API + "/health/ready";
+  const [h, ready] = await Promise.all([
+    call(healthUrl, { headers: publicHeaders }),
+    call(readyUrl, { headers: publicHeaders }),
+  ]);
   state.health = h.data;
   if (!h.ok) state.bootError = h.data?.message || h.data?.error || "The GenomeGuard API is not responding.";
-  state.readiness = h.data?.readiness || { ready: false, checks: {} };
+  state.readiness = ready.data || h.data?.readiness || { ready: false, checks: {} };
   state.demo = null;
   state.donors = [];
   if (!h.ok || !h.data?.demo_mode) {
