@@ -148,6 +148,22 @@ Deno.serve(async (request: Request) => {
         full_frontend_route_parity: false },
       note: "Fail-closed migration gate. No genomic data access is granted by this API yet." }, 503);
   }
+  if (path.endsWith("/me") && request.method === "GET") {
+    const user = await authenticatedUser(request, url, serviceKey);
+    if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
+    try {
+      const access = await rpc(url, serviceKey, "gg_get_my_access_status", {
+        p_auth_user_id: user.id,
+      });
+      return json({
+        user: { id: user.id, email: user.email ?? null },
+        access,
+        note: "An authenticated account is not automatically authorized. An active organization membership is required for requests and steward actions.",
+      });
+    } catch {
+      return error(503, "access_status_unavailable", "Your organization access status could not be loaded.");
+    }
+  }
   const requestDetailMatch = path.match(/\/requests\/(\d+)$/);
   if (requestDetailMatch && request.method === "GET") {
     const user = await authenticatedUser(request, url, serviceKey);
