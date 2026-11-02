@@ -1,5 +1,13 @@
 name: real-data-image-build
 on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "backend/app/data/real.py"
+      - "backend/app/service.py"
+      - "docs/policies/igsr-1000-genomes-public-release.json"
   pull_request:
     paths:
       - "Dockerfile"
