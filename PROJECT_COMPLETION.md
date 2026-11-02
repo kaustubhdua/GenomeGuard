@@ -127,7 +127,7 @@ deployment were applied; no production genomic or participant data was inserted.
 
 ### Supabase steward queue implementation
 
-- Added `supabase/migrations/20261103010000_genomeguard_steward_review_queue.sql` and applied the migration to Supabase project `common 1` as `genomeguard_steward_review_queue`.
+- Added `supabase/migrations/20261102212149_genomeguard_steward_review_queue.sql` and applied the migration to Supabase project `common 1` as `genomeguard_steward_review_queue`.
 - Added `GET /steward/requests?limit=50&offset=0` to `supabase/functions/genomeguard-api/index.ts`; deployed Edge Function version 8.
 - Added the service-role-only `public.gg_list_review_queue(uuid,integer,integer)` RPC. It resolves reviewer membership from server-side records, rejects missing or ambiguous memberships, bounds pagination, filters to the reviewer's organization, and exposes only request metadata.
 - Added a clean-PostgreSQL migration regression test for queue pagination, organization isolation, researcher denial, ambiguous multi-organization denial, and function grants. GitHub Actions is running the new checks on the current mainline; do not mark the suite complete until that run finishes.
