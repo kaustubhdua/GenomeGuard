@@ -87,8 +87,8 @@ jobs:
           test -s supabase/migrations/20261029310000_genomeguard_assembly_scoped_coverage.sql
           test -s supabase/migrations/20261029320000_genomeguard_assembly_aware_reference_catalogue.sql
           test -s supabase/migrations/20261103000000_genomeguard_population_reference.sql
-          test -s supabase/migrations/20261103010000_genomeguard_steward_review_queue.sql
-          test -s supabase/migrations/20261103020000_genomeguard_auth_access_status.sql
+          test -s supabase/migrations/20261102212149_genomeguard_steward_review_queue.sql
+          test -s supabase/migrations/20261102212425_genomeguard_auth_access_status.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
