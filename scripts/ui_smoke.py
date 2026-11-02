@@ -9,7 +9,8 @@ Checks, on every page, in light and dark themes:
   * every visible text element has WCAG AA contrast (4.5:1; 3:1 for large text)
   * every button and link has a name, every input has a label, each page has one h1
   * buttons and form controls are at least 24 px tall and wide
-And it plays the guided tour end to end, including its two live actions, and checks the results.
+It exercises steward VCF upload, malformed and oversized inputs, gzip input, and JSON/text exports.
+It also plays the guided tour end to end, including its two live actions, and checks the results.
 The run changes server state (it sends requests and freezes the probe account), so use a fresh DB.
 Set CHROMIUM_PATH to use a browser that is already installed.
 """
@@ -17,15 +18,27 @@ Set CHROMIUM_PATH to use a browser that is already installed.
 from __future__ import annotations
 
 import argparse
+import gzip
+import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies", "#/audit",
-         "#/sources",
+         "#/datasets", "#/chromosomes", "#/variants", "#/sources", "#/dataset-qc",
          "#/donor", "#/redteam", "#/federated"]
+
+QC_VCF_HEADER = """##fileformat=VCFv4.2
+##reference=GRCh38
+##contig=<ID=1,length=248956422>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+##FILTER=<ID=PASS,Description="All filters passed">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE_A\tSAMPLE_B
+"""
 
 AUDIT_JS = r"""
 () => {
@@ -75,6 +88,98 @@ def check(label: str, ok: bool, detail: str = "") -> None:
     print(f"  [{'PASS' if ok else 'FAIL'}] {label}" + (f"  ({detail})" if detail else ""))
     if not ok:
         failures.append(label)
+
+
+def check_vcf_qc_workflow(browser, base: str) -> None:
+    print("\n3. Steward VCF QC upload and report exports")
+    context = browser.new_context(viewport={"width": 1280, "height": 900})
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(base + "/#/overview")
+    page.wait_for_selector("#who option[value='steward']", timeout=30000)
+    page.locator("#who").select_option("steward")
+    page.goto(base + "/#/dataset-qc")
+    page.wait_for_selector(".qc-upload", timeout=15000)
+
+    with tempfile.TemporaryDirectory(prefix="genomeguard-ui-vcf-qc-") as directory:
+        temporary = Path(directory)
+        valid_vcf = temporary / "synthetic-fixture.vcf"
+        valid_vcf.write_text(
+            QC_VCF_HEADER + "1\t100\t.\tA\tG\t50\tPASS\t.\tGT\t0/1\t0/0\n",
+            encoding="utf-8",
+        )
+        file_input = page.get_by_label("Select VCF or gzip-compressed VCF")
+        page.get_by_label("Reference assembly").select_option("GRCh38")
+        file_input.set_input_files(str(valid_vcf))
+        page.get_by_role("button", name="Run VCF QC").click()
+        page.wait_for_selector(".qc-report", timeout=60000)
+        report_status = page.locator(".qc-report-head h2").inner_text()
+        eligibility = page.locator(".qc-report").inner_text()
+        check("valid VCF upload completes with warnings, not false approval",
+              "passed with warnings" in report_status.lower()
+              and "NOT ESTABLISHED" in eligibility, report_status)
+
+        with page.expect_download() as json_download_info:
+            page.get_by_role("button", name="Download JSON").click()
+        json_download = json_download_info.value
+        json_path = temporary / json_download.suggested_filename
+        json_download.save_as(str(json_path))
+        exported = json.loads(json_path.read_text(encoding="utf-8"))
+        serialized = json.dumps(exported)
+        check("JSON report includes measured metrics and redacts sample identifiers",
+              exported.get("statistics", {}).get("split_variant_count") == 1
+              and exported.get("statistics", {}).get("genotype_cells") == 2
+              and exported.get("import_eligibility") == "NOT_ESTABLISHED"
+              and exported.get("file", {}).get("name") == "[redacted from export]"
+              and "SAMPLE_A" not in serialized and "SAMPLE_B" not in serialized)
+
+        with page.expect_download() as text_download_info:
+            page.get_by_role("button", name="Download human-readable report").click()
+        text_download = text_download_info.value
+        text_path = temporary / text_download.suggested_filename
+        text_download.save_as(str(text_path))
+        text_report = text_path.read_text(encoding="utf-8")
+        check("human-readable report preserves QC status and import boundary",
+              "Validation: PASSED_WITH_WARNINGS" in text_report
+              and "Import eligibility: NOT_ESTABLISHED" in text_report
+              and "SAMPLE_A" not in text_report and "SAMPLE_B" not in text_report)
+
+        invalid_vcf = temporary / "malformed.vcf"
+        invalid_vcf.write_text(
+            QC_VCF_HEADER + "1\tinvalid\t.\tA\tG\t50\tPASS\t.\tGT\t0/1\t0/0\n",
+            encoding="utf-8",
+        )
+        file_input.set_input_files(str(invalid_vcf))
+        page.get_by_role("button", name="Run VCF QC").click()
+        page.wait_for_function(
+            "() => document.querySelector('.qc-report-head h2')?.textContent.includes('failed')",
+            timeout=60000,
+        )
+        check("malformed VCF is reported as failed validation",
+              "failed" in page.locator(".qc-report-head h2").inner_text().lower())
+
+        compressed_vcf = temporary / "synthetic-fixture.vcf.gz"
+        with gzip.open(compressed_vcf, "wt", encoding="utf-8") as stream:
+            stream.write(QC_VCF_HEADER + "1\t101\t.\tC\tT\t.\tPASS\t.\tGT\t0/1\t./.\n")
+        file_input.set_input_files(str(compressed_vcf))
+        page.get_by_role("button", name="Run VCF QC").click()
+        page.wait_for_selector(".qc-report", timeout=60000)
+        check("gzip-compressed VCF upload completes",
+              "passed with warnings" in page.locator(".qc-report-head h2").inner_text().lower())
+
+        oversized_vcf = temporary / "oversized.vcf"
+        with oversized_vcf.open("wb") as stream:
+            stream.write(QC_VCF_HEADER.encode("utf-8"))
+            stream.truncate(100 * 1024 * 1024 + 1)
+        file_input.set_input_files(str(oversized_vcf))
+        upload_disabled = page.get_by_role("button", name="Run VCF QC").is_disabled()
+        check("oversized VCF is rejected before upload",
+              upload_disabled and "exceeds the 100 MiB upload limit"
+              in page.locator('.qc-upload [role="status"]').inner_text())
+
+    check("no JavaScript errors during VCF QC workflow", not errors, "; ".join(errors)[:160])
+    context.close()
 
 
 def main() -> None:
@@ -265,6 +370,8 @@ def main() -> None:
                     pg.screenshot(path=str(Path(screenshot_dir) / shot_name), full_page=True,
                                   animations="disabled")
             check(f"no JavaScript errors ({theme})", not errs, "; ".join(errs)[:120])
+
+        check_vcf_qc_workflow(browser, base)
 
         print("\n3. No horizontal scroll on phones")
         for width in (320, 375, 414):
