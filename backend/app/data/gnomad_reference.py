@@ -11,6 +11,7 @@ import hashlib
 import os
 import re
 import sys
+from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -95,6 +96,48 @@ def iter_frequency_rows(path: Path) -> Iterator[tuple]:
             raise ReferenceImportError("TSV contains no aggregate frequency rows")
 
 
+
+
+def validate_input(args) -> dict:
+    """Preflight a normalized TSV without database access or writes."""
+    if not args.input.is_file() or args.input.stat().st_size == 0:
+        raise ReferenceImportError("input TSV is missing or empty")
+    digest = sha256_file(args.input)
+    if args.expected_sha256 and digest != args.expected_sha256:
+        raise ReferenceImportError("input TSV SHA-256 does not match --expected-sha256")
+    chromosomes: Counter[str] = Counter()
+    populations: Counter[str] = Counter()
+    row_count = 0
+    zero_frequency_rows = 0
+    min_frequency = 1.0
+    max_frequency = 0.0
+    for row in iter_frequency_rows(args.input):
+        chrom, _, _, _, population, _, _, frequency, _ = row
+        row_count += 1
+        chromosomes[chrom] += 1
+        populations[population] += 1
+        zero_frequency_rows += frequency == 0
+        min_frequency = min(min_frequency, frequency)
+        max_frequency = max(max_frequency, frequency)
+    return {
+        "report_status": "validated_input_only",
+        "dataset_key": args.dataset_key,
+        "reference_assembly": "GRCh38",
+        "source_file": args.input.name,
+        "source_sha256": digest,
+        "file_bytes": args.input.stat().st_size,
+        "format": "normalized aggregate-frequency TSV",
+        "source_variant_population_rows": row_count,
+        "chromosome_row_counts": dict(sorted(chromosomes.items())),
+        "population_row_counts": dict(sorted(populations.items())),
+        "allele_frequency": {
+            "minimum": min_frequency, "maximum": max_frequency,
+            "zero_frequency_rows": zero_frequency_rows,
+        },
+        "approval_or_import_performed": False,
+    }
+
+
 def import_to_database(args) -> dict:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -105,6 +148,9 @@ def import_to_database(args) -> dict:
     if args.expected_sha256 and digest != args.expected_sha256:
         raise ReferenceImportError("input TSV SHA-256 does not match --expected-sha256")
     inserted = 0
+    input_rows = 0
+    chromosome_counts: Counter[str] = Counter()
+    population_counts: Counter[str] = Counter()
     batch: list[tuple] = []
     with psycopg.connect(database_url, autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -128,6 +174,9 @@ def import_to_database(args) -> dict:
                 if status not in {"validated", "loading"}:
                     raise ReferenceImportError("manifest must be validated or loading before import")
                 for row in iter_frequency_rows(args.input):
+                    input_rows += 1
+                    chromosome_counts[row[0]] += 1
+                    population_counts[row[4]] += 1
                     batch.append((dataset_id, *row))
                     if len(batch) >= BATCH_SIZE:
                         cur.executemany(
@@ -154,7 +203,26 @@ def import_to_database(args) -> dict:
                         batch,
                     )
                     inserted += max(cur.rowcount, 0)
-    return {"dataset_key": args.dataset_key, "inserted_rows": inserted, "sha256": digest}
+                cur.execute(
+                    """SELECT count(*) FROM genomeguard.population_variant_frequency
+                       WHERE dataset_id = %s""",
+                    (dataset_id,),
+                )
+                database_rows = int(cur.fetchone()[0])
+    return {
+        "report_status": "imported_pending_steward_reconciliation",
+        "dataset_key": args.dataset_key,
+        "reference_assembly": assembly,
+        "source_file": args.input.name,
+        "source_sha256": digest,
+        "source_variant_population_rows": input_rows,
+        "inserted_rows": inserted,
+        "rows_not_inserted_due_to_conflict": max(input_rows - inserted, 0),
+        "database_rows_after_import": database_rows,
+        "chromosome_row_counts": dict(sorted(chromosome_counts.items())),
+        "population_row_counts": dict(sorted(population_counts.items())),
+        "manifest_updated": False,
+    }
 
 
 def export_to_excel(args) -> dict:
@@ -220,14 +288,22 @@ def export_to_excel(args) -> dict:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="gnomAD aggregate frequency import/export")
     commands = parser.add_subparsers(dest="command", required=True)
+    val = commands.add_parser("validate", help="validate a normalized aggregate TSV without database writes")
+    val.add_argument("--input", type=Path, required=True)
+    val.add_argument("--dataset-key", required=True)
+    val.add_argument("--expected-sha256")
+    val.add_argument("--report", type=Path, help="also write the aggregate validation report as JSON")
+    val.set_defaults(func=validate_input)
     imp = commands.add_parser("import", help="import a normalized aggregate TSV")
     imp.add_argument("--input", type=Path, required=True)
     imp.add_argument("--dataset-key", required=True)
     imp.add_argument("--expected-sha256")
+    imp.add_argument("--report", type=Path, help="also write the aggregate reconciliation report as JSON")
     imp.set_defaults(func=import_to_database)
     exp = commands.add_parser("export-xlsx", help="export an approved loaded dataset to Excel")
     exp.add_argument("--dataset-key", required=True)
     exp.add_argument("--output", type=Path, required=True)
+    exp.add_argument("--report", type=Path, help="also write the export summary as JSON")
     exp.set_defaults(func=export_to_excel)
     return parser
 
@@ -235,7 +311,21 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        print(__import__("json").dumps(args.func(args), indent=2))
+        import json
+        result = args.func(args)
+        serialized = json.dumps(result, indent=2, sort_keys=True)
+        if getattr(args, "report", None):
+            report_path = args.report.resolve()
+            protected_paths = [
+                path.resolve() for path in (
+                    getattr(args, "input", None), getattr(args, "output", None)
+                ) if path is not None
+            ]
+            if report_path in protected_paths:
+                raise ReferenceImportError("report path must not overwrite an input or export file")
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(serialized + "\n", encoding="utf-8")
+        print(serialized)
     except (ReferenceImportError, OSError, psycopg.Error) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

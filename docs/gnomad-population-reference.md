@@ -14,6 +14,30 @@ Download the appropriate public gnomAD v4 GRCh38 sites artifact and prepare a no
 
 Optional: `homozygote_count`. No additional columns are accepted; sample identifiers, individual genotype fields, and participant IDs are rejected. Preserve source release, artifact URL, checksum, and documented population labels. The normalizer must map the release's INFO/frequency annotations to AC, AN, AF and homozygote count without deriving sample-level calls.
 
+## Preflight validation and import reports
+
+Validate the normalized file before connecting to the database:
+
+The validate command needs no database connection:
+
+    python -m app.data.gnomad_reference validate \
+      --input /secure/gnomad-frequency.tsv \
+      --dataset-key gnomad-v4-grch38 \
+      --expected-sha256 <64-character-sha256> \
+      --report /secure/reports/gnomad-v4-validation.json
+
+The preflight streams and validates the complete TSV, then reports its checksum, byte size, row counts by chromosome and population, and AF range. It contains aggregate metadata only; it does not list variant rows, connect to a database, approve a manifest, or import data.
+
+The import command can also write a JSON report with the same source checksum and dimensions, inserted row count, rows skipped by the unique-key conflict rule, and total database rows after import:
+
+    python -m app.data.gnomad_reference import \
+      --input /secure/gnomad-frequency.tsv \
+      --dataset-key gnomad-v4-grch38 \
+      --expected-sha256 <64-character-sha256> \
+      --report /secure/reports/gnomad-v4-import.json
+
+Treat this report as reconciliation evidence for a steward. The importer still does not update the manifest or mark the dataset loaded; a steward must compare the database row count and report with the source manifest before changing status. Keep report files in the approved data-handling location.
+
 ## Import
 
 1. Apply migration `20261103000000_genomeguard_population_reference.sql` through the normal reviewed deployment process.
@@ -56,7 +80,7 @@ The response status is available, empty, or unavailable. Missing serving-role gr
 
 ## Current implementation status
 
-This code provides normalized TSV import, Excel export, and a read-only exact-locus API lookup. It does not download the source artifact, perform source-term approval, run the import, or connect to a production database. Do not claim data is loaded until a steward has completed those steps and reconciled row counts. gnomAD's represented cohort size must never be described as 807,162 individual profiles available for download.
+This code provides normalized TSV preflight validation, import reconciliation reports, Excel export, and a read-only exact-locus API lookup. It does not download the source artifact, perform source-term approval, run the import, or connect to a production database. Do not claim data is loaded until a steward has completed those steps and reconciled row counts. gnomAD's represented cohort size must never be described as 807,162 individual profiles available for download.
 
 Sources:
 - https://gnomad.broadinstitute.org/news/2023-11-gnomad-v4/
