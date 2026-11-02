@@ -6,6 +6,8 @@ COPY backend ./backend
 RUN pip install -e .
 COPY frontend ./frontend
 COPY docs ./docs
+# Rebuild the public cohort image whenever its provenance generator or policy changes.
+# This marker also forces a fresh Render image so stale embedded cohort metadata is replaced.
 # Build a small cohort from the official public 1000 Genomes VCF at image-build time.
 # Only the derived cohort is retained in the image; the downloaded source VCF and panel are removed.
 # The policy is dataset-level public-release provenance, not participant-specific consent.
