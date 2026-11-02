@@ -147,7 +147,7 @@ function renderSupabaseRequest(data, id) {
         message.replaceChildren(notice("err", errorText(result)));
         return;
       }
-      location.reload();
+      location.hash = "#/requests";
     };
     root.append(h("section", { class: "card", style: "margin-top:14px" },
       h("h2", {}, "Steward review"),
