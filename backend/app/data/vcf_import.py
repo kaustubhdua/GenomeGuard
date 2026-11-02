@@ -151,14 +151,47 @@ def inspect_header(
                     raise ImportValidationError("invalid, empty, or duplicate sample identifiers")
                 if max_samples is not None and len(samples) > max_samples:
                     raise ImportValidationError("sample count exceeds the configured limit")
-                definitions: dict[str, set[str]] = {"INFO": set(), "FORMAT": set(), "FILTER": set(), "contig": set()}
+                definitions: dict[str, set[str]] = {
+                    "INFO": set(), "FORMAT": set(), "FILTER": set(), "contig": set()
+                }
+                field_schemas: dict[str, dict[str, dict[str, str]]] = {
+                    "INFO": {}, "FORMAT": {}, "FILTER": {},
+                }
                 for header in headers:
-                    match = re.match(r"^##(INFO|FORMAT|FILTER|contig)=<ID=([^,>]+)", header)
-                    if match:
-                        section, identifier = match.groups()
-                        if identifier in definitions[section]:
-                            raise ImportValidationError(f"duplicate {section} header definition")
-                        definitions[section].add(identifier)
+                    section_match = re.match(r"^##(INFO|FORMAT|FILTER|contig)=", header)
+                    if not section_match:
+                        continue
+                    section = section_match.group(1)
+                    attributes = _parse_meta_definition(header, section)
+                    identifier = attributes.get("ID", "")
+                    if not identifier or not re.fullmatch(r"[A-Za-z0-9_.:-]+", identifier):
+                        raise ImportValidationError(f"invalid {section} header identifier")
+                    if identifier in definitions[section]:
+                        raise ImportValidationError(f"duplicate {section} header definition")
+                    definitions[section].add(identifier)
+                    if section in {"INFO", "FORMAT"}:
+                        number = attributes.get("Number", "")
+                        field_type = attributes.get("Type", "")
+                        if (
+                            number not in {".", "A", "R", "G"}
+                            and (not number.isdigit() or len(number) > 9)
+                        ):
+                            raise ImportValidationError(f"invalid {section} Number definition")
+                        if field_type not in {"Integer", "Float", "Flag", "Character", "String"}:
+                            raise ImportValidationError(f"invalid {section} Type definition")
+                        if "Description" not in attributes:
+                            raise ImportValidationError(f"{section} definition is missing Description")
+                        if field_type == "Flag" and (section != "INFO" or number != "0"):
+                            raise ImportValidationError("Flag fields must be INFO fields with Number=0")
+                        if number == "0" and field_type != "Flag":
+                            raise ImportValidationError("Number=0 is only valid for INFO Flag fields")
+                        field_schemas[section][identifier] = {
+                            "Number": number, "Type": field_type,
+                        }
+                    elif section == "FILTER":
+                        if "Description" not in attributes:
+                            raise ImportValidationError("FILTER definition is missing Description")
+                        field_schemas["FILTER"][identifier] = {}
                 reference = [actual] if any(
                     header.startswith(("##reference=", "##assembly=")) for header in headers
                 ) else []
@@ -175,6 +208,7 @@ def inspect_header(
                     "format_definitions": sorted(definitions["FORMAT"]),
                     "info_definitions": sorted(definitions["INFO"]),
                     "filter_definitions": sorted(definitions["FILTER"]),
+                    "_field_schemas": field_schemas,
                 }
                 return headers, samples, metadata
     raise ImportValidationError("VCF is missing a #CHROM header")
@@ -185,16 +219,122 @@ def read_header(path: Path, expected_assembly: str) -> tuple[list[str], list[str
     return headers, samples
 
 
-def _validate_info(info: str) -> None:
+def _parse_meta_definition(header: str, section: str) -> dict[str, str]:
+    prefix = f"##{section}=<"
+    if not header.startswith(prefix) or not header.endswith(">"):
+        raise ImportValidationError(f"malformed {section} header definition")
+    body = header[len(prefix):-1]
+    parts: list[str] = []
+    current: list[str] = []
+    in_quotes = False
+    escaped = False
+    for character in body:
+        if escaped:
+            current.append(character)
+            escaped = False
+        elif character == "\\" and in_quotes:
+            current.append(character)
+            escaped = True
+        elif character == '"':
+            current.append(character)
+            in_quotes = not in_quotes
+        elif character == "," and not in_quotes:
+            parts.append("".join(current))
+            current.clear()
+        else:
+            current.append(character)
+    if in_quotes or escaped:
+        raise ImportValidationError(f"malformed {section} header definition")
+    parts.append("".join(current))
+    attributes: dict[str, str] = {}
+    for part in parts:
+        key, separator, value = part.partition("=")
+        if not separator or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", key) or key in attributes:
+            raise ImportValidationError(f"malformed {section} header definition")
+        if value.startswith('"') or value.endswith('"'):
+            if len(value) < 2 or not (value.startswith('"') and value.endswith('"')):
+                raise ImportValidationError(f"malformed {section} header definition")
+            value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+        elif '"' in value:
+            raise ImportValidationError(f"malformed {section} header definition")
+        attributes[key] = value
+    return attributes
+
+
+def _validate_scalar(value: str, field_type: str, field_name: str) -> None:
+    if value == ".":
+        return
+    if not value:
+        raise ImportValidationError(f"empty value for {field_name}")
+    if field_type == "Integer":
+        if len(value) > 11 or not re.fullmatch(r"[+-]?[0-9]+", value):
+            raise ImportValidationError(f"invalid integer value for {field_name}")
+        if not -(2**31) <= int(value) < 2**31:
+            raise ImportValidationError(f"integer value is out of range for {field_name}")
+    elif field_type == "Float":
+        if len(value) > 64 or not re.fullmatch(
+            r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value
+        ):
+            raise ImportValidationError(f"invalid float value for {field_name}")
+        if not math.isfinite(float(value)):
+            raise ImportValidationError(f"non-finite float value for {field_name}")
+    elif field_type == "Character":
+        if len(value) != 1 or not value.isprintable():
+            raise ImportValidationError(f"invalid character value for {field_name}")
+    elif field_type == "String":
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+            raise ImportValidationError(f"invalid string value for {field_name}")
+
+
+def _validate_declared_value(
+    value: str,
+    schema: dict[str, str],
+    field_name: str,
+    alternate_count: int,
+    *,
+    genotype_count: int | None = None,
+) -> None:
+    if value == ".":
+        return
+    values = value.split(",")
+    number = schema["Number"]
+    expected_count: int | None = None
+    if number.isdigit():
+        expected_count = int(number)
+    elif number == "A":
+        expected_count = alternate_count
+    elif number == "R":
+        expected_count = alternate_count + 1
+    elif number == "G":
+        expected_count = genotype_count
+    if expected_count is not None and len(values) != expected_count:
+        raise ImportValidationError(f"wrong value count for {field_name}")
+    for item in values:
+        _validate_scalar(item, schema["Type"], field_name)
+
+
+def _validate_info(info: str, schemas: dict[str, dict[str, str]], alternate_count: int) -> None:
     if info == ".":
         return
     entries = info.split(";")
     if any(not entry or entry.count("=") > 1 for entry in entries):
         raise ImportValidationError("invalid INFO field structure")
+    seen: set[str] = set()
     for entry in entries:
         key, separator, value = entry.partition("=")
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key) or (separator and not value):
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]+", key) or (separator and not value):
             raise ImportValidationError("invalid INFO field structure")
+        if key in seen:
+            raise ImportValidationError("duplicate INFO field")
+        seen.add(key)
+        schema = schemas.get(key)
+        if schema is None:
+            raise ImportValidationError(f"INFO field {key} has no header definition")
+        is_flag = schema["Type"] == "Flag"
+        if is_flag != (not separator):
+            raise ImportValidationError(f"INFO flag/value structure does not match {key} definition")
+        if separator:
+            _validate_declared_value(value, schema, f"INFO/{key}", alternate_count)
 
 
 def iter_records(
@@ -208,6 +348,12 @@ def iter_records(
     # Keep duplicate-detection memory bounded: require coordinate-sorted VCF input and
     # retain only keys at the current chromosome/position, not every variant in the file.
     chrom_order = {str(i): i for i in range(1, 23)} | {"X": 23, "Y": 24, "MT": 25}
+    _, declared_samples, header_metadata = inspect_header(
+        path, assembly, max_line_bytes=max_line_bytes, max_total_bytes=max_total_bytes,
+    )
+    if samples != declared_samples:
+        raise ImportValidationError("sample columns changed between VCF validation passes")
+    field_schemas = header_metadata["_field_schemas"]
     last_coordinate: tuple[str, int] | None = None
     last_order: tuple[int, int] | None = None
     seen_at_coordinate: set[tuple[str, str]] = set()
@@ -217,24 +363,40 @@ def iter_records(
     with open_vcf(path) as stream:
         for raw in bounded_lines(stream, max_line_bytes, max_total_bytes):
             line = raw.rstrip("\r\n")
-            if not line or line.startswith("#"):
-                if line.startswith("#CHROM"):
-                    if header_seen:
-                        raise ImportValidationError("duplicate VCF column header")
-                    header_seen = True
+            if not line:
                 continue
+            if line.startswith("##"):
+                if header_seen:
+                    raise ImportValidationError("VCF metadata appears after the column header")
+                continue
+            if line.startswith("#CHROM"):
+                if header_seen:
+                    raise ImportValidationError("duplicate VCF column header")
+                header_seen = True
+                continue
+            if line.startswith("#"):
+                raise ImportValidationError("unexpected VCF header line")
+            if not header_seen:
+                raise ImportValidationError("VCF record appears before the #CHROM header")
             fields = line.split("\t")
             if len(fields) != 9 + len(samples):
                 raise ImportValidationError("VCF row has the wrong number of columns")
             chrom, pos_text, _, ref, alt_text, quality_text, filter_text, info_text, fmt = fields[:9]
-            if filter_text != "." and (
-                not filter_text or any(
-                    not re.fullmatch(r"[A-Za-z0-9_.:]+", value)
-                    for value in filter_text.split(";")
-                ) or len(set(filter_text.split(";"))) != len(filter_text.split(";"))
+            filter_values = [] if filter_text == "." else filter_text.split(";")
+            if (
+                filter_text != "."
+                and (
+                    not filter_text
+                    or any(not re.fullmatch(r"[A-Za-z0-9_.:-]+", value) for value in filter_values)
+                    or len(set(filter_values)) != len(filter_values)
+                    or ("PASS" in filter_values and len(filter_values) != 1)
+                    or any(
+                        value != "PASS" and value not in field_schemas["FILTER"]
+                        for value in filter_values
+                    )
+                )
             ):
-                raise ImportValidationError("invalid FILTER field")
-            _validate_info(info_text)
+                raise ImportValidationError("invalid or undeclared FILTER value")
             if quality_text == ".":
                 quality = None
             else:
@@ -259,6 +421,7 @@ def iter_records(
             alts = alt_text.split(",")
             if not alts or any(not ALLELE_RE.fullmatch(a) or a == ref for a in alts) or len(set(alts)) != len(alts):
                 raise ImportValidationError("invalid, duplicate, symbolic, or reference-equal ALT allele")
+            _validate_info(info_text, field_schemas["INFO"], len(alts))
             order = (chrom_order[chrom], pos)
             coordinate = (chrom, pos)
             if last_order is not None and order < last_order:
@@ -277,6 +440,11 @@ def iter_records(
                 or len(formats) != len(set(formats)) or formats.count("GT") != 1
             ):
                 raise ImportValidationError("FORMAT must contain exactly one GT field and no duplicates")
+            gt_schema = field_schemas["FORMAT"].get("GT")
+            if gt_schema is None:
+                raise ImportValidationError("FORMAT field GT has no header definition")
+            if gt_schema != {"Number": "1", "Type": "String"}:
+                raise ImportValidationError("GT must be declared as Number=1,Type=String")
             gt_index = formats.index("GT")
             gq_index = formats.index("GQ") if "GQ" in formats else None
             genotypes = []
@@ -287,9 +455,23 @@ def iter_records(
                     raise ImportValidationError("sample FORMAT value count does not match FORMAT fields")
                 if sample_cell == ".":
                     values = ["."] * len(formats)
+                if any(field not in field_schemas["FORMAT"] for field in formats):
+                    raise ImportValidationError("FORMAT field has no header definition")
                 if gt_index >= len(values):
                     raise ImportValidationError("sample has no GT value")
                 genotypes.append(values[gt_index])
+                gt = values[gt_index]
+                ploidy = 0 if gt in {"", "."} else len(re.split(r"[|/]", gt))
+                genotype_count = (
+                    math.comb(len(alts) + ploidy, ploidy) if ploidy else None
+                )
+                for field_index, field_name in enumerate(formats):
+                    if field_name != "GT":
+                        _validate_declared_value(
+                            values[field_index], field_schemas["FORMAT"][field_name],
+                            f"FORMAT/{field_name}", len(alts),
+                            genotype_count=genotype_count,
+                        )
                 if gq_index is not None and values[gq_index] != ".":
                     if (
                         len(values[gq_index]) > 10
@@ -345,6 +527,8 @@ def iter_records(
                 }
                 variant_index += 1
             source_index += 1
+    if not header_seen:
+        raise ImportValidationError("VCF is missing a #CHROM header")
     if source_index == 0:
         raise ImportValidationError("VCF contains no variant records")
 

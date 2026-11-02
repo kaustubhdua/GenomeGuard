@@ -7,6 +7,10 @@
   source file, and runs only on the configured GenomeGuard server. Reports include parser,
   checksum, metadata, genotype-missingness, allele-frequency, QUAL, and optional GQ measures;
   they omit sample identifiers and do not establish licensing, consent, or import approval.
+- Tightened VCF structure checks: records must follow the column header, metadata definitions
+  are parsed safely, and INFO/FORMAT/FILTER identifiers, declared scalar types, and supported
+  cardinalities are validated. Reference-allele comparison and normalization remain out of
+  scope without a verified reference sequence.
 - UI redesign: a biology and medical research-instrument look. The request pipeline is drawn as a
   banded chromosome with the decision as the centromere, audit hashes and checksums get banded
   fingerprints, the chromosome explorer gains coverage bars, and outcome colours are named after

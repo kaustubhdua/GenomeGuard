@@ -13,6 +13,7 @@ def _vcf(tmp_path: Path, reference: str = "GRCh37") -> Path:
     path.write_text(
         "##fileformat=VCFv4.2\n"
         f"##reference={reference}\n"
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE_A\tSAMPLE_B\n"
         "22\t100\t.\tA\tG\t.\tPASS\t.\tGT\t0/1\t1/1\n"
         "22\t200\t.\tC\tA,T\t.\tPASS\t.\tGT\t1|2\t0/2\n",
@@ -106,6 +107,63 @@ def test_vcf_rejects_malformed_info_and_sample_format_values(tmp_path):
         list(iter_records(path, samples, "GRCh37"))
 
 
+def test_vcf_rejects_records_before_header_and_metadata_after_header(tmp_path):
+    path = _vcf(tmp_path)
+    text = path.read_text(encoding="utf-8")
+    header = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE_A\tSAMPLE_B\n"
+    first_record = "22\t100\t.\tA\tG\t.\tPASS\t.\tGT\t0/1\t1/1\n"
+
+    path.write_text(text.replace(header, "").replace(first_record, first_record + header), encoding="utf-8")
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="before the #CHROM"):
+        list(iter_records(path, samples, "GRCh37"))
+
+    path.write_text(text + "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Frequency\">\n", encoding="utf-8")
+    _, samples = read_header(path, "GRCh37")
+    with pytest.raises(ImportValidationError, match="after the column header"):
+        list(iter_records(path, samples, "GRCh37"))
+
+
+def test_vcf_validates_declared_field_types_and_cardinalities(tmp_path):
+    header = (
+        "##fileformat=VCFv4.2\n"
+        "##reference=GRCh37\n"
+        '##INFO=<ID=DP,Number=1,Type=Integer,Description="Depth, total">\n'
+        '##INFO=<ID=AF,Number=A,Type=Float,Description="ALT frequencies">\n'
+        '##INFO=<ID=DB,Number=0,Type=Flag,Description="Database membership">\n'
+        '##FILTER=<ID=LowQual,Description="Low quality">\n'
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'
+        '##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">\n'
+        '##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Likelihoods">\n'
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE_A\n"
+    )
+    row = (
+        "22\t100\t.\tA\tG,T\t40\tPASS\tDP=10;AF=0.1,0.2;DB\t"
+        "GT:AD:PL\t1/2:5,3,2:0,1,2,3,4,5\n"
+    )
+    path = tmp_path / "schema.vcf"
+    path.write_text(header + row, encoding="utf-8")
+    _, samples = read_header(path, "GRCh37")
+    assert len(list(iter_records(path, samples, "GRCh37"))) == 2
+
+    invalid_rows = (
+        row.replace("DP=10", "DP=ten"),
+        row.replace("AF=0.1,0.2", "AF=0.1"),
+        row.replace("DP=10", "UNKNOWN=10"),
+        row.replace("PASS", "Undeclared"),
+        row.replace("0,1,2,3,4,5", "0,1,2,3,4"),
+    )
+    for invalid_row, message in zip(
+        invalid_rows,
+        ("integer value", "wrong value count", "no header definition", "FILTER", "wrong value count"),
+        strict=True,
+    ):
+        path.write_text(header + invalid_row, encoding="utf-8")
+        _, samples = read_header(path, "GRCh37")
+        with pytest.raises(ImportValidationError, match=message):
+            list(iter_records(path, samples, "GRCh37"))
+
+
 def test_vcf_header_requires_one_leading_fileformat_declaration(tmp_path):
     path = _vcf(tmp_path).with_name("missing-version.vcf")
     path.write_text(_vcf(tmp_path).read_text(encoding="utf-8").replace(
@@ -191,7 +249,10 @@ def test_vcf_import_requires_timezone_aware_retrieval_timestamp(tmp_path, capsys
 def test_vcf_duplicate_detection_is_bounded_and_rejects_duplicate_records(tmp_path):
     original = _vcf(tmp_path).read_text(encoding="utf-8").splitlines()
     duplicate = tmp_path / "duplicate.vcf"
-    duplicate.write_text("\n".join(original[:3] + [original[3], original[3], original[4]]) + "\n", encoding="utf-8")
+    duplicate.write_text(
+        "\n".join(original[:4] + [original[4], original[4], original[5]]) + "\n",
+        encoding="utf-8",
+    )
     _, samples = read_header(duplicate, "GRCh37")
     with pytest.raises(ImportValidationError, match="duplicate VCF record"):
         list(iter_records(duplicate, samples, "GRCh37"))
@@ -200,7 +261,10 @@ def test_vcf_duplicate_detection_is_bounded_and_rejects_duplicate_records(tmp_pa
 def test_vcf_rejects_unsorted_coordinates(tmp_path):
     original = _vcf(tmp_path).read_text(encoding="utf-8").splitlines()
     unsorted = tmp_path / "unsorted.vcf"
-    unsorted.write_text("\n".join(original[:3] + [original[4], original[3]]) + "\n", encoding="utf-8")
+    unsorted.write_text(
+        "\n".join(original[:4] + [original[5], original[4]]) + "\n",
+        encoding="utf-8",
+    )
     _, samples = read_header(unsorted, "GRCh37")
     with pytest.raises(ImportValidationError, match="sorted by chromosome and position"):
         list(iter_records(unsorted, samples, "GRCh37"))

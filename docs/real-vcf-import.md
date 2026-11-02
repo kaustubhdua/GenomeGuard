@@ -93,12 +93,14 @@ columns, and 10 million sample-by-split-ALT genotype cells. The browser request 
 guarantee that validation already running on the server stops immediately.
 
 The CLI and server upload use the shared constrained VCF parser. It requires a VCF
-fileformat header and validates the expected assembly against recognized header labels,
-column structure, sample-column count, record coordinates/order, DNA alleles, QUAL,
-basic INFO/FILTER syntax, FORMAT value counts, supported GT ploidy, and optional GQ
-values. The local JSON preview validates the report format but does not parse a VCF.
-It does not validate INFO field semantics against all declared types/cardinalities,
-compare REF alleles to a reference genome, normalize variants, or prove that a header's
+fileformat and column header in the correct order, checks assembly labels, parses
+INFO/FORMAT/FILTER definitions, and validates used field identifiers, scalar types,
+fixed counts, and Number=A/R/G cardinalities where ploidy is known. It also checks
+sample-column count, record coordinates/order, DNA alleles, QUAL, FORMAT value counts,
+supported GT ploidy, and optional GQ values. These checks cover VCF structure and
+declared field shapes, not the scientific meaning of every INFO field. The local JSON
+preview validates report shape but does not parse a VCF. Neither path compares REF
+alleles with a reference genome, normalizes variants, or proves that a header's
 assembly claim is true. An explicitly selected assembly plus a matching header label
 is not reference-sequence verification.
 

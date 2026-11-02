@@ -94,6 +94,7 @@ def validate_vcf(
                     path, assembly, max_line_bytes=MAX_VCF_LINE_BYTES,
                     max_total_bytes=MAX_DECOMPRESSED_BYTES, max_samples=MAX_SAMPLE_COLUMNS,
                 )
+                metadata_report.pop("_field_schemas", None)
             except (ImportValidationError, OSError, UnicodeError) as error:
                 _check(checks, "header_and_assembly", "failed", str(error))
                 errors.append("VCF header or assembly validation failed.")
