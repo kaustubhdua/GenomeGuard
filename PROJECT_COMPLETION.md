@@ -8,8 +8,9 @@ Updated: 2 November 2026
 contains a functioning research prototype and substantial workflow foundations. It is
 not verified for private or controlled-access participant data, clinical use, or
 production governance. Do not infer completion from local tests or a reachable hosted
-frontend. The [live readiness audit](docs/live-readiness-audit-2026-11-02.md) records
-the latest read-only checks; no live infrastructure was changed.
+frontend. The [latest live-readiness audit](docs/live-readiness-audit-2026-11-03.md)
+records the current hosted evidence. An additive steward-queue migration and Edge Function
+deployment were applied; no production genomic or participant data was inserted.
 
 ## Current evidence
 
