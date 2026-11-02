@@ -51,6 +51,8 @@ jobs:
           test -s supabase/functions/genomeguard-api/index.ts
           grep -q 'path.endsWith("/steward/requests")' supabase/functions/genomeguard-api/index.ts
           grep -q 'gg_list_review_queue' supabase/functions/genomeguard-api/index.ts
+          grep -q 'path.endsWith("/me")' supabase/functions/genomeguard-api/index.ts
+          grep -q 'gg_get_my_access_status' supabase/functions/genomeguard-api/index.ts
           grep -q 'authenticatedUser(request, url, serviceKey)' supabase/functions/genomeguard-api/index.ts
           test -s supabase/functions/genomeguard-health/index.ts
           test -s supabase/migrations/20261027000000_genomeguard_schema.sql
@@ -83,6 +85,7 @@ jobs:
           test -s supabase/migrations/20261029320000_genomeguard_assembly_aware_reference_catalogue.sql
           test -s supabase/migrations/20261103000000_genomeguard_population_reference.sql
           test -s supabase/migrations/20261103010000_genomeguard_steward_review_queue.sql
+          test -s supabase/migrations/20261103020000_genomeguard_auth_access_status.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
@@ -134,6 +137,7 @@ jobs:
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_function_privilege('anon', 'public.gg_list_my_requests(uuid)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_list_my_requests(uuid)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_list_my_requests(uuid)', 'EXECUTE') AND NOT has_function_privilege('anon', 'public.gg_submit_request(uuid,text,text,text,text,boolean,text,jsonb,jsonb)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_submit_request(uuid,text,text,text,text,boolean,text,jsonb,jsonb)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_submit_request(uuid,text,text,text,text,boolean,text,jsonb,jsonb)', 'EXECUTE')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_function_privilege('anon', 'public.gg_review_request(uuid,bigint,text,text)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_review_request(uuid,bigint,text,text)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_review_request(uuid,bigint,text,text)', 'EXECUTE') AND NOT has_function_privilege('anon', 'public.gg_get_request_details(uuid,bigint)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_get_request_details(uuid,bigint)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_get_request_details(uuid,bigint)', 'EXECUTE') AND NOT has_function_privilege('anon', 'public.gg_withdraw_consent(uuid,uuid,text)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_withdraw_consent(uuid,uuid,text)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_withdraw_consent(uuid,uuid,text)', 'EXECUTE') AND (SELECT count(*) FROM genomeguard.organizations)=0 AND (SELECT count(*) FROM genomeguard.organization_memberships)=0 AND (SELECT count(*) FROM genomeguard.participant_consent_records)=0 AND (SELECT count(*) FROM genomeguard.dataset_samples)=0 AND (SELECT count(*) FROM genomeguard.dataset_variants)=0 AND (SELECT count(*) FROM genomeguard.dataset_genotype_calls)=0 AND NOT has_table_privilege('anon', 'genomeguard.organization_memberships', 'SELECT') AND NOT has_table_privilege('authenticated', 'genomeguard.participant_consent_records', 'SELECT')" | grep -q "(1 row)"
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_function_privilege('anon', 'public.gg_list_review_queue(uuid,integer,integer)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_list_review_queue(uuid,integer,integer)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_list_review_queue(uuid,integer,integer)', 'EXECUTE') AND (SELECT prosecdef FROM pg_proc WHERE oid='public.gg_list_review_queue(uuid,integer,integer)'::regprocedure) AND (SELECT EXISTS (SELECT 1 FROM unnest(proconfig) cfg WHERE cfg LIKE 'search_path=%') FROM pg_proc WHERE oid='public.gg_list_review_queue(uuid,integer,integer)'::regprocedure)" | grep -q "(1 row)"
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 -c "SELECT 1 WHERE NOT has_function_privilege('anon', 'public.gg_get_my_access_status(uuid)', 'EXECUTE') AND NOT has_function_privilege('authenticated', 'public.gg_get_my_access_status(uuid)', 'EXECUTE') AND has_function_privilege('service_role', 'public.gg_get_my_access_status(uuid)', 'EXECUTE') AND (SELECT prosecdef FROM pg_proc WHERE oid='public.gg_get_my_access_status(uuid)'::regprocedure) AND (SELECT EXISTS (SELECT 1 FROM unnest(proconfig) cfg WHERE cfg LIKE 'search_path=%') FROM pg_proc WHERE oid='public.gg_get_my_access_status(uuid)'::regprocedure)" | grep -q "(1 row)"
           # Review queue is organization-scoped, bounded, paginated, and fail-closed.
           psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL'
           DO $test$
@@ -326,6 +330,50 @@ jobs:
                v_history->1->>'previous_status' <> 'needs_more_information' OR
                v_history->1->>'outcome' <> 'approved' THEN
               RAISE EXCEPTION 'review history did not preserve both transitions: %',v_history;
+            END IF;
+          END
+          $test$;
+          SQL
+          # Authenticated access status reveals only the caller's own memberships.
+          psql -h localhost -U postgres -d genomeguard_migration_test -v ON_ERROR_STOP=1 <<'SQL'
+          DO $test$
+          DECLARE
+            v_user uuid := '00000000-0000-0000-0000-000000000101';
+            v_other uuid := '00000000-0000-0000-0000-000000000102';
+            v_org uuid;
+            v_pending_org uuid;
+            v_other_org uuid;
+            v_result jsonb;
+          BEGIN
+            v_result := public.gg_get_my_access_status(v_user);
+            IF v_result->>'access_status' <> 'no_membership' OR
+               jsonb_array_length(v_result->'memberships') <> 0 THEN
+              RAISE EXCEPTION 'unprovisioned user should have no membership: %',v_result;
+            END IF;
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-access-status','CI Access Status','active') RETURNING id INTO v_org;
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-access-pending','CI Access Pending','active') RETURNING id INTO v_pending_org;
+            INSERT INTO genomeguard.organizations(slug,display_name,status)
+              VALUES ('ci-access-other','CI Access Other','active') RETURNING id INTO v_other_org;
+            INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
+              VALUES (v_org,v_user,'researcher','active',now()),
+                     (v_pending_org,v_user,'reviewer','pending',NULL),
+                     (v_other_org,v_other,'organization_admin','active',now());
+            v_result := public.gg_get_my_access_status(v_user);
+            IF v_result->>'access_status' <> 'active' OR
+               (v_result->>'active_membership_count')::int <> 1 OR
+               (v_result->>'membership_count')::int <> 2 OR
+               jsonb_array_length(v_result->'memberships') <> 2 OR
+               v_result::text LIKE '%' || v_other::text || '%' THEN
+              RAISE EXCEPTION 'access status returned incorrect or cross-user memberships: %',v_result;
+            END IF;
+            INSERT INTO genomeguard.organization_memberships(organization_id,auth_user_id,role,status,activated_at)
+              VALUES (v_other_org,v_user,'reviewer','active',now());
+            v_result := public.gg_get_my_access_status(v_user);
+            IF v_result->>'access_status' <> 'ambiguous_memberships' OR
+               (v_result->>'active_membership_count')::int <> 2 THEN
+              RAISE EXCEPTION 'multiple active memberships should be flagged ambiguous: %',v_result;
             END IF;
           END
           $test$;
