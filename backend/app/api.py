@@ -9,6 +9,7 @@ membership: only aggregates, transformed releases, counts and reason codes.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -27,6 +28,8 @@ from app.config import get_settings, validate_settings
 from app.core.audit_chain import jsonable
 from app.data.vcf_qc import MAX_UPLOAD_BYTES, validate_vcf
 from app.service import DEMO_REQUESTERS, GenomeGuardService, ServiceError, bootstrap
+
+log = logging.getLogger(__name__)
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 # GG_EVAL_JSON points the UI at docs/eval-results-real.json when you deploy on a real cohort
