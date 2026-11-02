@@ -58,37 +58,42 @@ jobs:
           grep -q 'path.endsWith("/chromosomes")' supabase/functions/genomeguard-api/index.ts
           grep -q 'authenticatedUser(request, url, serviceKey)' supabase/functions/genomeguard-api/index.ts
           test -s supabase/functions/genomeguard-health/index.ts
-          test -s supabase/migrations/20261027000000_genomeguard_schema.sql
-          test -s supabase/migrations/20261027001000_index_donor_access_request.sql
-          test -s supabase/migrations/20261027002000_deployment_status.sql
-          test -s supabase/migrations/20261027003000_deployment_status_policy.sql
-          test -s supabase/migrations/20261027010000_private_schema_rls.sql
-          test -s supabase/migrations/20261029101900_genomeguard_supabase_request_api.sql
-          test -s supabase/migrations/20261029113000_genomeguard_request_validation_hardening.sql
-          test -s supabase/migrations/20261029120000_genomeguard_variant_dataset_manifest.sql
-          test -s supabase/migrations/20261029150000_genomeguard_verified_public_dataset_catalog.sql
-          test -s supabase/migrations/20261029180000_genomeguard_organization_consent_workflows.sql
-          test -s supabase/migrations/20261029200000_genomeguard_normalized_genotype_storage.sql
-          test -s supabase/migrations/20261029210000_genomeguard_request_details.sql
+          test -s supabase/migrations/20261026194921_genomeguard_schema.sql
+          test -s supabase/migrations/20261026194950_index_donor_access_request.sql
+          test -s supabase/migrations/20261026195105_deployment_status.sql
+          test -s supabase/migrations/20261026195207_deployment_status_service_policy.sql
+          test -s supabase/migrations/20261028180028_genomeguard_private_schema_rls.sql
+          test -s supabase/migrations/20261029045259_genomeguard_supabase_request_api.sql
+          test -s supabase/migrations/20261029051616_genomeguard_request_validation_hardening.sql
+          test -s supabase/migrations/20261029075822_genomeguard_variant_dataset_manifest.sql
+          test -s supabase/migrations/20261029081133_genomeguard_verified_public_dataset_catalog.sql
+          test -s supabase/migrations/20261029084043_genomeguard_organization_consent_workflows.sql
+          test -s supabase/migrations/20261029084053_genomeguard_normalized_genotype_storage.sql
+          test -s supabase/migrations/20261029084102_genomeguard_request_details.sql
           test -s supabase/migrations/20261030200000_genomeguard_importer_privileges.sql
           test -s supabase/migrations/20261102000000_genomeguard_importer_append_only.sql
           grep -q 'SET ROLE genomeguard_importer' backend/app/data/vcf_import.py
           ! grep -q 'INSERT INTO genomeguard.variant_dataset_manifest' backend/app/data/vcf_import.py
-          test -s supabase/migrations/20261029220000_genomeguard_audit_append_only_and_consent_indexes.sql
-          test -s supabase/migrations/20261029230000_genomeguard_request_history_membership_gate.sql
-          test -s supabase/migrations/20261029235000_genomeguard_api_events.sql
-          test -s supabase/migrations/20261029240000_genomeguard_consent_steward_role.sql
-          test -s supabase/migrations/20261029250000_genomeguard_consent_steward_only.sql
-          test -s supabase/migrations/20261029260000_genomeguard_api_events_constraints.sql
-          test -s supabase/migrations/20261029270000_genomeguard_request_review_history.sql
-          test -s supabase/migrations/20261029280000_genomeguard_review_history_append_only.sql
-          test -s supabase/migrations/20261029290000_genomeguard_target_org_authorization.sql
-          test -s supabase/migrations/20261029300000_genomeguard_review_history_fk_indexes.sql
-          test -s supabase/migrations/20261029310000_genomeguard_assembly_scoped_coverage.sql
-          test -s supabase/migrations/20261029320000_genomeguard_assembly_aware_reference_catalogue.sql
+          test -s supabase/migrations/20261029090645_genomeguard_audit_append_only_and_consent_indexes.sql
+          test -s supabase/migrations/20261029094937_genomeguard_request_history_membership_gate.sql
+          test -s supabase/migrations/20261029100254_genomeguard_api_events.sql
+          test -s supabase/migrations/20261029100140_genomeguard_consent_steward_role.sql
+          test -s supabase/migrations/20261029100358_genomeguard_consent_steward_only.sql
+          test -s supabase/migrations/20261029100724_genomeguard_api_events_constraints.sql
+          test -s supabase/migrations/20261029101432_genomeguard_request_review_history.sql
+          test -s supabase/migrations/20261029101831_genomeguard_review_history_append_only.sql
+          test -s supabase/migrations/20261029125817_genomeguard_target_org_authorization.sql
+          test -s supabase/migrations/20261029132531_genomeguard_review_history_fk_indexes.sql
+          test -s supabase/migrations/20261029132749_genomeguard_assembly_scoped_coverage.sql
+          test -s supabase/migrations/20261029132941_genomeguard_assembly_aware_reference_catalogue.sql
           test -s supabase/migrations/20261103000000_genomeguard_population_reference.sql
           test -s supabase/migrations/20261102212149_genomeguard_steward_review_queue.sql
           test -s supabase/migrations/20261102212425_genomeguard_auth_access_status.sql
+          test -s supabase/migrations/20261029045250_genomeguard_supabase_api_identity_foundation.sql
+          test -s supabase/migrations/20261102213657_genomeguard_importer_privileges.sql
+          test -s supabase/migrations/20261102213711_genomeguard_importer_append_only.sql
+          test -s supabase/migrations/20261102213726_genomeguard_population_reference.sql
+          test -s supabase/migrations/20261104000000_genomeguard_population_reference_reader.sql
 
   postgres-migrations:
     name: Validate Supabase SQL migrations on PostgreSQL
