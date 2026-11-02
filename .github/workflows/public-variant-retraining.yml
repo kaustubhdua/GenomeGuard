@@ -8,13 +8,18 @@ on:
         required: true
         type: boolean
         default: false
+  push:
+    branches:
+      - ml/public-annotations-retraining
+    paths:
+      - .github/workflows/public-variant-retraining.yml
 
 permissions:
   contents: read
 
 jobs:
   train:
-    if: ${{ inputs.confirm_public_data }}
+    if: ${{ github.event_name == 'push' || inputs.confirm_public_data }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
