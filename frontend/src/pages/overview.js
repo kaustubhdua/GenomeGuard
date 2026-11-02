@@ -164,9 +164,14 @@ export async function render() {
       fact("Dataset provenance", pv.genotypes_label || "Not reported"),
       fact("Policy mapping", pv.consent_label || "Not reported"),
       fact("Audit integrity", chain ? (chain.ok ? "Verified" : "Integrity issue") : "Unavailable", chain ? (chain.length ? fmt(chain.length) + " entries checked" : "No access events recorded yet") : "No verification response"),
-      fact("Model assistance", hl.agents_use_llm ? "Configured" : "Template-based explanations", "Advisory only; rules govern release"),
-      fact("Minimum release cohort", fmt(hl.k_min), "Applied by policy engine"),
-      fact("Identity assurance", readiness.data?.checks?.institutional_identity_provider_verified === true ? "Verified" : "Not verified", "Institutional identity provider")));
+      fact("Model assistance", state.authToken ? "Not enabled" : hl.agents_use_llm ? "Configured" : "Template-based explanations",
+        state.authToken ? "Not ported to this API" : "Advisory only; rules govern release"),
+      fact("Minimum release cohort", state.authToken ? "Not available" : fmt(hl.k_min),
+        state.authToken ? "Policy engine not ported to this API" : "Applied by policy engine"),
+      fact("Identity assurance",
+        readiness.data?.checks?.institutional_identity_provider_verified === true ||
+          readiness.data?.checks?.institutional_identity_reviewed === true ? "Reviewed" : "Not verified",
+        "Institutional identity provider")));
   root.append(h("div", { class: "gg-two-column" }, recent, governance));
 
   const flowPanel = h("section", { class: "gg-panel gg-workflow" },
