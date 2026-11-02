@@ -205,7 +205,7 @@ const ACTIONS = () => [
     { text: "Switch to the researcher view", hint: "Acting as", run: () => { const r = (state.demo || { requesters: [] }).requesters[0]; if (r) { setWho(r.api_key); drawWho(); drawNav(""); render(); } } },
   ] : []),
   { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
-  ...(tourAvailable() ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
+  ...(tourAvailable() && !state.authToken ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
 ];
 let sel = 0, shown = [];
 function openPalette() { $("cmdk").classList.add("open"); const i = $("cmdk-input"); i.value = ""; filter(); i.focus(); }
