@@ -20,6 +20,21 @@ Latest GitHub mainline at the time of this audit: newer than the deployed commit
 
 Vercel's deployment state is READY, but this proves only that the static frontend deployment completed. API requests are still rewritten to Render. The deployed frontend SHA is not the latest mainline SHA, and the backend is demonstrably stale relative to the current source.
 
+## Frontend changes pending production deployment
+
+After the Vercel deployment recorded above, GitHub mainline was extended with the Supabase Auth interface and API integration:
+
+- Email/password sign-in, sign-up, sign-out, and explicit membership-status messaging.
+- `GET /me` for the signed-in user's own membership status.
+- Supabase Edge routes for request submission, request detail, steward queue, and reasoned review.
+- Public source discovery, verified dataset catalogue, and chromosome-reference pages now use Supabase Edge routes rather than the stale Render catalogue endpoints.
+- Hosted boot health/readiness now comes from the Supabase Edge Function; the old Render `/health` consent/provenance count is no longer the intended frontend source of truth.
+- Legacy-only screens are hidden in Supabase Auth mode, and the overview explains that the current Edge request workflow does not run the full genomic policy/risk engine or release data.
+
+These frontend changes are in GitHub mainline but are **not yet live**. The latest Vercel production deployment observed is `dpl_6D31fP2Fjb4xBf5TgZUArhY5q6i7`, commit `cdf906c83f8fff97dd5aecd96d26770436628482`; GitHub mainline is ahead. A manual production deployment request was rejected with HTTP 402, code `api-deployments-free-per-day` (more than 100 deployments in the free daily allowance; retry-after 86,400 seconds). No billing or team settings were changed. The production frontend must be deployed after Vercel's quota resets or the owner resolves the plan limit.
+
+The Supabase Edge Function is deployed separately as version 11, so its new API routes are live even though the static frontend has not yet been updated.
+
 ## Supabase project `common 1`
 
 Project ref: `hkyieaovolkethovyenb`  
