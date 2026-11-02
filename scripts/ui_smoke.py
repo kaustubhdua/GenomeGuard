@@ -458,6 +458,9 @@ def main() -> None:
             pg = ctx.new_page()
             pg.goto(base + "/#/overview")
             pg.wait_for_selector("#view h1", timeout=15000)
+            menu_button = pg.locator("#menu")
+            if menu_button.is_visible():
+                menu_button.click()
             pg.locator("#who").wait_for(state="visible", timeout=30000)
             pg.locator("#who").select_option("steward")
             over = []
