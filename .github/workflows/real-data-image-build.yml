@@ -8,6 +8,7 @@ on:
       - "backend/app/data/real.py"
       - "backend/app/service.py"
       - "docs/policies/igsr-1000-genomes-public-release.json"
+      - ".github/workflows/real-data-image-build.yml"
   pull_request:
     paths:
       - "Dockerfile"
