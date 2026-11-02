@@ -32,9 +32,15 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | Existing hosted research instance still runs on Render; the common 1 Supabase project has an isolated GenomeGuard schema | The Supabase schema is provisioned but the running backend is not yet migrated to it; no Supabase-only API deployment, cohort import, or production readiness is verified |
+| Hosting and persistence | Render still hosts the legacy Python research API; the common 1 Supabase project has an isolated GenomeGuard schema and a deployed Edge Function | The static frontend now has Supabase Auth and request/review API paths plus public source/dataset/chromosome catalogues. The full Python policy/risk engine, normalized cohort import, audit parity, and durable production cutover are not complete. No genomic dataset is loaded in Supabase. |
 
 These boundaries are intentional and should remain visible in the interface and any exported results.
+
+## Supabase account access
+
+The hosted frontend includes Supabase email/password sign-in and account creation. New accounts do not automatically receive research access: an authorized administrator must provision an active organization membership. The current Supabase request workflow supports organization-scoped request submission and steward review only. It does not run the full genomic policy engine, disclosure-risk calculation, participant-specific consent checks, or genomic data release. Approvals remain pending separate release controls.
+
+Public source discovery is informational only. A source appearing in the catalogue does not mean its exact artifact has been approved, downloaded, checksum-verified, imported, or made available for research. The verified dataset catalogue intentionally remains empty until the complete import and provenance gate is satisfied.
 
 ## Get started
 
