@@ -214,6 +214,26 @@ Deno.serve(async (request: Request) => {
         "The review was not recorded. Confirm active reviewer membership and request ownership.");
     }
   }
+  if (path.endsWith("/steward/requests") && request.method === "GET") {
+    const user = await authenticatedUser(request, url, serviceKey);
+    if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
+    const params = new URL(request.url).searchParams;
+    const limit = Number(params.get("limit") || "50");
+    const offset = Number(params.get("offset") || "0");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100 ||
+        !Number.isInteger(offset) || offset < 0 || offset > 100000) {
+      return error(400, "invalid_pagination", "Use a limit from 1 to 100 and a non-negative offset.");
+    }
+    try {
+      const result = await rpc(url, serviceKey, "gg_list_review_queue", {
+        p_auth_user_id: user.id, p_limit: limit, p_offset: offset,
+      });
+      return json(result);
+    } catch {
+      return error(403, "review_queue_not_authorized_or_unavailable",
+        "The review queue is unavailable. Confirm active reviewer membership in exactly one organization.");
+    }
+  }
   if (path.endsWith("/requests") && request.method === "GET") {
     const user = await authenticatedUser(request, url, serviceKey);
     if (!user) return error(401, "unauthorized", "Sign in with your Supabase account first.");
