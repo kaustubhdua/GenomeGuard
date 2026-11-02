@@ -122,6 +122,26 @@ the latest read-only checks; no live infrastructure was changed.
 - Pytest emitted existing warnings for development-key use in local fixtures and an
   `httpx`/Starlette test-client deprecation; they did not fail the suite.
 
+## 3 November 2026 execution update
+
+### Supabase steward queue implementation
+
+- Added `supabase/migrations/20261103010000_genomeguard_steward_review_queue.sql` and applied the migration to Supabase project `common 1` as `genomeguard_steward_review_queue`.
+- Added `GET /steward/requests?limit=50&offset=0` to `supabase/functions/genomeguard-api/index.ts`; deployed Edge Function version 8.
+- Added the service-role-only `public.gg_list_review_queue(uuid,integer,integer)` RPC. It resolves reviewer membership from server-side records, rejects missing or ambiguous memberships, bounds pagination, filters to the reviewer's organization, and exposes only request metadata.
+- Added a clean-PostgreSQL migration regression test for queue pagination, organization isolation, researcher denial, ambiguous multi-organization denial, and function grants. GitHub Actions is running the new checks on the current mainline; do not mark the suite complete until that run finishes.
+- Live SQL inspection confirmed `SECURITY DEFINER`, an empty search path, execute permission for `service_role` only, and denial for `anon` and `authenticated`. A request using an unprovisioned identity failed closed with SQLSTATE `42501`.
+- A successful queue response and review lifecycle are **not verified**: the live GenomeGuard organization, membership, request, decision, and review-history tables are empty. No test identity has been provisioned.
+
+### Current hosted deployment evidence
+
+- The latest Vercel production deployment observed is `dpl_5yQmTqq4J2WC8vvbdDhChHPMows4`, serving commit `7ed416ce53fdbbb5269a867f55bcb8dcfbfb6d4e`. It is behind the current GitHub mainline.
+- The public frontend returned HTTP 200. The proxied `/health` returned HTTP 200 but still reports `storage_backend=sqlite` and `consent_records_matched=600` even though the source policy is dataset-level and not participant-specific. Treat the count as a deployment/data-provenance discrepancy, not participant consent.
+- `/catalogue/datasets` and `/catalogue/sources` returned HTTP 404. `/health/ready` returned HTTP 503, which is the correct fail-closed state while production gates remain incomplete.
+- Supabase project `common 1` is healthy. The GenomeGuard schema has 23 tables, but normalized dataset manifests/samples/variants/genotype calls, organizations, memberships, participant consent, requests, decisions and API events are all empty. The Python Render backend is not yet connected to this PostgreSQL database.
+- The Supabase security advisor reports informational RLS-enabled/no-policy findings for private GenomeGuard tables and unrelated shared-project tables; direct schema usage and table grants for browser roles remain denied. The Auth advisor also reports leaked-password protection disabled. These findings require deliberate review; do not add broad policies or change shared-project tables to silence the advisor.
+- See [the 3 November live-readiness audit](docs/live-readiness-audit-2026-11-03.md) for the exact checks and boundaries.
+
 ## Remaining release blockers
 
 1. Establish and verify the production database/API cutover, including runtime
