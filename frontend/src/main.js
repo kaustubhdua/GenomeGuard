@@ -153,8 +153,10 @@ function drawWho() {
   const signInButton = $("supabase-signin");
   const signUpButton = $("supabase-signup");
   const signOutButton = $("supabase-signout");
+  const resendButton = $("supabase-resend");
   if (signInButton) signInButton.hidden = !!state.authToken;
   if (signUpButton) signUpButton.hidden = !!state.authToken;
+  if (resendButton) resendButton.hidden = !!state.authToken;
   if (signOutButton) signOutButton.hidden = !state.authToken;
   if (state.authToken) {
     if (state.authAccess?.access_status === "active" && active.length === 1) {
