@@ -5,9 +5,9 @@ saved in the same file format; the labels under test come from the metadata we w
 import hashlib
 import tempfile
 import warnings
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 from app.config import Settings
 from app.data import real
