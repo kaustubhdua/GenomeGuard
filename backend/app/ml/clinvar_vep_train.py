@@ -36,7 +36,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import GroupShuffleSplit
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -44,7 +44,9 @@ CLINVAR_URL = "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_su
 VEP_URL = "https://rest.ensembl.org/vep/human/region?CADD=1"
 DNA = set("ACGTN")
 NUMERIC = ["ref_length", "alt_length", "length_delta", "gc_ref", "gc_alt",
-           "is_snv", "is_indel", "cadd_phred", "max_population_af"]
+           "is_snv", "is_indel", "cadd_phred", "sift_score", "polyphen_score",
+           "max_population_af", "transcript_consequence_count",
+           "canonical_transcript_count", "mane_select_present"]
 CATEGORICAL = ["variant_class", "most_severe_consequence", "impact"]
 
 
@@ -137,15 +139,19 @@ def post_vep(batch: list[dict], retries: int = 5) -> list[dict]:
     raise RuntimeError("unreachable")
 
 
-def numeric_af(colocated: list[dict]) -> float:
+def numeric_af(colocated: list[dict], alternate_allele: str) -> float:
+    """Return AF for the queried ALT allele, never a REF or unrelated allele."""
     values = []
     for item in colocated:
-        freqs = item.get("frequencies") or {}
-        for allele_map in freqs.values():
-            if isinstance(allele_map, dict):
-                for value in allele_map.values():
-                    if isinstance(value, (int, float)) and 0 <= value <= 1:
-                        values.append(float(value))
+        allele_string = item.get("allele_string")
+        if isinstance(allele_string, str) and alternate_allele not in allele_string.split("/"):
+            continue
+        allele_map = (item.get("frequencies") or {}).get(alternate_allele)
+        if not isinstance(allele_map, dict):
+            continue
+        for value in allele_map.values():
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1:
+                values.append(float(value))
     return max(values) if values else float("nan")
 
 
@@ -164,11 +170,20 @@ def annotate(rows: list[dict], out: Path) -> list[dict]:
             impacts = [x.get("impact") for x in consequences if x.get("impact")]
             cadds = [x.get("cadd_phred") for x in consequences
                      if isinstance(x.get("cadd_phred"), (int, float))]
+            sift = [x.get("sift_score") for x in consequences
+                    if isinstance(x.get("sift_score"), (int, float))]
+            polyphen = [x.get("polyphen_score") for x in consequences
+                        if isinstance(x.get("polyphen_score"), (int, float))]
             annotation = {
                 "most_severe_consequence": result.get("most_severe_consequence", "unknown"),
                 "impact": max(impacts, key=lambda x: {"HIGH": 3, "MODERATE": 2, "LOW": 1, "MODIFIER": 0}.get(x, -1), default="unknown"),
                 "cadd_phred": max(cadds) if cadds else None,
-                "max_population_af": numeric_af(result.get("colocated_variants") or []),
+                "sift_score": min(sift) if sift else None,
+                "polyphen_score": max(polyphen) if polyphen else None,
+                "max_population_af": numeric_af(result.get("colocated_variants") or [], source["alt"]),
+                "transcript_consequence_count": len(consequences),
+                "canonical_transcript_count": sum(bool(x.get("canonical")) for x in consequences),
+                "mane_select_present": int(any(x.get("mane_select") for x in consequences)),
             }
             key = f'{source["chrom"]}:{source["pos"]}:{source["ref"]}:{source["alt"]}'
             cache[key] = annotation
@@ -221,12 +236,13 @@ def main() -> int:
     numeric = NUMERIC
     categorical = CATEGORICAL
     X, y, groups = frame[numeric + categorical], frame["label"].astype(int), frame["gene"]
-    train_idx, test_idx = next(GroupShuffleSplit(n_splits=1, test_size=.2, random_state=args.seed).split(X, y, groups))
+    train_idx, test_idx = next(StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=args.seed).split(X, y, groups))
     if set(groups.iloc[train_idx]) & set(groups.iloc[test_idx]):
         raise SystemExit("Gene leakage detected in holdout")
     pre = ColumnTransformer([
-        ("numeric", Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())]), numeric),
-        ("categorical", OneHotEncoder(handle_unknown="ignore"), categorical),
+        ("numeric", Pipeline([("impute", SimpleImputer(strategy="median", add_indicator=True)), ("scale", StandardScaler())]), numeric),
+        ("categorical", Pipeline([("impute", SimpleImputer(strategy="constant", fill_value="unknown")),
+                                  ("encode", OneHotEncoder(handle_unknown="ignore"))]), categorical),
     ])
     candidates = {
         "logistic_regression": LogisticRegression(
@@ -273,11 +289,12 @@ def main() -> int:
         "annotated_rows": len(frame), "train_rows": len(train_idx), "test_rows": len(test_idx),
         "train_genes": int(groups.iloc[train_idx].nunique()), "test_genes": int(groups.iloc[test_idx].nunique()),
         "features": numeric + categorical,
+        "feature_coverage": {column: float(frame[column].notna().mean()) for column in numeric + categorical},
         "feature_policy": "REF/ALT shape plus Ensembl VEP consequence, impact, CADD and colocated population-frequency annotations; clinical labels, coordinates and gene identifiers are excluded from features",
-        "split_policy": "single gene-disjoint holdout; not external cohort or ancestry validation",
+        "split_policy": "first fold of 5-fold stratified gene-disjoint split; not external cohort or ancestry validation",
         "counts": dict(counts), "scikit_learn_version": sklearn.__version__,
         "model_sha256": digest(model_path),
-        "limitations": ["VEP annotation coverage is incomplete; missing values are imputed.",
+        "limitations": ["VEP annotation coverage is incomplete; missing values are imputed with explicit numeric missingness indicators.",
             "Colocated frequency values are not guaranteed to be gnomAD-specific; interpreted only as generic population-frequency annotations.",
             "Research-only; not for diagnosis or clinical decision-making."]
     }
