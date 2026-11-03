@@ -27,6 +27,7 @@ def main() -> int:
     args = parser.parse_args()
     base = args.base.rstrip("/")
     eval_calls: list[str] = []
+    auth_calls: list[dict] = []
     edge_calls: list[dict] = []
     review_state = {"status": "pending_review", "history": []}
     submitted_request: dict = {}
@@ -60,6 +61,8 @@ def main() -> int:
         parsed = urlparse(req.url)
         path = parsed.path
         if parsed.netloc == "hkyieaovolkethovyenb.supabase.co":
+            if path.startswith("/auth/v1/"):
+                auth_calls.append({"path": path, "body": req.post_data_json or {}})
             if path == "/auth/v1/token" and req.method == "POST":
                 payload = req.post_data_json or {}
                 email = payload.get("email", "")
@@ -74,6 +77,9 @@ def main() -> int:
             if path == "/auth/v1/signup" and req.method == "POST":
                 payload = req.post_data_json or {}
                 return fulfill(route, 200, {"user": {"id": "new-auth-user", "email": payload.get("email")}, "session": None})
+            if path == "/auth/v1/resend" and req.method == "POST":
+                payload = req.post_data_json or {}
+                return fulfill(route, 200, {"message_id": "confirmation-message"})
             if path == "/auth/v1/logout" and req.method == "POST":
                 return fulfill(route, 200, {})
             if path.startswith("/functions/v1/genomeguard-api/"):
@@ -260,6 +266,14 @@ def main() -> int:
         page.locator("#supabase-full-name").fill("New User")
         page.locator("#supabase-signup").click()
         page.get_by_text("Check your email for the verification link", exact=False).wait_for(timeout=5000)
+        signup_call = next((call for call in auth_calls if call["path"] == "/auth/v1/signup"), None)
+        check("signup confirmation redirects to the current app origin",
+              bool(signup_call and signup_call["body"].get("options", {}).get("emailRedirectTo") == base + "/"))
+        page.locator("#supabase-resend").click()
+        page.get_by_text("a fresh email has been sent", exact=False).wait_for(timeout=5000)
+        resend_call = next((call for call in auth_calls if call["path"] == "/auth/v1/resend"), None)
+        check("unconfirmed users can request a fresh confirmation email",
+              bool(resend_call and resend_call["body"].get("options", {}).get("emailRedirectTo") == base + "/"))
         check("new account is not treated as authorized before verification and membership", page.locator("#supabase-signout").is_hidden())
 
         # An authenticated but unprovisioned account must not see a request form.
