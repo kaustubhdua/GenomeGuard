@@ -19,6 +19,9 @@ def test_clinvar_binary_label_policy():
 
 
 def test_population_frequency_extraction_is_bounded():
-    assert numeric_af([{"frequencies": {"A": {"gnomad": 0.02, "1000G": 0.01}}}]) == 0.02
-    assert numeric_af([{"frequencies": {"A": {"unknown": 1.4}}}]) != 1.4
-    assert numeric_af([]) != numeric_af([])
+    assert numeric_af([{"allele_string": "C/T", "frequencies": {
+        "C": {"gnomad": 0.9}, "T": {"gnomad": 0.02, "1000G": 0.01}}}], "T") == 0.02
+    assert numeric_af([{"allele_string": "C/T", "frequencies": {
+        "C": {"gnomad": 0.9}, "T": {"gnomad": 1.4}}}], "T") != 1.4
+    assert numeric_af([{"allele_string": "C/T", "frequencies": {
+        "C": {"gnomad": 0.9}}}], "T") != numeric_af([], "T")
