@@ -130,12 +130,12 @@ def variant_key(chrom: str, pos: int, ref: str, alt: str) -> str:
 def write_vep_vcf(rows: list[dict], path: Path) -> None:
     """Write selected variants for a local Ensembl VEP offline/cache run."""
     with path.open("w", encoding="utf-8") as out:
-        out.write("##fileformat=VCFv4.2\\n##reference=GRCh38\\n")
-        out.write("#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\n")
+        out.write("##fileformat=VCFv4.2\n##reference=GRCh38\n")
+        out.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
         for row in rows:
             out.write(
-                f'{row["chrom"]}\\t{row["pos"]}\\t.\\t{row["ref"]}\\t'
-                f'{row["alt"]}\\t.\\t.\\t.\\n'
+                f'{row["chrom"]}\t{row["pos"]}\t.\t{row["ref"]}\t'
+                f'{row["alt"]}\t.\t.\t.\n'
             )
 
 
@@ -220,7 +220,7 @@ def annotate(rows: list[dict], vep_jsonl: Path, cache_path: Path) -> list[dict]:
         }
         cache[key] = annotation
         with cache_path.open("a", encoding="utf-8") as out:
-            out.write(json.dumps({"key": key, "annotation": annotation}) + "\\n")
+            out.write(json.dumps({"key": key, "annotation": annotation}) + "\n")
     result_rows = []
     for row in rows:
         key = variant_key(row["chrom"], row["pos"], row["ref"], row["alt"])
