@@ -1,5 +1,4 @@
 import { api, boot, state, setWho, isSteward } from "./api.js";
-import { signIn, signUp, signOut, resendConfirmation } from "./supabase-auth.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
 
@@ -118,17 +117,14 @@ function drawNav(active) {
 function drawWho() {
   const selector = $("who");
   const label = $("who-label");
-  const supabasePanel = $("supabase-auth-panel");
   const note = $("who-note");
-
+  // Account-free guest mode: only synthetic demo personas are selectable.
   if (state.demo) {
-    if (supabasePanel) supabasePanel.hidden = true;
-    // Demo mode offers explicit synthetic personas; never expose real credentials here.
     label.hidden = false;
     selector.hidden = false;
     const options = [
-      ["steward", "Data steward"],
-      ...(state.demo.requesters || []).map((r) => [r.api_key, r.name || r.institution || "Researcher"]),
+      ["steward", "Demo data steward"],
+      ...(state.demo.requesters || []).map((r) => [r.api_key, r.name || r.institution || "Demo researcher"]),
     ];
     selector.replaceChildren(...options.map(([value, text]) => {
       const option = document.createElement("option");
@@ -138,41 +134,12 @@ function drawWho() {
     }));
     selector.value = state.who || "";
     note.textContent = isSteward()
-      ? "Demo steward persona · synthetic cohort"
-      : "Demo researcher persona · synthetic cohort";
-    return;
-  }
-
-  // Real-data mode uses institution accounts; legacy machine-key login is removed.
-  label.hidden = true;
-  selector.hidden = true;
-  if (supabasePanel) supabasePanel.hidden = false;
-  const email = state.authUser?.email || "";
-  const active = (state.authAccess?.memberships || []).filter((m) =>
-    m.status === "active" && m.organization_status === "active");
-  const signInButton = $("supabase-signin");
-  const signUpButton = $("supabase-signup");
-  const signOutButton = $("supabase-signout");
-  const resendButton = $("supabase-resend");
-  if (signInButton) signInButton.hidden = !!state.authToken;
-  if (signUpButton) signUpButton.hidden = !!state.authToken;
-  if (resendButton) resendButton.hidden = !!state.authToken;
-  if (signOutButton) signOutButton.hidden = !state.authToken;
-  if (state.authToken) {
-    if (state.authAccess?.access_status === "active" && active.length === 1) {
-      const membership = active[0];
-      note.textContent = `Signed in as ${email} · ${membership.organization} (${membership.role}).`;
-    } else if (state.authAccess?.access_status === "ambiguous_memberships") {
-      note.textContent = `Signed in as ${email}, but multiple active organization memberships need administrator resolution.`;
-    } else if (state.authAccess?.access_status === "pending_or_inactive") {
-      note.textContent = `Signed in as ${email}. Organization membership is pending or inactive.`;
-    } else if (state.authAccess?.access_status === "no_membership") {
-      note.textContent = `Signed in as ${email}. Your account is waiting for an administrator to provision an organization membership.`;
-    } else {
-      note.textContent = `Signed in as ${email}. Access status could not be verified.`;
-    }
+      ? "Guest demo · synthetic cohort · no account required"
+      : "Guest demo · synthetic cohort · no account required";
   } else {
-    note.textContent = "No identity connected. Sign in with your institution account to continue.";
+    label.hidden = true;
+    selector.hidden = true;
+    note.textContent = "Guest access · account creation and sign-in are disabled. Only public demo features are available.";
   }
 }
 
@@ -249,94 +216,6 @@ document.addEventListener("keydown", (e) => {
 });
 window.addEventListener("hashchange", () => { if ($("shell").classList.contains("open")) setMenu(false); });
 $("who").addEventListener("change", (e) => { setWho(e.target.value); drawWho(); drawNav(""); render(); });
-async function refreshSupabaseAccess() {
-  const result = await api("/me");
-  if (!result.ok) {
-    state.authAccess = null;
-    state.authRole = "";
-    return result;
-  }
-  state.authAccess = result.data?.access || null;
-  const active = (state.authAccess?.memberships || []).filter((m) =>
-    m.status === "active" && m.organization_status === "active");
-  state.authRole = active.length === 1 ? active[0].role : "";
-  return result;
-}
-$("supabase-signin").addEventListener("click", async () => {
-  const email = $("supabase-email").value.trim();
-  const password = $("supabase-password").value;
-  const status = $("supabase-auth-status");
-  if (!email || !password) { status.textContent = "Enter your email and password."; return; }
-  const button = $("supabase-signin");
-  button.disabled = true;
-  status.textContent = "Signing in securely…";
-  try {
-    const result = await signIn(email, password);
-    if (!result.ok) {
-      status.textContent = result.data?.msg || result.data?.message || "Sign-in failed. Check your credentials and retry.";
-      return;
-    }
-    const access = await refreshSupabaseAccess();
-    status.textContent = access.ok
-      ? "Signed in. " + (state.authAccess?.access_status === "active"
-        ? "Your organization membership is active."
-        : "Your account is not yet authorized for research workflows.")
-      : "Signed in, but access status could not be loaded. Retry shortly.";
-    $("supabase-password").value = "";
-    drawWho(); drawNav(""); render();
-  } finally { button.disabled = false; }
-});
-$("supabase-resend").addEventListener("click", async () => {
-  const email = $("supabase-email").value.trim();
-  const status = $("supabase-auth-status");
-  if (!email) { status.textContent = "Enter your email address first."; return; }
-  const button = $("supabase-resend");
-  button.disabled = true;
-  status.textContent = "Sending a fresh confirmation email…";
-  try {
-    const result = await resendConfirmation(email);
-    status.textContent = result.ok
-      ? "If this account needs confirmation, a fresh email has been sent. Check your inbox and Spam folder."
-      : result.data?.msg || result.data?.message || "Could not resend the confirmation email. Wait a moment and retry.";
-  } finally { button.disabled = false; }
-});
-$("supabase-signup").addEventListener("click", async () => {
-  const email = $("supabase-email").value.trim();
-  const password = $("supabase-password").value;
-  const fullName = $("supabase-full-name").value.trim();
-  const status = $("supabase-auth-status");
-  if (!email || !password || password.length < 8) {
-    status.textContent = "Enter a valid email and a password of at least 8 characters.";
-    return;
-  }
-  const button = $("supabase-signup");
-  button.disabled = true;
-  status.textContent = "Creating your account…";
-  try {
-    const result = await signUp(email, password, fullName);
-    if (!result.ok) {
-      status.textContent = result.data?.msg || result.data?.message || "Account creation failed. Check the details and retry.";
-      return;
-    }
-    if (state.authToken) {
-      const access = await refreshSupabaseAccess();
-      status.textContent = access.ok
-        ? "Account created. " + (state.authAccess?.access_status === "active"
-          ? "Your organization membership is active."
-          : "Your account still needs an administrator-provisioned organization membership.")
-        : "Account created, but access status could not be loaded.";
-      drawWho(); drawNav(""); render();
-    } else {
-      status.textContent = "Account created. Check your email for the verification link, then sign in. An administrator must provision your organization membership before research access is enabled.";
-    }
-    $("supabase-password").value = "";
-  } finally { button.disabled = false; }
-});
-$("supabase-signout").addEventListener("click", async () => {
-  await signOut();
-  $("supabase-auth-status").textContent = "Signed out. Your session was cleared from this tab.";
-  drawWho(); drawNav(""); render();
-});
 // Warm the route chunk when a visitor signals intent, without loading every page at startup.
 for (const container of [ $("nav"), $("view") ]) {
   container.addEventListener("pointerover", (e) => {
