@@ -1,6 +1,5 @@
 import numpy as np
 
-from app.agents.base import grounded
 from app.service import ServiceError
 from tests.helpers import ANON, ATTACKER, CONTROLLED, DEMO_REQ, RESEARCHER, make_service
 
