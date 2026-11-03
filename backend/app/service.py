@@ -1103,6 +1103,28 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         from app.data.real import read_meta
 
         source_meta = read_meta(s.real_cohort_file)
+    if source_meta and source_meta.get("consent_basis") == "dataset_policy":
+        policy_name = source_meta.get("consent_policy_source_file")
+        if not isinstance(policy_name, str) or Path(policy_name).name != policy_name:
+            raise ValueError("dataset-policy provenance must name a local policy file")
+        policy_path = Path(__file__).resolve().parents[2] / "docs" / "policies" / policy_name
+        if not policy_path.is_file():
+            raise ValueError("dataset-policy source document is missing from this deployment image")
+        policy_digest = hashlib.sha256(policy_path.read_bytes()).hexdigest()
+        if not hmac.compare_digest(
+            policy_digest, str(source_meta.get("consent_policy_source_sha256") or "")
+        ):
+            raise ValueError("dataset-policy source document SHA-256 does not match cohort metadata")
+        policy_document = json.loads(policy_path.read_text(encoding="utf-8"))
+        embedded_policy = source_meta.get("consent_policy") or {}
+        for field in ("policy_id", "source_url", "scope", "review_status", "withdrawal_supported"):
+            if embedded_policy.get(field) != policy_document.get(field):
+                raise ValueError(f"dataset-policy metadata does not match source document field: {field}")
+        if source_meta.get("consent_records_matched") != 0:
+            raise ValueError("dataset-level policy must not be counted as participant consent")
+        if source_meta.get("dataset_policy_samples_scoped") != source_meta.get("samples"):
+            raise ValueError("dataset-policy scope must match the cohort sample count")
+
     if not s.demo_mode:
         if not s.real_cohort_file:
             raise ValueError("non-demo mode requires GG_REAL_COHORT_FILE with real source data")
