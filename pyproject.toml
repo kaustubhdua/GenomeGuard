@@ -29,10 +29,7 @@ genomeguard-vcf-qc = "app.data.vcf_qc:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.26", "jsonschema>=4.22,<5"]
-# llm optional: install any of the providers you want to use.
-# All are optional — built-in template agents work without any key.
-# Google Gemini free tier: pip install google-generativeai  (or just set GEMINI_API_KEY)
-# The LLM client uses plain urllib — no SDK required for Gemini, Anthropic, or OpenAI.
+# AI agents are offline-only: deterministic templates and a built-in rules planner.
 synth = ["msprime>=1.3"]
 reference = ["openpyxl>=3.1"]
 ml = ["pandas>=2.2,<4", "scikit-learn>=1.5,<2", "joblib>=1.4,<2"]
