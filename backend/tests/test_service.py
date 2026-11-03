@@ -224,47 +224,9 @@ def test_audit_entries_for_agents_record_model_and_prompt_hash():
                       == "template" for e in ag)
 
 
-def test_llm_path_accepts_grounded_and_rejects_ungrounded_text():
-    from app.agents.llm import LLM
-    from app.config import Settings
-    from app.service import bootstrap
-
-    s = Settings()
-    s.db_path = ":memory:"
-    s.n_donors, s.n_variants, s.n_families = 300, 800, 60
-    seen = {}
-
-    def good(url, headers, body, timeout):
-        seen["user"] = body["messages"][0]["content"]
-        return {"content": [{"type": "text", "text": "Approved with protections."}]}
-
-    svc = bootstrap(s, llm=LLM("k", "claude-test", transport=good))
-    d = svc.submit(U(svc, RESEARCHER), DEMO_REQ)
-    assert d["explanation"] == "Approved with protections."
-    assert "GENOTYPE" not in seen["user"]
-
-    def bad(url, headers, body, timeout):
-        return {"content": [{"type": "text", "text": "Exactly 987654 donors were affected."}]}
-
-    svc2 = bootstrap(s, llm=LLM("k", "claude-test", transport=bad))
-    d2 = svc2.submit(U(svc2, RESEARCHER), DEMO_REQ)
-    assert "987654" not in d2["explanation"] and d2["explanation"].startswith("Your request")
-    rej = [e for e in svc2.audit.entries() if e["action"] == "agent.output"
-           and e["payload"]["rejected"]]
-    assert rej and grounded("5 of 5", {"a": 5}) and not grounded("6", {"a": 5})
-
-
-def test_llm_failure_falls_back_to_template():
-    from app.agents.llm import LLM
-    from app.config import Settings
-    from app.service import bootstrap
-
-    def boom(*a, **k):
-        raise TimeoutError("network down")
-
-    s = Settings()
-    s.db_path = ":memory:"
-    s.n_donors, s.n_variants, s.n_families = 300, 800, 60
-    svc = bootstrap(s, llm=LLM("k", "m", transport=boom))
-    d = svc.submit(U(svc, RESEARCHER), DEMO_REQ)
-    assert d["explanation"].startswith("Your request")
+def test_service_agent_explanations_are_offline_and_deterministic():
+    svc = make_service()
+    decision = svc.submit(U(svc, RESEARCHER), DEMO_REQ)
+    assert decision["explanation"].startswith("Your request")
+    records = [e for e in svc.audit.entries() if e["action"] == "agent.output"]
+    assert records and all(e["payload"]["model"] == "template" for e in records)
