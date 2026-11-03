@@ -260,7 +260,7 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
         assert len(meta["consent_policy_source_sha256"]) == 64
         assert all(d["consent"]["consent_basis"] == "dataset_policy" for d in cohort.donors)
         assert all(d["consent"]["consent_date"] is None for d in cohort.donors)
-        assert all(d["consent"]["source_policy_id"] == "test-public-release-v1"
+        assert all(d["consent"]["source_policy_id"] == policy["policy_id"]
                    for d in cohort.donors)
         real.save_cohort(cohort, meta, out)
         assert real.read_meta(out)["consent_basis"] == "dataset_policy"
@@ -268,18 +268,12 @@ def test_dataset_public_release_policy_is_real_source_provenance_not_fake_person
 
 def test_production_bootstrap_preserves_dataset_policy_provenance():
     with tempfile.TemporaryDirectory() as d:
-        v, out, policy_path = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz", Path(d) / "policy.json"
+        v, out = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz"
+        # Exercise the same checked-in source document that production images must carry.
+        policy_path = (Path(__file__).resolve().parents[2] / "docs" / "policies"
+                       / "igsr-1000-genomes-public-release.json")
+        policy = __import__("json").loads(policy_path.read_text(encoding="utf-8"))
         make_vcf(v)
-        policy = {
-            "policy_id": "test-public-release-v1",
-            "source_url": "https://example.org/source-terms",
-            "scope": "dataset",
-            "duo_use": "GRU",
-            "duo_modifiers": [],
-            "withdrawal_supported": False,
-            "review_status": "source_documented_not_legal_review",
-        }
-        policy_path.write_text(__import__("json").dumps(policy), encoding="utf-8")
         cohort, meta = real.build_cohort(
             v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=9,
             consent_policy=policy, consent_source_file=str(policy_path),
