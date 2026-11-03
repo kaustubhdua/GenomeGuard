@@ -1,4 +1,4 @@
-import { api, boot, connectKey, disconnectKey, state, setWho, isSteward } from "./api.js";
+import { api, boot, state, setWho, isSteward } from "./api.js";
 import { signIn, signUp, signOut } from "./supabase-auth.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
@@ -118,7 +118,6 @@ function drawNav(active) {
 function drawWho() {
   const selector = $("who");
   const label = $("who-label");
-  const authPanel = $("auth-panel");
   const supabasePanel = $("supabase-auth-panel");
   const note = $("who-note");
 
@@ -127,7 +126,6 @@ function drawWho() {
     // Demo mode offers explicit synthetic personas; never expose real credentials here.
     label.hidden = false;
     selector.hidden = false;
-    authPanel.hidden = true;
     const options = [
       ["steward", "Data steward"],
       ...(state.demo.requesters || []).map((r) => [r.api_key, r.name || r.institution || "Researcher"]),
@@ -145,12 +143,10 @@ function drawWho() {
     return;
   }
 
-  // Real-data mode supports Supabase Auth accounts. Legacy machine API keys remain
-  // available only for the existing Render API until the backend cutover is complete.
+  // Real-data mode uses institution accounts; legacy machine-key login is removed.
   label.hidden = true;
   selector.hidden = true;
   if (supabasePanel) supabasePanel.hidden = false;
-  authPanel.hidden = !!state.authToken;
   const email = state.authUser?.email || "";
   const active = (state.authAccess?.memberships || []).filter((m) =>
     m.status === "active" && m.organization_status === "active");
@@ -173,12 +169,8 @@ function drawWho() {
     } else {
       note.textContent = `Signed in as ${email}. Access status could not be verified.`;
     }
-  } else if (state.adminKey) {
-    note.textContent = "Legacy steward API key is active in memory for this tab.";
-  } else if (state.who) {
-    note.textContent = "Legacy researcher API key is active in memory for this tab.";
   } else {
-    note.textContent = "No identity connected. Sign in with your institution account or use an issued legacy API key.";
+    note.textContent = "No identity connected. Sign in with your institution account to continue.";
   }
 }
 
@@ -328,41 +320,6 @@ $("supabase-signout").addEventListener("click", async () => {
   await signOut();
   $("supabase-auth-status").textContent = "Signed out. Your session was cleared from this tab.";
   drawWho(); drawNav(""); render();
-});
-$("connect-key").addEventListener("click", async () => {
-  const key = $("api-key-input").value.trim();
-  const kind = $("auth-kind").value;
-  const status = $("auth-status");
-  if (!key) { status.textContent = "Enter the API key issued to you."; return; }
-  status.textContent = "Checking credentials…";
-  $("connect-key").disabled = true;
-  try {
-    const result = await connectKey(kind, key);
-    if (!result.ok) {
-      status.textContent = result.status === 401 ? "The key was rejected. Check it with your administrator."
-        : result.data?.message || "Could not verify this key.";
-      return;
-    }
-    $("api-key-input").value = "";
-    drawWho();
-    status.textContent = "Connected. This key stays in memory for this tab and is not saved.";
-    drawNav("");
-    render();
-  } finally {
-    $("connect-key").disabled = false;
-  }
-});
-$("auth-kind").addEventListener("change", () => { $("auth-status").textContent = ""; });
-$("disconnect-key").addEventListener("click", () => {
-  disconnectKey();
-  $("api-key-input").value = "";
-  $("auth-status").textContent = "Disconnected. Credentials have been cleared from this tab.";
-  drawWho();
-  drawNav("");
-  render();
-});
-$("api-key-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); $("connect-key").click(); }
 });
 // Warm the route chunk when a visitor signals intent, without loading every page at startup.
 for (const container of [ $("nav"), $("view") ]) {
