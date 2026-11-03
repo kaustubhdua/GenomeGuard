@@ -1,5 +1,7 @@
 # Configuration
 
+GenomeGuard runs agent explanations and the steward copilot entirely offline using deterministic templates and a built-in rules planner. It does not call OpenAI, Anthropic, Google, or any hosted AI endpoint and requires no AI API key.
+
 All settings are environment variables with the prefix `GG_` (see `backend/app/config.py`;
 privacy and anomaly thresholds live in `backend/app/core/params.py` and are overridable the same
 way).
@@ -15,8 +17,6 @@ way).
 | `GG_REAL_COHORT_FILE` | empty | Path to a cohort `.npz` built by `make fetch-real` or `make real-trios` |
 | `GG_EVAL_JSON` | `docs/eval-results.json` | Evaluation file shown on the Red-team page |
 | `GG_N_DONORS`, `GG_N_VARIANTS`, `GG_N_FAMILIES`, `GG_SEED` | 600, 3000, 120, 1337 | Synthetic cohort shape |
-| `ANTHROPIC_API_KEY` | unset | Optional. Agents write explanations with a model; without it templates are used |
-| `GG_LLM_MODEL` | `claude-sonnet-5-5` | Model used when a key is set |
 | `PORT` | 8000 | Used by the Docker image |
 
 Generate a master key: `python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"`.
