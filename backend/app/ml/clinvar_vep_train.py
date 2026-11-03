@@ -185,7 +185,7 @@ def annotate(rows: list[dict], vep_jsonl: Path, cache_path: Path) -> list[dict]:
         for line in cache_path.read_text().splitlines():
             item = json.loads(line)
             cache[item["key"]] = item["annotation"]
-    vep_results = load_local_vep(vep_jsonl)
+    vep_results = load_local_vep(vep_jsonl) if vep_jsonl.is_file() else {}
     missing = [
         variant_key(row["chrom"], row["pos"], row["ref"], row["alt"])
         for row in rows
