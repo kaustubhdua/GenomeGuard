@@ -28,22 +28,6 @@
     <div class="who">
       <label for="who" id="who-label">Acting as</label>
       <select id="who"></select>
-      <div id="supabase-auth-panel" hidden>
-        <h3>Institution account</h3>
-        <label for="supabase-email">Email</label>
-        <input id="supabase-email" type="email" autocomplete="username" maxlength="254" placeholder="you@institution.edu">
-        <label for="supabase-password">Password</label>
-        <input id="supabase-password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Your account password">
-        <label for="supabase-full-name">Full name (for new accounts)</label>
-        <input id="supabase-full-name" type="text" autocomplete="name" maxlength="120" placeholder="Your name">
-        <div class="stack-tight">
-          <button id="supabase-signin" type="button">Sign in</button>
-          <button id="supabase-signup" class="ghost" type="button">Create account</button>
-          <button id="supabase-resend" class="ghost" type="button">Resend confirmation email</button>
-          <button id="supabase-signout" class="ghost" type="button" hidden>Sign out</button>
-        </div>
-        <p class="fine" id="supabase-auth-status" role="status" aria-live="polite"></p>
-      </div>
       <p class="fine" id="who-note"></p>
       <p class="fine">Data and consent provenance are labelled in the interface. Use only datasets you are authorized to process.</p>
     </div>
