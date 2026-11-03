@@ -1,5 +1,5 @@
 import { api, boot, state, setWho, isSteward } from "./api.js";
-import { signIn, signUp, signOut } from "./supabase-auth.js";
+import { signIn, signUp, signOut, resendConfirmation } from "./supabase-auth.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
 
@@ -282,6 +282,20 @@ $("supabase-signin").addEventListener("click", async () => {
       : "Signed in, but access status could not be loaded. Retry shortly.";
     $("supabase-password").value = "";
     drawWho(); drawNav(""); render();
+  } finally { button.disabled = false; }
+});
+$("supabase-resend").addEventListener("click", async () => {
+  const email = $("supabase-email").value.trim();
+  const status = $("supabase-auth-status");
+  if (!email) { status.textContent = "Enter your email address first."; return; }
+  const button = $("supabase-resend");
+  button.disabled = true;
+  status.textContent = "Sending a fresh confirmation email…";
+  try {
+    const result = await resendConfirmation(email);
+    status.textContent = result.ok
+      ? "If this account needs confirmation, a fresh email has been sent. Check your inbox and Spam folder."
+      : result.data?.msg || result.data?.message || "Could not resend the confirmation email. Wait a moment and retry.";
   } finally { button.disabled = false; }
 });
 $("supabase-signup").addEventListener("click", async () => {
