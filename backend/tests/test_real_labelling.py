@@ -121,6 +121,7 @@ def _dataset_policy_meta(*, bad_digest=False):
     digest = hashlib.sha256(policy_path.read_bytes()).hexdigest()
     return {
         "source": "1000 Genomes (IGSR)",
+        "samples": 600,
         "genotypes_real": True,
         "consent_simulated": False,
         "consent_basis": "dataset_policy",
