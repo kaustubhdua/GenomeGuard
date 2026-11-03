@@ -25,16 +25,6 @@ class Settings:
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
     admin_api_key: str = field(default_factory=lambda: _env("admin_api_key", "demo-admin-key"))
-    anthropic_api_key: str | None = field(
-        default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY") or _env("anthropic_api_key", None))
-    gemini_api_key: str | None = field(
-        default_factory=lambda: os.environ.get("GEMINI_API_KEY") or _env("gemini_api_key", None)
-    )
-    openai_api_key: str | None = field(
-        default_factory=lambda: os.environ.get("OPENAI_API_KEY") or _env("openai_api_key", None)
-    )
-    llm_provider: str = field(default_factory=lambda: _env("llm_provider", "auto"))
-    llm_model: str = field(default_factory=lambda: _env("llm_model", "auto"))
     master_key: str = field(default_factory=lambda: _env("master_key", ""))
     dataset_id: str = field(default_factory=lambda: _env("dataset_id", "synthetic-cohort-1"))
     seed: int = field(default_factory=lambda: _env("seed", 1337, int))
