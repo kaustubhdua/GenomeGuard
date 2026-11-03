@@ -146,8 +146,8 @@ def _dataset_policy_meta(*, bad_digest=False):
 def test_dataset_policy_provenance_requires_matching_source_document_hash():
     with tempfile.TemporaryDirectory() as d:
         svc = _boot(_cohort_file(d, _dataset_policy_meta()))
-        from starlette.testclient import TestClient
         from app.api import create_app
+        from starlette.testclient import TestClient
 
         health = TestClient(create_app(svc)).get("/health").json()
         assert health["consent_provenance_consistent"] is True
