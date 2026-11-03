@@ -1230,8 +1230,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                             or stored_meta.get("genotypes_real") is not True):
         raise ValueError("stored cohort is not verified real-genotype data with source-matched consent")
     ds = store.load_dataset(master, s.dataset_id)
-    api_key = s.gemini_api_key or s.anthropic_api_key or s.openai_api_key
-    llm = llm or LLM(api_key, s.llm_model, provider=s.llm_provider)
+    llm = llm or LLM()
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
                              admin_key=s.admin_api_key, release_enabled=s.demo_mode, **kwargs)
     if stored_meta.get("provenance_unknown"):
