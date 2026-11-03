@@ -201,65 +201,16 @@ def main() -> int:
         page = context.new_page()
         page.route("**/*", mock_api)
         page.goto(base + "/#/overview", wait_until="domcontentloaded")
-        page.locator("#auth-panel").wait_for(state="visible", timeout=15000)
         page.locator("#view h1").wait_for(state="visible", timeout=15000)
-        check("non-demo mode shows credential sign-in", not page.locator("#auth-panel").is_hidden())
+        check("legacy API-key login panel is removed", page.locator("#auth-panel").count() == 0)
+        check("legacy API-key controls are absent",
+              page.locator("#api-key-input, #auth-kind, #connect-key, #disconnect-key").count() == 0)
+        check("institution account sign-in remains available",
+              not page.locator("#supabase-auth-panel").is_hidden())
         check("demo persona selector is hidden", page.locator("#who").is_hidden())
         check("participant/demo-only links are hidden",
               page.locator('nav a[href="#/donor"], nav a[href="#/redteam"], nav a[href="#/federated"]').count() == 0)
         check("synthetic evaluation is not fetched in non-demo overview", not eval_calls)
-
-        page.locator("#api-key-input").fill("valid-researcher-key")
-        page.locator("#connect-key").click()
-        page.get_by_text("Connected. This key stays in memory", exact=False).wait_for(timeout=5000)
-        check("researcher key is accepted", "active in memory" in page.locator("#who-note").inner_text())
-        check("real credentials are not persisted to localStorage",
-              page.evaluate("localStorage.getItem('gg_who')") is None)
-
-        page.goto(base + "/#/requests", wait_until="domcontentloaded")
-        page.locator("#view h1").wait_for(state="visible", timeout=15000)
-        check("real-mode request form is usable", page.locator("#purpose").count() == 1)
-        check("real-mode form omits planted demo variants", page.locator("#pl").count() == 0)
-        check("real-mode form omits demo preset buttons",
-              page.get_by_role("button", name="Diabetes frequency study").count() == 0)
-        check("real-mode form omits the synthetic probing sequence",
-              page.get_by_role("button", name="Run probe sequence").count() == 0)
-        check("disease field is free text for source-specific terms",
-              page.locator("input#disease").count() == 1 and page.locator("select#disease").count() == 0)
-
-        page.locator("#auth-kind").select_option("steward")
-        page.locator("#api-key-input").fill("invalid-steward-key")
-        page.locator("#connect-key").click()
-        page.get_by_text("The key was rejected", exact=False).wait_for(timeout=5000)
-        check("invalid steward key is rejected", page.locator('nav a[href="#/audit"]').count() == 0)
-        page.locator("#api-key-input").fill("valid-steward-key")
-        page.locator("#connect-key").click()
-        page.get_by_text("Connected. This key stays in memory", exact=False).wait_for(timeout=5000)
-        check("steward key is accepted", "Legacy steward API key is active" in page.locator("#who-note").inner_text())
-        check("steward navigation appears after authentication",
-              page.locator('nav a[href="#/audit"]').count() == 1)
-        check("steward key is not persisted to localStorage",
-              page.evaluate("localStorage.getItem('gg_who')") is None)
-        check("steward can open researcher provisioning form",
-              page.locator("#new-requester-name").count() == 1)
-        page.locator("#new-requester-name").fill("New Researcher")
-        page.locator("#new-requester-institution").fill("Research Institute")
-        page.locator("#issue-researcher-title + p")  # ensure the access section is rendered
-        page.get_by_role("button", name="Issue researcher key").click()
-        page.get_by_label("New researcher API key").wait_for(timeout=5000)
-        check("one-time researcher key is displayed after provisioning",
-              page.locator('input[aria-label="New researcher API key"]').input_value()
-              == "one-time-issued-researcher-key")
-        check("issued researcher key is not persisted to localStorage",
-              page.evaluate("localStorage.getItem('gg_who')") is None)
-
-        page.locator("#disconnect-key").click()
-        check("disconnect clears active credentials",
-              "Disconnected." in page.locator("#auth-status").inner_text())
-        check("steward navigation is removed after disconnect",
-              page.locator('nav a[href="#/audit"]').count() == 0)
-        check("Supabase Auth panel is available in non-demo mode",
-              not page.locator("#supabase-auth-panel").is_hidden())
 
         # Supabase Auth sign-in is mocked; no real account is created and no email is sent.
         page.locator("#supabase-email").fill("researcher@example.org")
@@ -268,7 +219,7 @@ def main() -> int:
         page.get_by_text("Your organization membership is active", exact=False).wait_for(timeout=5000)
         check("Supabase researcher sign-in obtains verified membership status",
               "Research Institute (researcher)" in page.locator("#who-note").inner_text())
-        check("legacy API-key panel hides after Supabase sign-in", page.locator("#auth-panel").is_hidden())
+        check("legacy API-key panel remains absent after Supabase sign-in", page.locator("#auth-panel").count() == 0)
         check("Supabase credentials are not persisted to browser storage",
               page.evaluate("localStorage.getItem('gg_who')") is None)
 
