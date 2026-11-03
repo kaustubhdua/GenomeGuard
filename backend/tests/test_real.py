@@ -242,18 +242,10 @@ def test_loaded_cohort_works_with_dataset_and_consent_engine():
 
 def test_dataset_public_release_policy_is_real_source_provenance_not_fake_personal_consent():
     with tempfile.TemporaryDirectory() as d:
-        v, out, policy_path = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz", Path(d) / "policy.json"
+        v, out = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz"
+        policy_path = Path(__file__).resolve().parents[2] / "docs" / "policies" / "igsr-1000-genomes-public-release.json"
+        policy = __import__("json").loads(policy_path.read_text(encoding="utf-8"))
         make_vcf(v)
-        policy = {
-            "policy_id": "test-public-release-v1",
-            "source_url": "https://example.org/source-terms",
-            "scope": "dataset",
-            "duo_use": "GRU",
-            "duo_modifiers": [],
-            "withdrawal_supported": False,
-            "review_status": "source_documented_not_legal_review",
-        }
-        policy_path.write_text(__import__("json").dumps(policy), encoding="utf-8")
         cohort, meta = real.build_cohort(
             v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=8,
             consent_policy=policy, consent_source_file=str(policy_path),
