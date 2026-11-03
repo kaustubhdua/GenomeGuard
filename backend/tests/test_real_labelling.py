@@ -5,6 +5,8 @@ saved in the same file format; the labels under test come from the metadata we w
 import hashlib
 import tempfile
 import warnings
+
+import pytest
 from pathlib import Path
 
 from app.config import Settings
@@ -108,3 +110,54 @@ def test_exposure_note_names_the_pedigree_file_only_for_real_data():
         d2 = rs.submit(rs.authenticate("k-real"), DEMO_REQ)
         model = rs.exposure(d2["id"])["model"]
         assert "pedigree file" in model and model.startswith("SIMULATED")
+
+
+
+def _dataset_policy_meta(*, bad_digest=False):
+    import json
+
+    policy_path = Path(__file__).resolve().parents[2] / "docs" / "policies" / "igsr-1000-genomes-public-release.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    digest = hashlib.sha256(policy_path.read_bytes()).hexdigest()
+    return {
+        "source": "1000 Genomes (IGSR)",
+        "genotypes_real": True,
+        "consent_simulated": False,
+        "consent_basis": "dataset_policy",
+        "consent_policy": {
+            "policy_id": policy["policy_id"],
+            "source_url": policy["source_url"],
+            "scope": policy["scope"],
+            "review_status": policy["review_status"],
+            "terms_summary": policy["terms_summary"],
+            "withdrawal_supported": policy["withdrawal_supported"],
+            "not_individual_consent": True,
+        },
+        "consent_policy_source_file": policy_path.name,
+        "consent_policy_source_sha256": ("0" * 64 if bad_digest else digest),
+        "consent_records_matched": 0,
+        "dataset_policy_samples_scoped": 600,
+        "source_vcf_sha256": "a" * 64,
+        "source_sample_metadata_sha256": "b" * 64,
+        "source_vcf_file": "public-test.vcf.gz",
+    }
+
+
+def test_dataset_policy_provenance_requires_matching_source_document_hash():
+    with tempfile.TemporaryDirectory() as d:
+        svc = _boot(_cohort_file(d, _dataset_policy_meta()))
+        from starlette.testclient import TestClient
+        from app.api import create_app
+
+        health = TestClient(create_app(svc)).get("/health").json()
+        assert health["consent_provenance_consistent"] is True
+        assert health["participant_consent_records_matched"] == 0
+        assert health["dataset_policy_samples_scoped"] == 600
+        assert health["provenance"]["consent_source"] is None
+        assert health["provenance"]["consent_policy_source_sha256"] == _dataset_policy_meta()["consent_policy_source_sha256"]
+
+
+def test_dataset_policy_provenance_rejects_wrong_source_document_hash():
+    with tempfile.TemporaryDirectory() as d:
+        with pytest.raises(ValueError, match="SHA-256 does not match"):
+            _boot(_cohort_file(d, _dataset_policy_meta(bad_digest=True)))
