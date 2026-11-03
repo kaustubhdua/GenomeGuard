@@ -112,9 +112,10 @@ export async function render() {
       h("div", { class: "gg-eyebrow" }, h("span", { class: hl.status === "ok" ? "gg-live-dot" : "gg-live-dot gg-live-dot-off" }), state.demo ? "DEMONSTRATION ENVIRONMENT / SYNTHETIC COHORT" : "GENOMIC DATA GOVERNANCE / RESEARCH WORKSPACE"),
       h("h1", {}, "Research access, governed with evidence."),
       h("p", {}, "A unified workspace for genomic dataset provenance, privacy-aware access decisions and accountable research operations."),
-      h("div", { class: "gg-command-actions" },
-        h("a", { class: "gg-primary-action", href: "#/requests" }, isSteward() ? "Open review queue" : "Create access request"),
-        tourAvailable() && !state.authToken ? h("button", { class: "gg-secondary-action", "aria-label": "Explore platform — Guided walkthrough", onclick: startTour }, "Explore platform") : null)),
+      tourAvailable() && !state.authToken
+        ? h("div", { class: "gg-command-actions" },
+            h("button", { class: "gg-secondary-action", "aria-label": "Explore platform — Guided walkthrough", onclick: startTour }, "Explore platform"))
+        : null),
     h("div", { class: "gg-command-art" }, helixGraphic(),
       h("div", { class: "gg-art-label" }, h("span", {}, "REFERENCE BUILD"),
         h("strong", {}, pv.genotypes_label || "Public research cohort")))));
