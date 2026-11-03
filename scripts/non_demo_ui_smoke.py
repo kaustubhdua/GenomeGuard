@@ -26,7 +26,8 @@ def main() -> int:
     parser.add_argument("--base", default="http://127.0.0.1:8767")
     args = parser.parse_args()
     base = args.base.rstrip("/")
-    eval_calls: list[str] = []\n    auth_calls: list[dict] = []
+    eval_calls: list[str] = []
+    auth_calls: list[dict] = []
     edge_calls: list[dict] = []
     review_state = {"status": "pending_review", "history": []}
     submitted_request: dict = {}
@@ -60,7 +61,9 @@ def main() -> int:
         parsed = urlparse(req.url)
         path = parsed.path
         if parsed.netloc == "hkyieaovolkethovyenb.supabase.co":
-            if path.startswith("/auth/v1/"):\n                auth_calls.append({"path": path, "body": req.post_data_json or {}})\n            if path == "/auth/v1/token" and req.method == "POST":
+            if path.startswith("/auth/v1/"):
+                auth_calls.append({"path": path, "body": req.post_data_json or {}})
+            if path == "/auth/v1/token" and req.method == "POST":
                 payload = req.post_data_json or {}
                 email = payload.get("email", "")
                 token = "reviewer-token" if email.startswith("reviewer") else (
