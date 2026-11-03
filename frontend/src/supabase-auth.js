@@ -26,13 +26,29 @@ export async function signIn(email, password) {
   return result;
 }
 
+function confirmationRedirectUrl() {
+  // Supabase must allow-list the production origin in Authentication → URL Configuration.
+  // Use the current origin so local development and deployed builds never redirect to localhost
+  // from a production confirmation email.
+  return window.location.origin + "/";
+}
+
 export async function signUp(email, password, fullName) {
   const result = await authRequest("signup", {
     email, password,
     data: fullName ? { full_name: fullName } : {},
+    options: { emailRedirectTo: confirmationRedirectUrl() },
   });
   if (result.ok && result.data?.access_token) setSupabaseSession(result.data);
   return result;
+}
+
+export async function resendConfirmation(email) {
+  return authRequest("resend", {
+    type: "signup",
+    email,
+    options: { emailRedirectTo: confirmationRedirectUrl() },
+  });
 }
 
 export async function signOut() {
