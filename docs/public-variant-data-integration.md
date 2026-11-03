@@ -5,8 +5,8 @@ Variant Effect Predictor (VEP) annotations and trains a gene-held-out research m
 
 ## Sources
 - NCBI ClinVar variant summary: https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz
-- Ensembl VEP REST region endpoint: https://rest.ensembl.org/documentation/info/vep_region_post
-- Ensembl VEP CADD plugin documentation: https://rest.ensembl.org/documentation/info/vep_region_get
+- Ensembl VEP: run locally with the GRCh38 offline cache; see [offline variant training](offline-variant-training.md)
+- Ensembl VEP plugins and their locally installed data files are optional; no Ensembl REST endpoint is used
 
 The workflow selects a deterministic, balanced subset (default 10,000) of variants
 with GRCh38 coordinates and criteria-provided, non-conflicting ClinVar assertions.

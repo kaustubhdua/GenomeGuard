@@ -4,7 +4,7 @@ import inspect
 import json
 
 from app.agents import copilot as cp
-from app.agents.copilot import MAX_STEPS, Copilot, evaluate, next_tool
+from app.agents.copilot import Copilot, evaluate, next_tool
 from app.agents.llm import LLM
 from tests.helpers import (
     ADMIN,

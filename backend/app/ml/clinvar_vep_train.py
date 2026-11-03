@@ -1,7 +1,7 @@
-"""ClinVar + public Ensembl VEP annotation research training pipeline.
+"""ClinVar + local Ensembl VEP annotation research training pipeline.
 
-Downloads no private data. VEP annotations are derived from public Ensembl REST data;
-the bounded sample avoids turning the public API into a bulk-download service.
+ClinVar may be downloaded from its public FTP distribution. Variant annotation is
+consumed only from a local Ensembl VEP offline/cache JSONL export; no REST API is used.
 """
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ import gzip
 import hashlib
 import json
 import random
-import time
-import urllib.error
 import urllib.request
 from collections import Counter
 from pathlib import Path
@@ -41,7 +39,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 CLINVAR_URL = "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz"
-VEP_URL = "https://rest.ensembl.org/vep/human/region?CADD=1"
+VEP_OFFLINE_FILE = "ensembl_vep_offline.jsonl"
 DNA = set("ACGTN")
 NUMERIC = ["ref_length", "alt_length", "length_delta", "gc_ref", "gc_alt",
            "is_snv", "is_indel", "cadd_phred", "sift_score", "polyphen_score",
@@ -122,21 +120,47 @@ def eligible_rows(path: Path, cap: int, seed: int) -> tuple[list[dict], Counter]
     return rows, counts
 
 
-def post_vep(batch: list[dict], retries: int = 5) -> list[dict]:
-    variants = [f'{r["chrom"]} {r["pos"]} . {r["ref"]} {r["alt"]} . . .' for r in batch]
-    payload = json.dumps({"variants": variants}).encode()
-    req = urllib.request.Request(VEP_URL, data=payload, headers={
-        "Content-Type": "application/json", "Accept": "application/json",
-        "User-Agent": "GenomeGuard-research/0.2"})
-    for attempt in range(retries):
-        try:
-            with urllib.request.urlopen(req, timeout=120) as response:
-                return json.loads(response.read().decode())
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            if attempt == retries - 1:
-                raise RuntimeError(f"Ensembl VEP batch failed after {retries} attempts: {exc}") from exc
-            time.sleep(min(60, 2 ** attempt))
-    raise RuntimeError("unreachable")
+def variant_key(chrom: str, pos: int, ref: str, alt: str) -> str:
+    chrom = str(chrom).removeprefix("chr").upper()
+    if chrom == "M":
+        chrom = "MT"
+    return f"{chrom}:{int(pos)}:{ref.upper()}:{alt.upper()}"
+
+
+def write_vep_vcf(rows: list[dict], path: Path) -> None:
+    """Write selected variants for a local Ensembl VEP offline/cache run."""
+    with path.open("w", encoding="utf-8") as out:
+        out.write("##fileformat=VCFv4.2\n##reference=GRCh38\n")
+        out.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+        for row in rows:
+            out.write(
+                f'{row["chrom"]}\t{row["pos"]}\t.\t{row["ref"]}\t'
+                f'{row["alt"]}\t.\t.\t.\n'
+            )
+
+
+def load_local_vep(path: Path) -> dict[str, dict]:
+    """Read one JSON object per line from Ensembl VEP CLI --json output."""
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Local VEP JSONL not found: {path}. Generate it with Ensembl VEP "
+            "--offline --cache --assembly GRCh38 --json using the generated VCF."
+        )
+    annotations: dict[str, dict] = {}
+    with path.open(encoding="utf-8") as source:
+        for line_number, line in enumerate(source, start=1):
+            if not line.strip():
+                continue
+            try:
+                result = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid VEP JSON on line {line_number}") from exc
+            fields = str(result.get("input", "")).split()
+            if len(fields) < 5:
+                continue
+            chrom, pos, _identifier, ref, alt = fields[:5]
+            annotations[variant_key(chrom, int(pos), ref, alt)] = result
+    return annotations
 
 
 def numeric_af(colocated: list[dict], alternate_allele: str) -> float:
@@ -155,45 +179,51 @@ def numeric_af(colocated: list[dict], alternate_allele: str) -> float:
     return max(values) if values else float("nan")
 
 
-def annotate(rows: list[dict], out: Path) -> list[dict]:
+def annotate(rows: list[dict], vep_jsonl: Path, cache_path: Path) -> list[dict]:
     cache = {}
-    if out.exists():
-        for line in out.read_text().splitlines():
+    if cache_path.exists():
+        for line in cache_path.read_text().splitlines():
             item = json.loads(line)
             cache[item["key"]] = item["annotation"]
-    pending = [r for r in rows if f'{r["chrom"]}:{r["pos"]}:{r["ref"]}:{r["alt"]}' not in cache]
-    for offset in range(0, len(pending), 200):
-        batch = pending[offset:offset + 200]
-        response = post_vep(batch)
-        for source, result in zip(batch, response, strict=True):
-            consequences = result.get("transcript_consequences") or []
-            impacts = [x.get("impact") for x in consequences if x.get("impact")]
-            cadds = [x.get("cadd_phred") for x in consequences
-                     if isinstance(x.get("cadd_phred"), (int, float))]
-            sift = [x.get("sift_score") for x in consequences
-                    if isinstance(x.get("sift_score"), (int, float))]
-            polyphen = [x.get("polyphen_score") for x in consequences
-                        if isinstance(x.get("polyphen_score"), (int, float))]
-            annotation = {
-                "most_severe_consequence": result.get("most_severe_consequence", "unknown"),
-                "impact": max(impacts, key=lambda x: {"HIGH": 3, "MODERATE": 2, "LOW": 1, "MODIFIER": 0}.get(x, -1), default="unknown"),
-                "cadd_phred": max(cadds) if cadds else None,
-                "sift_score": min(sift) if sift else None,
-                "polyphen_score": max(polyphen) if polyphen else None,
-                "max_population_af": numeric_af(result.get("colocated_variants") or [], source["alt"]),
-                "transcript_consequence_count": len(consequences),
-                "canonical_transcript_count": sum(bool(x.get("canonical")) for x in consequences),
-                "mane_select_present": int(any(x.get("mane_select") for x in consequences)),
-            }
-            key = f'{source["chrom"]}:{source["pos"]}:{source["ref"]}:{source["alt"]}'
-            cache[key] = annotation
-            with out.open("a") as f:
-                f.write(json.dumps({"key": key, "annotation": annotation}) + "\n")
-        print(f"VEP annotated {min(offset + len(batch), len(pending))}/{len(pending)} new variants", flush=True)
-        time.sleep(0.1)
+    vep_results = load_local_vep(vep_jsonl) if vep_jsonl.is_file() else {}
+    missing = [
+        variant_key(row["chrom"], row["pos"], row["ref"], row["alt"])
+        for row in rows
+        if variant_key(row["chrom"], row["pos"], row["ref"], row["alt"]) not in cache
+        and variant_key(row["chrom"], row["pos"], row["ref"], row["alt"]) not in vep_results
+    ]
+    if missing:
+        raise ValueError(
+            f"{len(missing)} selected variants are absent from local VEP output; "
+            "regenerate the VCF and run offline VEP for the complete input."
+        )
+    for row in rows:
+        key = variant_key(row["chrom"], row["pos"], row["ref"], row["alt"])
+        if key in cache:
+            continue
+        result = vep_results[key]
+        consequences = result.get("transcript_consequences") or []
+        impacts = [x.get("impact") for x in consequences if x.get("impact")]
+        cadds = [x.get("cadd_phred") for x in consequences if isinstance(x.get("cadd_phred"), (int, float))]
+        sift = [x.get("sift_score") for x in consequences if isinstance(x.get("sift_score"), (int, float))]
+        polyphen = [x.get("polyphen_score") for x in consequences if isinstance(x.get("polyphen_score"), (int, float))]
+        annotation = {
+            "most_severe_consequence": result.get("most_severe_consequence", "unknown"),
+            "impact": max(impacts, key=lambda x: {"HIGH": 3, "MODERATE": 2, "LOW": 1, "MODIFIER": 0}.get(x, -1), default="unknown"),
+            "cadd_phred": max(cadds) if cadds else None,
+            "sift_score": min(sift) if sift else None,
+            "polyphen_score": max(polyphen) if polyphen else None,
+            "max_population_af": numeric_af(result.get("colocated_variants") or [], row["alt"]),
+            "transcript_consequence_count": len(consequences),
+            "canonical_transcript_count": sum(bool(x.get("canonical")) for x in consequences),
+            "mane_select_present": int(any(x.get("mane_select") for x in consequences)),
+        }
+        cache[key] = annotation
+        with cache_path.open("a", encoding="utf-8") as out:
+            out.write(json.dumps({"key": key, "annotation": annotation}) + "\n")
     result_rows = []
     for row in rows:
-        key = f'{row["chrom"]}:{row["pos"]}:{row["ref"]}:{row["alt"]}'
+        key = variant_key(row["chrom"], row["pos"], row["ref"], row["alt"])
         ann = cache.get(key)
         if ann is None:
             continue
@@ -218,6 +248,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/clinvar-vep"))
     parser.add_argument("--max-variants", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--vep-jsonl", type=Path, default=None, help="local Ensembl VEP --json output; no REST endpoint is called")
     args = parser.parse_args()
     if args.max_variants < 1000 or args.max_variants > 20000:
         parser.error("--max-variants must be between 1000 and 20000")
@@ -228,8 +259,11 @@ def main() -> int:
         print("Downloading public NCBI ClinVar summary...", flush=True)
         download(CLINVAR_URL, clinvar)
     selected, counts = eligible_rows(clinvar, args.max_variants, args.seed)
+    input_vcf = args.data_dir / "clinvar_selected_for_vep.vcf"
+    write_vep_vcf(selected, input_vcf)
+    vep_jsonl = args.vep_jsonl or (args.data_dir / VEP_OFFLINE_FILE)
     cache = args.data_dir / "ensembl_vep_annotations.jsonl"
-    records = annotate(selected, cache)
+    records = annotate(selected, vep_jsonl, cache)
     if len(records) < 500 or len({x["gene"] for x in records}) < 20 or len({x["label"] for x in records}) != 2:
         raise SystemExit(f"Not enough annotated records for a meaningful run: {len(records)}")
     frame = pd.DataFrame(records)
@@ -283,14 +317,14 @@ def main() -> int:
         "model": "clinvar_vep_research", "version": "0.2.0",
         "sources": [
             {"name": "NCBI ClinVar variant_summary", "url": CLINVAR_URL, "sha256": digest(clinvar)},
-            {"name": "Ensembl VEP REST", "url": VEP_URL, "annotation_cache_sha256": digest(cache)},
+            {"name": "Ensembl VEP offline CLI/cache", "annotation_file": str(vep_jsonl), "annotation_file_sha256": digest(vep_jsonl), "annotation_cache_sha256": digest(cache)},
         ],
         "assembly": "GRCh38", "max_variants_requested": args.max_variants,
         "annotated_rows": len(frame), "train_rows": len(train_idx), "test_rows": len(test_idx),
         "train_genes": int(groups.iloc[train_idx].nunique()), "test_genes": int(groups.iloc[test_idx].nunique()),
         "features": numeric + categorical,
         "feature_coverage": {column: float(frame[column].notna().mean()) for column in numeric + categorical},
-        "feature_policy": "REF/ALT shape plus Ensembl VEP consequence, impact, CADD and colocated population-frequency annotations; clinical labels, coordinates and gene identifiers are excluded from features",
+        "feature_policy": "REF/ALT shape plus locally generated Ensembl VEP consequence, impact, CADD and colocated population-frequency annotations; clinical labels, coordinates and gene identifiers are excluded from features",
         "split_policy": "first fold of 5-fold stratified gene-disjoint split; not external cohort or ancestry validation",
         "counts": dict(counts), "scikit_learn_version": sklearn.__version__,
         "model_sha256": digest(model_path),
