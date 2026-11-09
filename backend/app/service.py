@@ -810,6 +810,95 @@ class GenomeGuardService:
                                                                        len(new["modifiers"])]})
         return self.donor_profile(donor_id)
 
+    @transactional
+    def apply_signed_consent_event(
+        self, event: dict, *, public_key_b64: str, trusted_issuer: str,
+    ) -> dict:
+        """Apply a signed source-system consent change to one mapped participant."""
+        from app.consent_authority import ConsentAuthorityError, verify_consent_event
+
+        try:
+            payload, source_digest = verify_consent_event(
+                event,
+                public_key_b64=public_key_b64,
+                trusted_issuer=trusted_issuer,
+                expected_dataset_id=self.dataset_id,
+            )
+        except ConsentAuthorityError as exc:
+            raise ServiceError(422, "invalid_consent_authority_event", str(exc)) from None
+        if self.store.consent_event_exists(payload["event_id"]):
+            raise ServiceError(409, "duplicate_consent_event", "this consent event was already applied")
+        row = self.store.donor_by_source_sample_id(payload["source_sample_id"])
+        if not row:
+            raise ServiceError(404, "participant_not_found",
+                               "source sample is not part of the active cohort")
+        donor_id = int(row["id"])
+        donor = self._donor(donor_id)
+        if donor.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_not_individual_consent",
+                               "dataset-level public terms cannot be converted into participant consent")
+
+        incoming = payload["consent"]
+        use = str(incoming.get("use", "")).upper()
+        if use not in self.CONSENT_USES:
+            raise ServiceError(422, "invalid_consent", "signed consent use must be GRU, HMB or DS")
+        disease = incoming.get("disease")
+        if use == "DS":
+            if not isinstance(disease, str) or not re.fullmatch(r"[a-z_]{2,32}", disease):
+                raise ServiceError(422, "invalid_consent", "DS consent requires a lowercase disease label")
+        else:
+            disease = None
+        modifiers = incoming.get("modifiers", [])
+        if (not isinstance(modifiers, list)
+                or not all(isinstance(item, str) for item in modifiers)
+                or {item.upper() for item in modifiers} - set(self.CONSENT_MODS)):
+            raise ServiceError(422, "invalid_consent", "signed consent modifiers are invalid")
+        population = incoming.get("population")
+        if population is not None and (
+            not isinstance(population, str) or len(population) > 80
+        ):
+            raise ServiceError(422, "invalid_consent", "population restriction is invalid")
+        consent_date = incoming.get("consent_date")
+        if not isinstance(consent_date, str) or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", consent_date):
+            raise ServiceError(422, "invalid_consent", "participant consent_date must be YYYY-MM-DD")
+        from datetime import date
+        try:
+            date.fromisoformat(consent_date)
+        except ValueError:
+            raise ServiceError(422, "invalid_consent", "participant consent_date is invalid") from None
+
+        consent = {
+            **donor.consent,
+            "use": use,
+            "disease": disease,
+            "modifiers": sorted({item.upper() for item in modifiers}),
+            "population": population,
+            "consent_date": consent_date,
+            "consent_basis": "participant_records",
+            "consent_simulated": False,
+            "consent_authority_issuer": trusted_issuer,
+            "consent_event_id": payload["event_id"],
+        }
+        event_type = payload["event_type"]
+        withdrawn = event_type == "withdrawn"
+        if event_type == "restored":
+            # A restore is accepted only with a newly signed, complete consent payload above.
+            withdrawn = False
+        self.ds.donors[donor_id - 1] = replace(donor, consent=consent, withdrawn=withdrawn)
+        self.store.set_donor_consent(donor_id, consent)
+        self.store.set_donor_withdrawn(donor_id, payload["effective_at"] if withdrawn else None)
+        self.store.record_consent_event(
+            payload["event_id"], donor_id, self.dataset_id, event_type, consent,
+            trusted_issuer, source_digest, payload["effective_at"],
+        )
+        self.audit.append(
+            f"donor:{self._donor_ref(donor_id)}", f"consent.authority_{event_type}",
+            {"donor_ref": self._donor_ref(donor_id), "event_id": payload["event_id"],
+             "source_record_sha256": source_digest, "effective_at": payload["effective_at"],
+             "withdrawn": withdrawn, "issuer": trusted_issuer},
+        )
+        return self.donor_profile(donor_id)
+
     FHIR_BASE = "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package"
     FHIR_EXT = FHIR_BASE + "/StructureDefinition-"
 
