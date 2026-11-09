@@ -1,6 +1,6 @@
 """Safety contracts for the PostgreSQL backup/restore drill script."""
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "postgres_backup_restore_check.sh"
 SCRIPT = SCRIPT_PATH.read_text(encoding="utf-8")
@@ -40,15 +40,14 @@ def test_backup_is_encrypted_before_persisting_and_plaintext_is_not_written_to_d
 
 def test_restore_check_keeps_audit_chain_validation_boundary_explicit():
     assert "audit_min <> 1 OR audit_max <> audit_count" in SCRIPT
-    assert "Verify the full audit hash chain with the application verifier" in SCRIPT
-
+    assert "Verifying the restored PostgreSQL audit hash chain" in SCRIPT
+    assert "scripts/verify_postgres_audit.py" in SCRIPT
 
 
 def test_restore_drill_runs_the_application_audit_chain_verifier():
     assert "scripts/verify_postgres_audit.py" in SCRIPT
     assert 'GG_DATABASE_URL="$GG_RESTORE_TEST_URL"' in SCRIPT
     assert "GG_AUDIT_CHECKPOINT_FILE" in SCRIPT
-
 
 
 def test_audit_verifier_is_read_only_and_does_not_run_migrations():
