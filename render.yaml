@@ -24,6 +24,8 @@ services:
         sync: false   # Separate owner URL, used only during startup migrations and then closed
       - key: GG_OIDC_REQUIRED
         value: "true"
+      - key: GG_TENANT_ISOLATION_REQUIRED
+        value: "true"
       - key: GG_OIDC_ISSUER
         sync: false
       - key: GG_OIDC_AUDIENCE
