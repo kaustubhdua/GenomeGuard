@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import re
 import time
 from collections.abc import Callable
@@ -1304,10 +1305,16 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         if s.database_url:
             from app.postgres_store import PostgresStore
 
+            migration_url = s.migration_database_url or None
             store = PostgresStore(
                 s.database_url,
-                migration_database_url=s.migration_database_url or None,
+                migration_database_url=migration_url,
             )
+            if migration_url:
+                # The privileged credential is used only to apply migrations; drop it from
+                # process configuration once PostgresStore has closed its owner connection.
+                s.migration_database_url = ""
+                os.environ.pop("GG_MIGRATION_DATABASE_URL", None)
         else:
             store = Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
