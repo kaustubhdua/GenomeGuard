@@ -1052,3 +1052,9 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
   .qc-report .facts dd { padding: 2px 0 10px; }
   .qc-report .facts > :last-child { border-bottom: 0; }
 }
+
+
+/* Institutional authentication controls in the workspace rail. */
+.auth-controls { display: grid; gap: 8px; margin: 10px 0; }
+.auth-controls .btn { width: 100%; justify-content: center; }
+.auth-controls p { margin: 0; overflow-wrap: anywhere; }
