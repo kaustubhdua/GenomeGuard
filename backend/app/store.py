@@ -136,6 +136,16 @@ class Store:
             finally:
                 self._transaction_depth -= 1
 
+    def set_tenant(self, organization_id: str) -> None:
+        """SQLite demo adapter has no database-level tenant policy."""
+        return None
+
+    def set_admin_access(self) -> None:
+        return None
+
+    def set_allow_unscoped_demo(self) -> None:
+        return None
+
     # ------------------------------------------------------------------ dataset
     def has_dataset(self) -> bool:
         return bool(self.one("SELECT 1 AS x FROM donors LIMIT 1"))
