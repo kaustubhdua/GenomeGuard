@@ -141,8 +141,9 @@ def test_broken_provider_session_is_reopened_even_before_closed_flag_changes(mon
         ("SET search_path TO genomeguard_runtime, public", ()),
     ]
 
-def test_read_query_retries_once_after_server_side_disconnect(monkeypatch):
-    import psycopg
+def test_read_query_reconnects_before_using_broken_provider_session(monkeypatch):
+    from contextlib import nullcontext
+    import threading
 
     from app.postgres_store import PostgresStore, _ConnectionCompat
 
@@ -151,18 +152,13 @@ def test_read_query_retries_once_after_server_side_disconnect(monkeypatch):
             return [{"ok": True}]
 
     class FakeConnection:
-        def __init__(self, *, broken=False, fail=False):
+        def __init__(self, *, broken=False):
             self.closed = 0
             self.broken = broken
-            self.fail = fail
             self.statements = []
 
         def execute(self, statement, args=()):
             self.statements.append((statement, args))
-            if self.fail:
-                self.fail = False
-                self.broken = True
-                raise psycopg.OperationalError("server administratively terminated connection")
             return Cursor()
 
         def commit(self):
@@ -172,29 +168,32 @@ def test_read_query_retries_once_after_server_side_disconnect(monkeypatch):
             self.closed = 1
 
         def transaction(self):
-            from contextlib import nullcontext
             return nullcontext()
 
-    first = FakeConnection(fail=True)
+    first = FakeConnection(broken=True)
     second = FakeConnection()
-    connections = iter((first, second))
-    monkeypatch.setattr(
-        "app.postgres_store.psycopg.connect",
-        lambda *args, **kwargs: next(connections),
-    )
+    calls = []
+
+    def connect(*args, **kwargs):
+        calls.append((args, kwargs))
+        return second
+
+    monkeypatch.setattr("app.postgres_store.psycopg.connect", connect)
 
     store = object.__new__(PostgresStore)
     store.database_url = "postgresql://example.invalid/db"
     store.connect_timeout = 7
     store._transaction_depth = 0
-    import threading
-
     store.lock = threading.RLock()
     store.connection = first
     store.db = _ConnectionCompat(first, store)
 
     assert store.q("SELECT 1") == [{"ok": True}]
-    assert first.closed == 1
+    assert first.closed == 0
+    assert len(calls) == 1
     assert store.connection is second
-    assert second.statements == [("SELECT 1", ())]
-
+    assert store.db.connection is second
+    assert second.statements == [
+        ("SET search_path TO genomeguard_runtime, public", ()),
+        ("SELECT 1", ()),
+    ]
