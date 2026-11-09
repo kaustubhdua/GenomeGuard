@@ -1,13 +1,11 @@
-import { SUPABASE_EDGE_API, SUPABASE_PUBLISHABLE_KEY } from "./supabase-config.js";
-
 // Tiny API client. Credentials are deliberately kept in tab memory only.
 // Never read or write API keys to localStorage, sessionStorage, URLs, or logs.
 // Donors use their own X-Donor-Key and are also kept in memory only.
 
 // Defer any remembered identity until the server confirms demo mode.
-export const state = { who: "", adminKey: "", demo: null, health: null, readiness: null, bootError: "", me: null, donors: [], donor: null, authToken: "", authRefreshToken: "", authUser: null, authAccess: null, authRole: "" };
+export const state = { who: "", adminKey: "", demo: null, health: null, readiness: null, bootError: "", me: null, donors: [], donor: null };
 
-export const isSteward = () => state.who === "steward" || ["reviewer", "organization_admin"].includes(state.authRole);
+export const isSteward = () => state.who === "steward";
 
 export function setWho(v) {
   state.who = v;
@@ -63,68 +61,11 @@ function authHeaders() {
   return {};
 }
 
-function supabaseRoute(path, method = "GET") {
-  if (path === "/me") return "/me";
-  if (path === "/requests" && method === "GET" && isSteward()) return "/steward/requests";
-  if (path === "/requests" || /^\/requests\/\d+(?:\/review)?$/.test(path)) return path;
-  if (path === "/steward/requests" || /^\/consents\/[0-9a-f-]{36}\/withdraw$/i.test(path)) return path;
-  return null;
-}
-
-async function refreshSupabaseSession() {
-  if (!state.authRefreshToken) return false;
-  try {
-    const response = await fetch(SUPABASE_EDGE_API.replace("/functions/v1/genomeguard-api", "/auth/v1/token?grant_type=refresh_token"), {
-      method: "POST",
-      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: state.authRefreshToken }),
-    });
-    if (!response.ok) return false;
-    const session = await response.json();
-    state.authToken = session.access_token || "";
-    state.authRefreshToken = session.refresh_token || state.authRefreshToken;
-    state.authUser = session.user || state.authUser;
-    return !!state.authToken;
-  } catch { return false; }
-}
-
 // `opts.key` sends that requester key instead of the acting identity (the guided tour uses it).
 export async function api(path, opts = {}) {
   const { key, ...rest } = opts;
-  const method = rest.method || "GET";
-  const route = state.authToken ? supabaseRoute(path, method) : null;
-  if (route) {
-    const invoke = () => call(SUPABASE_EDGE_API + route, {
-      ...rest,
-      headers: {
-        apikey: SUPABASE_PUBLISHABLE_KEY,
-        Authorization: "Bearer " + state.authToken,
-      },
-    });
-    let result = await invoke();
-    if (result.status === 401 && await refreshSupabaseSession()) result = await invoke();
-    return result;
-  }
   const headers = key ? { "X-API-Key": key } : authHeaders();
   return call(path, { ...rest, headers });
-}
-
-export function setSupabaseSession(session) {
-  state.authToken = session?.access_token || "";
-  state.authRefreshToken = session?.refresh_token || "";
-  state.authUser = session?.user || null;
-  state.authAccess = null;
-  state.authRole = "";
-  if (state.authToken) state.who = "";
-}
-
-export function clearSupabaseSession() {
-  state.authToken = "";
-  state.authRefreshToken = "";
-  state.authUser = null;
-  state.authAccess = null;
-  state.authRole = "";
-  state.who = "";
 }
 
 export function uploadVcfQc(file, assembly, expectedSha256, signal) {
@@ -174,17 +115,12 @@ export function disconnectKey() {
 }
 
 export async function boot() {
-  // Local development keeps the Python demo backend. Hosted deployments use the
-  // Supabase liveness/readiness endpoints so stale Render metadata cannot be shown
-  // as current provenance or participant consent.
+  // Every deployment uses the same first-party Python API. No hosted auth,
+  // Edge Function, project URL, or browser publishable key is required.
   state.bootError = "";
-  const localBackend = ["localhost", "127.0.0.1"].includes(location.hostname);
-  const publicHeaders = localBackend ? {} : { apikey: SUPABASE_PUBLISHABLE_KEY };
-  const healthUrl = localBackend ? "/health" : SUPABASE_EDGE_API + "/health";
-  const readyUrl = localBackend ? "/health/ready" : SUPABASE_EDGE_API + "/health/ready";
   const [h, ready] = await Promise.all([
-    call(healthUrl, { headers: publicHeaders }),
-    call(readyUrl, { headers: publicHeaders }),
+    call("/health"),
+    call("/health/ready"),
   ]);
   state.health = h.data;
   if (!h.ok) state.bootError = h.data?.message || h.data?.error || "The GenomeGuard API is not responding.";
