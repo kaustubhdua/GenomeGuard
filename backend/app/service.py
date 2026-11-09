@@ -58,7 +58,16 @@ def transactional(method):
         transaction = getattr(self.store, "transaction", None)
         if transaction is None:
             return method(self, *args, **kwargs)
+        requester = next(
+            (value for value in args if isinstance(value, dict)
+             and ("organization_id" in value or value.get("_allow_unscoped_demo"))),
+            None,
+        )
         with transaction():
+            if requester and requester.get("organization_id"):
+                self.store.set_tenant(requester["organization_id"])
+            elif requester and requester.get("_allow_unscoped_demo"):
+                self.store.set_allow_unscoped_demo()
             return method(self, *args, **kwargs)
     return wrapped
 
