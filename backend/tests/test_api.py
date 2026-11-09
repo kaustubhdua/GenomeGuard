@@ -319,25 +319,29 @@ def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
     assert bad.status_code == 422
 
 
-def test_demo_accounts_endpoint_only_in_demo_mode():
-    svc, c = make_client(expose_demo_admin_key=True)
+def test_demo_accounts_endpoint_only_in_demo_mode(monkeypatch):
+    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
+    svc, c = make_client()
     j = c.get("/demo/requesters").json()
     assert {r["tier"] for r in j["requesters"]} == {"registered", "anonymous", "controlled"}
     assert j["admin_key"] == "demo-admin-key"
 
 
-def test_public_demo_accounts_never_disclose_custom_admin_credential():
+def test_public_demo_accounts_never_disclose_custom_admin_credential(monkeypatch):
     secret = "staging-admin-secret-that-must-never-be-public-123456"
-    _, client = make_client(admin_api_key=secret)
+    monkeypatch.setenv("GG_ADMIN_API_KEY", secret)
+    _, client = make_client()
     response = client.get("/demo/requesters")
     assert response.status_code == 200
     assert "admin_key" not in response.json()
     assert secret not in response.text
 
 
-def test_public_demo_accounts_can_only_disclose_explicit_local_demo_key():
+def test_public_demo_accounts_can_only_disclose_explicit_local_demo_key(monkeypatch):
     secret = "local-only-demo-secret-12345678901234567890"
-    _, client = make_client(admin_api_key=secret, expose_demo_admin_key=True)
+    monkeypatch.setenv("GG_ADMIN_API_KEY", secret)
+    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
+    _, client = make_client()
     response = client.get("/demo/requesters")
     assert response.status_code == 200
     assert response.json()["admin_key"] == secret
