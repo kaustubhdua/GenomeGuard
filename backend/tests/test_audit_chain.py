@@ -200,3 +200,45 @@ def test_checkpoint_generation_and_verification():
 
     c.tamper(3)
     assert c.verify_checkpoint(cp)["valid"] is False
+
+
+
+def test_external_anchor_rejects_malformed_types_and_empty_chain_forgery():
+    chain = make_chain(3)
+    for anchor in (
+        {"length": True, "head_hash": GENESIS},
+        {"length": 1.5, "head_hash": GENESIS},
+        {"length": -1, "head_hash": GENESIS},
+        {"length": 1, "head_hash": "not-a-hash"},
+        {"length": 1},
+        None,
+    ):
+        if anchor is None:
+            continue
+        result = chain.verify(anchor)
+        assert result["ok"] is False
+        assert result["reason"] == "malformed_anchor"
+
+    empty = AuditChain(MemoryStore())
+    assert empty.verify({"length": 0, "head_hash": GENESIS})["ok"] is True
+    forged_empty = empty.verify({"length": 0, "head_hash": "f" * 64})
+    assert forged_empty["ok"] is False
+    assert forged_empty["reason"] == "anchor_mismatch"
+
+
+def test_checkpoint_verifier_rejects_malformed_length_without_raising():
+    chain = make_chain(2)
+    checkpoint = chain.checkpoint()
+    for invalid_length in (True, 1.5, -1, "2", None):
+        malformed = dict(checkpoint, length=invalid_length)
+        result = chain.verify_checkpoint(malformed)
+        assert result == {"valid": False, "reason": "malformed_checkpoint"}
+
+
+def test_checkpoint_is_an_unsigned_integrity_envelope_not_a_signature():
+    chain = make_chain(1)
+    checkpoint = chain.checkpoint(signed_by="reviewer-label")
+    assert checkpoint["signed_by"] == "reviewer-label"
+    assert "signature" not in checkpoint
+    assert "signature_algorithm" not in checkpoint
+    assert chain.verify_checkpoint(checkpoint)["valid"] is True
