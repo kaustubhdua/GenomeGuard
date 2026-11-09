@@ -29,21 +29,24 @@ fi
 # Refuse any non-empty target before pg_restore can partially overwrite it.
 target_objects="$(psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --dbname="$GG_RESTORE_TEST_URL" --command="
-    SELECT count(*)
-    FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-      AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
-      AND n.nspname <> 'pg_toast'")"
+    SELECT
+      (SELECT count(*)
+       FROM pg_namespace
+       WHERE nspname NOT IN ('pg_catalog', 'information_schema', 'public', 'pg_toast'))
+      +
+      (SELECT count(*)
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public'
+         AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f'))")"
 if [[ "$target_objects" != "0" ]]; then
   echo "Refusing restore: target database contains $target_objects user objects; use a dedicated empty database." >&2
   exit 2
 fi
 
 umask 077
-backup_dir="${TMPDIR:-/tmp}/genomeguard-pg-backup-$(date -u +%Y%m%dT%H%M%SZ)-$$"
-mkdir -p "$backup_dir"
-trap 'rm -rf "$backup_dir"' EXIT
+backup_dir="$(mktemp -d "${TMPDIR:-/tmp}/genomeguard-pg-backup.XXXXXXXX")"
+trap 'rm -rf -- "$backup_dir"' EXIT
 encrypted_file="$backup_dir/genomeguard.dump.age"
 
 echo "Creating encrypted logical backup; plaintext is streamed directly to age..."
