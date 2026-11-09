@@ -556,9 +556,9 @@ def validate_args(args) -> None:
 
 
 def import_to_database(args, digest: str, samples: list[str]) -> dict:
-    database_url = os.environ.get("DATABASE_URL")
+    database_url = os.environ.get("GG_IMPORT_DATABASE_URL") or os.environ.get("GG_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not database_url:
-        raise ImportValidationError("DATABASE_URL must be set in the trusted server environment")
+        raise ImportValidationError("GG_IMPORT_DATABASE_URL or GG_DATABASE_URL must be set in the trusted server environment")
     metadata = {
         "reuse_statement_url": args.reuse_statement_url,
         "citation": args.citation,
