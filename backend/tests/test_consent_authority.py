@@ -3,12 +3,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from app.core.audit_chain import canonical_json
 from app.service import ServiceError
-from backend.tests.helpers import make_service
+from helpers import make_service
 
 
 def signed_event(private, dataset_id, event_type="withdrawn"):
@@ -38,10 +37,6 @@ def signed_event(private, dataset_id, event_type="withdrawn"):
 def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
     svc = make_service()
     private = Ed25519PrivateKey.generate()
-    private_bytes = private.private_bytes(
-        serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
-        serialization.NoEncryption(),
-    )
     public = base64.b64encode(private.public_key().public_bytes(
         serialization.Encoding.Raw, serialization.PublicFormat.Raw,
     )).decode()
