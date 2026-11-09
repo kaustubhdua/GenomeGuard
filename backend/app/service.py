@@ -109,7 +109,7 @@ class GenomeGuardService:
         return self.store.requester_by_key(hash_key(key)) if key else None
 
     def is_admin(self, key: str | None) -> bool:
-        return bool(key) and hash_key(key) == self.admin_hash
+        return bool(key) and hmac.compare_digest(hash_key(key), self.admin_hash)
 
     @transactional
     def create_requester(self, name: str, role: str, level: str, institution: str, key: str) -> int:
