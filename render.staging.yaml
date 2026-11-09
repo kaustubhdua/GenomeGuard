@@ -14,6 +14,8 @@ services:
     envVars:
       - key: GG_DEMO_MODE
         value: "true"
+      - key: GG_EXPOSE_DEMO_ADMIN_KEY
+        value: "false"  # never expose an administrator credential through a public demo endpoint
       - key: GG_ALLOW_TAMPER_DEMO
         value: "false"
       - key: GG_REAL_COHORT_FILE
