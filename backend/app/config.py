@@ -24,6 +24,8 @@ class Settings:
     db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
+    # Publicly returning the demo admin key is allowed only in explicitly local demos.
+    expose_demo_admin_key: bool = field(default_factory=lambda: _env("expose_demo_admin_key", False, bool))
     admin_api_key: str = field(default_factory=lambda: _env("admin_api_key", "demo-admin-key"))
     master_key: str = field(default_factory=lambda: _env("master_key", ""))
     dataset_id: str = field(default_factory=lambda: _env("dataset_id", "synthetic-cohort-1"))
