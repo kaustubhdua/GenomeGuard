@@ -244,7 +244,7 @@ class Store:
                 raise ValueError("requester is already bound to a different organization")
             self.x(
                 "INSERT INTO identity_bindings(issuer,subject,organization_id,requester_id,active,created_at) "
-                "VALUES(?,?,?,?,1,?)",
+                "VALUES(?,?,?,?,TRUE,?)",
                 (issuer, subject, organization_id, requester_id, now_iso()),
             )
             self.x(
@@ -256,13 +256,13 @@ class Store:
         return self.one(
             "SELECT r.* FROM requesters AS r JOIN identity_bindings AS b "
             "ON b.requester_id=r.id WHERE b.issuer=? AND b.subject=? AND b.organization_id=? "
-            "AND b.active=1 AND r.organization_id=? AND r.frozen_at IS NULL",
+            "AND b.active=TRUE AND r.organization_id=? AND r.frozen_at IS NULL",
             (issuer, subject, organization_id, organization_id),
         )
 
     def revoke_identity_binding(self, issuer: str, subject: str, organization_id: str) -> None:
         self.x(
-            "UPDATE identity_bindings SET active=0, revoked_at=? "
+            "UPDATE identity_bindings SET active=FALSE, revoked_at=? "
             "WHERE issuer=? AND subject=? AND organization_id=?",
             (now_iso(), issuer, subject, organization_id),
         )
