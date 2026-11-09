@@ -1,0 +1,28 @@
+# Separate, synthetic-only staging service for the Supabase-free PR branch.
+# Apply this Blueprint only after reviewing its plan. It does not adopt or modify production.
+services:
+  - type: web
+    name: genomeguard-staging
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: feat/remove-supabase-runtime
+    autoDeploy: false
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    envVars:
+      - key: GG_DEMO_MODE
+        value: "true"
+      - key: GG_ALLOW_TAMPER_DEMO
+        value: "false"
+      - key: GG_REAL_COHORT_FILE
+        value: ""
+      - key: GG_DATASET_ID
+        value: synthetic-cohort-1
+      - key: GG_DATABASE_URL
+        sync: false
+      - key: GG_MASTER_KEY
+        sync: false
+      - key: GG_ADMIN_API_KEY
+        generateValue: true
