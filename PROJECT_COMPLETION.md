@@ -1,5 +1,9 @@
 # GenomeGuard project completion status
 
+> **Current status (10 November 2026): supersedes the older deployment narrative below.** The repository's active target architecture is now the first-party Python/Starlette API with SQLite for local demo and PostgreSQL via `GG_DATABASE_URL` for hosted non-demo operation. The Supabase browser runtime and hosted Supabase dependency are removed by [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111), which is ready for review and has a passing CI run including PostgreSQL integration tests, Playwright browser QA, responsive checks, accessibility checks, VCF QC flows, and guided-tour tests. The older Supabase-specific sections below are retained as historical evidence from the previous architecture and must not be read as the current runtime design. Production remains **not ready**: the live Render service still deploys `main` and uses SQLite; durable PostgreSQL, verified institutional identity, consent provenance, external audit anchoring, backup/restore, reviewed real-data import, and exact-commit production acceptance are outstanding. See [the current status and verification record](docs/current-status-2026-11-10.md).
+
+---
+
 Updated: 2 November 2026
 
 ## Overall status
