@@ -116,8 +116,9 @@ function drawWho() {
   if (state.demo) {
     label.hidden = false;
     selector.hidden = false;
+    if (!state.demo.admin_key && isSteward()) setWho(state.demo.requesters?.[0]?.api_key || "");
     const options = [
-      ["steward", "Demo data steward"],
+      ...(state.demo.admin_key ? [["steward", "Demo data steward"]] : []),
       ...(state.demo.requesters || []).map((r) => [r.api_key, r.name || r.institution || "Demo researcher"]),
     ];
     selector.replaceChildren(...options.map(([value, text]) => {
@@ -127,9 +128,9 @@ function drawWho() {
       return option;
     }));
     selector.value = state.who || "";
-    note.textContent = isSteward()
+    note.textContent = state.demo.admin_key
       ? "Guest demo · synthetic cohort · no account required"
-      : "Guest demo · synthetic cohort · no account required";
+      : "Guest demo · synthetic cohort · steward controls disabled on this hosted demo";
   } else {
     label.hidden = true;
     selector.hidden = true;
@@ -161,7 +162,7 @@ function toggleTheme() {
 const ACTIONS = () => [
   ...visibleNav().flatMap(([label, items]) => items.map(([, text, href]) => ({ text, hint: label || "Page", run: () => (location.hash = href) }))),
   ...(state.demo ? [
-    { text: "Switch to the steward view", hint: "Acting as", run: () => { setWho("steward"); drawWho(); drawNav(""); render(); } },
+    ...(state.demo.admin_key ? [{ text: "Switch to the steward view", hint: "Acting as", run: () => { setWho("steward"); drawWho(); drawNav(""); render(); } }] : []),
     { text: "Switch to the researcher view", hint: "Acting as", run: () => { const r = (state.demo || { requesters: [] }).requesters[0]; if (r) { setWho(r.api_key); drawWho(); drawNav(""); render(); } } },
   ] : []),
   { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
