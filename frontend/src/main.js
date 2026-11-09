@@ -53,12 +53,7 @@ async function render() {
     h("span", {}, "Preparing workspace"), h("small", {}, "Loading secure research view")));
   let page;
   try {
-    if (hit && state.authToken && ["variants", "dataset-qc", "family", "anomalies", "audit", "donor", "redteam", "federated"].includes(hit[0].nav)) {
-      page = h("section", { class: "card empty-state" },
-        h("h1", {}, "This workflow is not connected to Supabase Auth"),
-        h("p", { class: "muted" }, "This legacy workflow still depends on the separate Render API and is intentionally disabled in Supabase Auth mode. Use the supported request, steward review, dataset discovery, source discovery, and chromosome-reference workflows."),
-        h("a", { class: "btn ghost", href: "#/overview" }, "Return to overview"));
-    } else if (hit && !state.demo && ["donor", "redteam", "federated"].includes(hit[0].nav)) {
+    if (hit && !state.demo && ["donor", "redteam", "federated"].includes(hit[0].nav)) {
       page = h("section", { class: "card empty-state" },
         h("h1", {}, "This workflow is not enabled for this deployment"),
         h("p", { class: "muted" }, "This page uses demo personas or simulated federated data. It is disabled outside demo mode rather than presenting simulated results as real participant workflows."),
@@ -100,7 +95,6 @@ function visibleNav() {
   const steward = isSteward();
   return NAV.map(([label, items]) => [label, items.filter(([id]) => {
     if (id === "requests") return label === (steward ? "Steward Review" : "Research Requests");
-    if (state.authToken && ["variants", "dataset-qc", "family", "anomalies", "audit", "donor", "redteam", "federated"].includes(id)) return false;
     if (["dataset-qc", "family", "anomalies", "audit"].includes(id)) return steward;
     if (["donor", "redteam", "federated"].includes(id)) return state.demo;
     return true;
@@ -171,7 +165,7 @@ const ACTIONS = () => [
     { text: "Switch to the researcher view", hint: "Acting as", run: () => { const r = (state.demo || { requesters: [] }).requesters[0]; if (r) { setWho(r.api_key); drawWho(); drawNav(""); render(); } } },
   ] : []),
   { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
-  ...(tourAvailable() && !state.authToken ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
+  ...(tourAvailable() ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
 ];
 let sel = 0, shown = [];
 function openPalette() { $("cmdk").classList.add("open"); const i = $("cmdk-input"); i.value = ""; filter(); i.focus(); }
