@@ -20,8 +20,9 @@ def pg_store():
     # This fixture must only ever point to a disposable test database.
     with store.lock, store.connection.transaction():
         store.connection.execute(
-            "TRUNCATE audit_log, donor_access, epsilon_ledger, decisions, requests, "
-            "requesters, alerts, genotypes, donors, variants, relationships, cohort_metadata "
+            "TRUNCATE audit_log, donor_access, consent_events, identity_bindings, "
+            "epsilon_ledger, decisions, requests, requesters, alerts, genotypes, donors, "
+            "variants, relationships, cohort_metadata "
             "RESTART IDENTITY CASCADE"
         )
     try:
@@ -123,7 +124,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2]
+    assert versions == [1, 2, 3, 4, 5]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -158,3 +159,73 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
     finally:
         reopened.close()
 
+
+
+def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_store):
+    from uuid import uuid4
+
+    role = "gg_test_rls_" + uuid4().hex[:12]
+    pg_store.connection.execute(f'CREATE ROLE "{role}" NOLOGIN')
+    try:
+        pg_store.connection.execute(
+            f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT SELECT, INSERT, UPDATE, DELETE ON requests, decisions, epsilon_ledger, alerts '
+            f'TO "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT SELECT ON requesters TO "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
+        )
+
+        ids = {}
+        for org in ("tenant-a", "tenant-b"):
+            rid = pg_store.add_requester(
+                f"Researcher {org}", "researcher", "registered", org, f"hash-{org}",
+            )
+            pg_store.add_identity_binding(
+                rid, "https://id.example.edu", f"subject-{org}", org,
+            )
+            req_id = pg_store.add_request(
+                rid, "2026-11-10T00:00:00Z",
+                {"purpose": "research", "disease": None, "is_commercial": False,
+                 "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
+            )
+            pg_store.save_decision(req_id, {
+                "outcome": "deny", "reasons": ["test"], "risk": {}, "transform": {},
+                "explanation": "test", "needs_human": False, "private": {}, "release": None,
+            })
+            ids[org] = req_id
+
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        with pg_store.transaction():
+            pg_store.set_tenant("tenant-a")
+            visible = {row["id"] for row in pg_store.q("SELECT id FROM requests")}
+            assert visible == {ids["tenant-a"]}
+            decisions = {row["request_id"] for row in pg_store.q("SELECT request_id FROM decisions")}
+            assert decisions == {ids["tenant-a"]}
+
+        with pg_store.transaction():
+            # No organization context is default-deny for tenant-owned rows.
+            assert pg_store.q("SELECT id FROM requests") == []
+
+        with pg_store.transaction():
+            pg_store.set_admin_access()
+            assert {row["id"] for row in pg_store.q("SELECT id FROM requests")} == set(ids.values())
+
+        with pg_store.transaction():
+            pg_store.set_tenant("tenant-a")
+            with pytest.raises(Exception):
+                pg_store.x(
+                    "INSERT INTO requests(requester_id,organization_id,ts,purpose,disease,"
+                    "is_commercial,data_level,cohort_filter_json,variant_filter_json,status) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (1, "tenant-b", "2026-11-10T00:00:00Z", "research", None, 0,
+                     "frequency", "{}", "{}", "pending"),
+                )
+        pg_store.connection.execute("RESET ROLE")
+    finally:
+        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
