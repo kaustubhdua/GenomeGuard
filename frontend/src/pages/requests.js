@@ -1,4 +1,4 @@
-import { api, state, isSteward, setWho } from "../api.js";
+import { api, state, isSteward } from "../api.js";
 import { h, row, badge, when, notice, errorText, reasonText } from "../ui.js";
 
 const PURPOSES = ["disease_research", "health_research", "biomedical_research", "general_research", "population_genetics", "ancestry_research", "methods_development", "education"];
@@ -25,23 +25,9 @@ function probeSequence() {
 export async function render() {
   const root = h("div", {});
   root.dataset.title = "Requests";
-  if (!state.demo && !state.authToken && !state.who && !state.adminKey) {
+  if (!state.demo && !state.who && !state.adminKey) {
     root.append(h("h1", {}, "Research requests"),
-      notice("warn", "Sign in with your institution account or connect an issued legacy API key before viewing requests."));
-    return root;
-  }
-  if (state.authToken && state.authAccess?.access_status !== "active") {
-    const message = state.authAccess?.access_status === "ambiguous_memberships"
-      ? "Your account has multiple active organization memberships. Ask an administrator to resolve this before submitting or reviewing requests."
-      : state.authAccess?.access_status === "pending_or_inactive"
-        ? "Your organization membership is pending or inactive. An administrator must activate it before you can use research workflows."
-        : "Your account is authenticated, but no active organization membership has been provisioned. Ask your institution's administrator for access.";
-    root.append(h("h1", {}, "Research requests"), notice("warn", message));
-    return root;
-  }
-  if (state.authToken && !["researcher", "reviewer", "organization_admin"].includes(state.authRole)) {
-    root.append(h("h1", {}, "Research requests"),
-      notice("warn", "Your current organization role does not have access to request submission or review in this interface."));
+      notice("warn", "Connect an issued researcher or steward API key before viewing requests."));
     return root;
   }
   root.append(h("h1", {}, "Data requests"),
@@ -63,7 +49,7 @@ export async function render() {
 }
 
 function provisionSection() {
-  if (state.demo || state.authToken || !isSteward() || !state.adminKey) return null;
+  if (state.demo || !isSteward() || !state.adminKey) return null;
   const name = h("input", { id: "new-requester-name", type: "text", autocomplete: "off", maxlength: 120 });
   const institution = h("input", { id: "new-requester-institution", type: "text", autocomplete: "organization", maxlength: 200 });
   const level = h("select", { id: "new-requester-level" },
