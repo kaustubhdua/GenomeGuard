@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS genomeguard.population_reference_manifest (
  source_url text NOT NULL CHECK (source_url ~ '^https://'),
  source_release text NOT NULL,
  reference_assembly text NOT NULL CHECK (reference_assembly IN ('GRCh37','GRCh38')),
- represented_individual_count integer NOT NULL CHECK (represented_individual_count >= 0),
+ represented_individual_count integer NOT NULL CHECK (represented_individual_count >= 100000),
  data_use_review text NOT NULL DEFAULT 'pending' CHECK (data_use_review IN ('pending','approved_public_research','rejected')),
  import_status text NOT NULL DEFAULT 'registered' CHECK (import_status IN ('registered','validated','loading','loaded','failed','retired')),
  file_sha256 text CHECK (file_sha256 IS NULL OR file_sha256 ~ '^[0-9a-f]{64}$'),
