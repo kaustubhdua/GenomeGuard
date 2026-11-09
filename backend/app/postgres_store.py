@@ -226,7 +226,6 @@ class PostgresStore(Store):
         """
         try:
             with self.lock, self.connection.transaction():
-                self.connection.execute("SET TRANSACTION READ ONLY")
                 self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
                 rows = self.connection.execute(query).fetchall()
             return [{
@@ -271,7 +270,6 @@ class PostgresStore(Store):
         """
         try:
             with self.lock, self.connection.transaction():
-                self.connection.execute("SET TRANSACTION READ ONLY")
                 self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
                 rows = self.connection.execute(query, (assembly,)).fetchall()
             return [{
@@ -304,7 +302,6 @@ class PostgresStore(Store):
         """
         try:
             with self.lock, self.connection.transaction():
-                self.connection.execute("SET TRANSACTION READ ONLY")
                 self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
                 rows = self.connection.execute(
                     query, (chromosome, position, reference, reference, alternate, alternate),
