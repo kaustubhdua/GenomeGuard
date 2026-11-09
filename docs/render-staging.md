@@ -19,9 +19,11 @@ The Render service API currently reports:
 - public network access enabled;
 - no provider-side health-check path configured (empty string).
 
-The Blueprint below declares /health/live as the liveness check. The live service dashboard must be aligned with that value separately; the Blueprint file alone does not update an already-provisioned Render service. Do not use /health/ready as the host liveness probe: readiness must remain fail-closed while production controls are absent.
+The checked-in Blueprint intentionally keeps auto-deploy disabled. The deployment-configuration CI gate requires this so a reviewed staging release is not implicitly promoted by every branch commit. The live service's existing auto-deploy setting therefore differs from the Blueprint and must be reconciled by an authorized Render operator before treating the Blueprint as an exact recreation of the live service.
 
-The latest confirmed live staging deployment remains commit 395fdbc2177e98a6597fa468e9b5402aca713c89. The exact current PR head has not yet been confirmed live. Although auto-deploy is enabled, no later deployment was present in the provider deployment history at the last check. The acceptance workflow waits for the exact PR SHA and must pass before the staging release is considered verified.
+The Blueprint declares /health/live as the liveness check. The live service dashboard currently has no health-check path; align it with /health/live separately. The Blueprint file alone does not update an already-provisioned Render service. Do not use /health/ready as the host liveness probe: readiness must remain fail-closed while production controls are absent.
+
+The latest confirmed live staging deployment remains commit 395fdbc2177e98a6597fa468e9b5402aca713c89. The exact current PR head has not yet been confirmed live. Although the provider reports auto-deploy enabled, no later deployment was present in the provider deployment history at the last check. The acceptance workflow waits for the exact PR SHA and must pass before the staging release is considered verified.
 
 ## Staging environment and trust boundaries
 
@@ -63,7 +65,7 @@ A post-redeploy persistence check and provider-level backup/restore drill agains
 
 ## Blueprint
 
-render.staging.yaml is a reproducible Blueprint description for this separate service. It now enables auto-deploy for the staging branch and declares /health/live. It is not a replacement for the live service's current dashboard settings. Review its plan before applying it to any other Render workspace or project.
+render.staging.yaml is a reproducible Blueprint description for this separate service. It deliberately disables auto-deploy and declares /health/live. It is not a replacement for the live service's current dashboard settings. Review its plan before applying it to any other Render workspace or project.
 
 ## References
 
