@@ -108,6 +108,29 @@ class GenomeGuardService:
     def authenticate(self, key: str | None) -> dict | None:
         return self.store.requester_by_key(hash_key(key)) if key else None
 
+    def authenticate_oidc(self, issuer: str, subject: str, organization_id: str) -> dict | None:
+        """Resolve only an explicitly provisioned issuer/subject/tenant binding."""
+        return self.store.requester_by_oidc(issuer, subject, organization_id)
+
+    @transactional
+    def bind_oidc_identity(
+        self, requester_id: int, issuer: str, subject: str, organization_id: str,
+    ) -> None:
+        self.store.add_identity_binding(requester_id, issuer, subject, organization_id)
+        self.audit.append("admin", "identity.oidc_bound", {
+            "requester_id": requester_id, "issuer": issuer, "subject_hash": hashlib.sha256(
+                subject.encode("utf-8")
+            ).hexdigest(), "organization_id": organization_id,
+        })
+
+    @transactional
+    def revoke_oidc_identity(self, issuer: str, subject: str, organization_id: str) -> None:
+        self.store.revoke_identity_binding(issuer, subject, organization_id)
+        self.audit.append("admin", "identity.oidc_revoked", {
+            "issuer": issuer, "subject_hash": hashlib.sha256(subject.encode("utf-8")).hexdigest(),
+            "organization_id": organization_id,
+        })
+
     def is_admin(self, key: str | None) -> bool:
         return bool(key) and hmac.compare_digest(hash_key(key), self.admin_hash)
 
