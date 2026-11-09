@@ -140,7 +140,7 @@ class PostgresStore(Store):
         the next operation. Callers inside an active transaction must fail closed; the next
         request/transaction can then reconnect cleanly.
         """
-        if not self.connection.closed:
+        if not self.connection.closed and not self.connection.broken:
             return
         if self._transaction_depth:
             raise psycopg.OperationalError("PostgreSQL connection closed during a transaction")
@@ -359,7 +359,16 @@ class PostgresStore(Store):
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:
             self._ensure_connection()
-            rows = list(self.connection.execute(_translate(sql), args).fetchall())
+            try:
+                rows = list(self.connection.execute(_translate(sql), args).fetchall())
+            except psycopg.OperationalError:
+                # A provider restart can race the health check above. Retrying a read-only
+                # query is safe only outside an application transaction.
+                if self._transaction_depth or not self.connection.broken:
+                    raise
+                self.connection.close()
+                self._ensure_connection()
+                rows = list(self.connection.execute(_translate(sql), args).fetchall())
             if self._transaction_depth == 0:
                 self.connection.commit()
             return rows
