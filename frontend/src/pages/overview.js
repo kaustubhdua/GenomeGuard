@@ -84,7 +84,7 @@ function workflowList() {
 }
 
 export async function render() {
-  const hasIdentity = !!(state.demo || state.who || state.adminKey || state.authToken), hl = state.health || {};
+  const hasIdentity = !!(state.demo || state.who || state.adminKey), hl = state.health || {};
   // Keep the overview responsive when the API or audit store is cold: non-critical
   // panels get a short budget and never hold the first paint hostage.
   const quick = (promise, fallback, ms = 650) => Promise.race([
@@ -93,7 +93,7 @@ export async function render() {
   ]);
   const [reqs, verify, ev, readyResult] = await Promise.all([
     hasIdentity ? quick(api("/requests"), { ok: false, data: null }) : Promise.resolve({ ok: false, status: 401, data: null }),
-    state.authToken ? Promise.resolve({ ok: false, data: null }) : quick(api("/audit/verify"), { ok: false, data: null }),
+    quick(api("/audit/verify"), { ok: false, data: null }),
     state.demo ? quick(api("/eval/results"), { ok: false }) : Promise.resolve({ ok: false }),
     state.readiness ? Promise.resolve({ ok: true, status: 200, data: state.readiness }) :
       hl.readiness ? Promise.resolve({ ok: true, status: 200, data: hl.readiness }) :
@@ -112,7 +112,7 @@ export async function render() {
       h("div", { class: "gg-eyebrow" }, h("span", { class: hl.status === "ok" ? "gg-live-dot" : "gg-live-dot gg-live-dot-off" }), state.demo ? "DEMONSTRATION ENVIRONMENT / SYNTHETIC COHORT" : "GENOMIC DATA GOVERNANCE / RESEARCH WORKSPACE"),
       h("h1", {}, "Research access, governed with evidence."),
       h("p", {}, "A unified workspace for genomic dataset provenance, privacy-aware access decisions and accountable research operations."),
-      tourAvailable() && !state.authToken
+      tourAvailable()
         ? h("div", { class: "gg-command-actions" },
             h("button", { class: "gg-secondary-action", "aria-label": "Explore platform — Guided walkthrough", onclick: startTour }, "Explore platform"))
         : null),
@@ -120,9 +120,6 @@ export async function render() {
       h("div", { class: "gg-art-label" }, h("span", {}, "REFERENCE BUILD"),
         h("strong", {}, pv.genotypes_label || "Public research cohort")))));
 
-  if (state.authToken) root.append(h("div", { class: "card" },
-    h("strong", {}, "Supabase request workflow boundary"),
-    h("p", { class: "muted" }, "This authenticated path currently supports organization-scoped request submission and human review. The full genomic policy engine, cohort risk calculation, participant-consent enforcement, governed data release, and external audit verification are not enabled through this API.")));
   root.append(h("section", { class: "gg-metrics", "aria-label": "Research environment metrics" },
     metric("Individuals in cohort", fmt(hl.donors), pv.genotypes_label || "Reported by research API", "metric-green"),
     metric("Variant loci", fmt(hl.variants), "Loaded research variant set", "metric-blue"),
@@ -160,15 +157,13 @@ export async function render() {
   const governance = h("section", { class: "gg-panel gg-governance" },
     h("div", { class: "gg-panel-head" },
       h("div", {}, h("span", { class: "gg-section-index" }, "03"), h("h2", {}, "Governance controls")),
-      state.authToken ? null : h("a", { href: "#/audit" }, "Audit log →")),
+      h("a", { href: "#/audit" }, "Audit log →")),
     h("div", { class: "gg-governance-grid" },
       fact("Dataset provenance", pv.genotypes_label || "Not reported"),
       fact("Policy mapping", pv.consent_label || "Not reported"),
       fact("Audit integrity", chain ? (chain.ok ? "Verified" : "Integrity issue") : "Unavailable", chain ? (chain.length ? fmt(chain.length) + " entries checked" : "No access events recorded yet") : "No verification response"),
-      fact("Model assistance", state.authToken ? "Not enabled" : hl.agents_use_llm ? "Configured" : "Template-based explanations",
-        state.authToken ? "Not ported to this API" : "Advisory only; rules govern release"),
-      fact("Minimum release cohort", state.authToken ? "Not available" : fmt(hl.k_min),
-        state.authToken ? "Policy engine not ported to this API" : "Applied by policy engine"),
+      fact("Model assistance", hl.agents_use_llm ? "Configured" : "Template-based explanations", "Advisory only; rules govern release"),
+      fact("Minimum release cohort", fmt(hl.k_min), "Applied by policy engine"),
       fact("Identity assurance",
         readiness.data?.checks?.institutional_identity_provider_verified === true ||
           readiness.data?.checks?.institutional_identity_reviewed === true ? "Reviewed" : "Not verified",
