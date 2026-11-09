@@ -57,23 +57,23 @@ The frontend rewrites API requests to the Render service. Vercel is not a replac
 
 ## Explicit production blockers
 
-1. **Durable persistence and recovery:** Render has no verified `GG_DATABASE_URL`; the backend is not connected to Supabase and no production backup/restore drill has passed.
-2. **Database security and isolation:** RLS is now enabled on all 13 GenomeGuard tables and browser roles lack schema `USAGE`, but the trusted server connection, least-privilege runtime role, and production access path are not yet verified. Supabase project `common 1` is shared with BharatSim, so this is schema isolation rather than a dedicated production security boundary.
+1. **Durable persistence and recovery:** the connected Render service uses SQLite on an ephemeral filesystem and has no verified `GG_DATABASE_URL`. The repository's disposable PostgreSQL integration/recovery checks are not a production provider backup or restore drill.
+2. **Database security and isolation:** a dedicated production PostgreSQL instance, least-privilege runtime role, database network boundary, and live authorization path are not verified.
 3. **Institutional identity:** no institutional OIDC/SSO, verified organization membership, or institution-controlled MFA lifecycle. Provisioned API keys are not verified human identity.
 4. **Participant consent and withdrawal:** hosted public-data policy is dataset-level only. There is no authoritative participant-specific consent/withdrawal source.
-5. **External audit anchoring:** the local hash chain is tamper-evident but not immutable against an actor able to rewrite the database and recompute hashes. No independently controlled external anchor or trusted timestamp is configured.
+5. **External audit anchoring:** the local hash chain is tamper-evident but not immutable against an actor able to rewrite the database and recompute hashes. Exported checkpoints are unsigned integrity envelopes; no independently controlled external anchor, trusted timestamp, or signing service is configured.
 6. **Independent assurance:** no independent penetration test, privacy impact assessment, institutional ethics/legal review, clinical validation, or cryptographic review has been completed.
 7. **Manual accessibility:** automated axe/browser checks do not replace manual screen-reader and assistive-technology review.
 8. **Operational controls:** monitoring/alerting, incident response, retention/deletion, recurring recovery drills, and multi-instance consistency are not verified.
-9. **Live acceptance:** run read-only research-mode, route/UI, authorization, and accessibility smoke tests on the exact current deployment; the available verifier could not fetch the live endpoints.
+9. **Live acceptance:** the connected Render service still runs the `main` commit, not PR #111. Its observed catalogue endpoints returned 404, and the exact PR commit has not been deployed to a staging service for end-to-end acceptance. The latest Vercel preview status is blocked by `build-rate-limit`.
 
 ## Data and policy boundary
 
-The deployed genotype calls come from the public 1000 Genomes / IGSR release. Source and policy file hashes are recorded during cohort build. The versioned policy maps published dataset-level terms to a DUO-inspired rule set; it is not participant-specific consent, legal advice, or independent approval for any specific use.
+The currently deployed service reports a public 1000 Genomes / IGSR cohort. The reported source and policy metadata are operator-declared and have not been independently authenticated. The versioned policy maps published dataset-level terms to a DUO-inspired rule set; it is not participant-specific consent, legal advice, or independent approval for any specific use.
 
-Local demo and test workflows intentionally use synthetic fixtures. Hosted research mode disables demo/synthetic participant workflows. Keep those paths explicitly labelled and never describe synthetic fixtures as real people or consent.
+Local demo and test workflows intentionally use synthetic fixtures. Keep those paths explicitly labelled and never describe synthetic fixtures as real people or consent. Do not use the public research instance for private participant data.
 
-The privacy-risk output is heuristic, not an independently validated guarantee. The privacy-budget ledger is not a formally audited differential-privacy implementation. The Beacon-style endpoint is not full Beacon certification. FHIR Consent fixtures are synthetic validation artifacts, not real consent records. No live LLM is configured. The local audit chain has no external immutable anchor.
+The privacy-risk output is heuristic, not an independently validated guarantee. The privacy-budget ledger is not a formally audited differential-privacy implementation. The Beacon-style endpoint is not full Beacon certification. FHIR Consent fixtures are synthetic validation artifacts, not real consent records. Agent explanations run offline using deterministic templates and a bounded rules planner; no hosted LLM provider is used. The local audit chain has no external immutable anchor, and its checkpoint digest is unkeyed and unsigned.
 
 ## Reproduce checks
 
