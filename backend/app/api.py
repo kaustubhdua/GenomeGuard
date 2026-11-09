@@ -462,7 +462,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def me(request):
         r = requester(request)
         budget = scoped_requester_call(r, S().budget, r["id"])
-        return _j({"id": r["id"], "name": r["name"], "tier": r["credential_level"],
+        return _j({"id": r["id"], "name": r["name"], "role": r["role"],
+                   "institution": r["institution"], "tier": r["credential_level"],
                    "frozen": r["id"] in S().monitor.frozen, **budget})
 
     @route("POST", "/requests", "Submit a data request; returns decision, explanation, risk, "
