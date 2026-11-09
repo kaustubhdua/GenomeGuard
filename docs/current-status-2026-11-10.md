@@ -4,127 +4,110 @@ Updated: 10 November 2026
 
 ## Executive status
 
-GenomeGuard is a research prototype with a first-party Python/Starlette API and a browser application. The Supabase-free runtime is implemented in [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111), branch `feat/remove-supabase-runtime`.
+GenomeGuard is a research prototype with a first-party Python/Starlette API and browser application. The Supabase-free runtime is implemented on [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111), branch feat/remove-supabase-runtime.
 
-**A separate synthetic-only staging deployment is live and connected to PostgreSQL. Production is not ready.** Automated CI verifies a commit in an isolated environment; it does not prove legal permission, participant consent, institutional identity, clinical validity, or provider-level disaster recovery.
+**The code-level implementation is under exact-head validation. The synthetic staging service is not yet confirmed on the current branch head. Production is not ready.** CI success does not prove lawful data use, participant consent, institutional identity, clinical validity, provider-level disaster recovery, or production readiness.
+
+## Current source and validation snapshot
+
+- Current branch head: 4587941f4ed0c20bda71e1927e72442732876e32
+- PR: https://github.com/kaustubhdua/GenomeGuard/pull/111
+- Deployment configuration checks: [run 597](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541556) — success on current head.
+- GA4GH Beacon v2 schema validation: [run 287](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541604) — success on current head.
+- FHIR R4 Consent validation: [run 249](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541578) — success on current head.
+- Security verification: [run 607](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541832) — success on current head, including secret scanning, CodeQL Python/JavaScript, and Python dependency audit.
+- Full CI: [run 957](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541579) — lint and seed completed successfully; backend suite including PostgreSQL integration tests was still running at this snapshot.
+- Real-data image build: [run 227](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541584) — running.
+- Synthetic staging acceptance: [run 24](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541730) — running; waiting for the exact branch head to be deployed.
+
+Earlier implementation head 395fdbc2177e98a6597fa468e9b5402aca713c89 passed the complete CI suite, staging acceptance, security verification, GA4GH Beacon v2 validation, FHIR R4 validation, and real-data image build. Do not treat that prior-head result as proof for the current head.
 
 ## Current architecture
 
 - Browser frontend uses same-origin GenomeGuard routes.
-- Python/Starlette is the application API and policy engine.
+- Python/Starlette is the single application API and policy engine.
 - Local development uses synthetic data and SQLite.
-- Hosted non-demo mode requires PostgreSQL via server-side `GG_DATABASE_URL`.
+- Hosted non-demo mode requires server-side PostgreSQL via GG_DATABASE_URL.
 - Supabase Auth, Supabase browser keys, Supabase Edge Functions, and Supabase runtime calls are removed from the active frontend.
-- Historical `supabase/` migrations are inert archive records and must not be applied to new deployments.
-- Agent explanations are offline deterministic templates and bounded rules; no hosted AI provider or API key is used.
+- Historical supabase/ migrations are inert archive records and must not be applied to new deployments.
+- Agent explanations use offline deterministic templates and bounded rules; no hosted AI provider or API key is required.
+- Steward API-key hash checks use constant-time comparison.
 
-## Latest repository verification
+## Synthetic-only staging
 
-- Branch: `feat/remove-supabase-runtime`
-- Latest commit: `51ba51753d34526d22d71a616afcc2e7c7546cf4`
-- PR: [#111 — Remove Supabase from GenomeGuard runtime](https://github.com/kaustubhdua/GenomeGuard/pull/111)
-- Latest CI: [run #42708010499](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42708010499) — in progress at last check.
-- Deployment configuration checks on this head: success.
-- Earlier full CI on commit `2254541bc9d8860bcfb22aeaff94b73efaa88404`: success, including backend tests, PostgreSQL integration, browser tests, responsive checks, accessibility checks, VCF QC, and guided tour.
-- A subsequent run exposed Ruff import ordering in the newly added staging-image regression test. That was fixed on the current branch and CI was restarted; do not call the latest head green until run #42708010499 finishes.
-- Security, Beacon, FHIR, and real-data image validation workflows are running for the current head.
+- URL: https://genomeguard-staging.onrender.com
+- Render service: srv-dbp41m5bedkc73fk4aug
+- Branch: feat/remove-supabase-runtime
+- Dockerfile: Dockerfile.staging; it does not embed or download the real 1000 Genomes cohort.
+- Database: separate Neon PostgreSQL staging database.
+- Last confirmed live deployment: 395fdbc2177e98a6597fa468e9b5402aca713c89.
+- Current PR head has not been confirmed live. The Render provider currently reports auto-deploy enabled, but no deployment newer than 395fdbc appeared in the provider deployment history at the last check.
+- The live Render service has no provider-side health-check path configured; the checked-in Blueprint declares /health/live.
+- The checked-in Blueprint deliberately keeps auto-deploy disabled, as required by the deployment-configuration CI gate. The live service's existing auto-deploy setting therefore differs from the Blueprint.
 
-## Live synthetic-only staging
-
-A separate free Render service was created without changing or adopting the production service:
-
-- URL: [https://genomeguard-staging.onrender.com](https://genomeguard-staging.onrender.com)
-- Dashboard: [Render staging service](https://dashboard.render.com/web/srv-dbp41m5bedkc73fk4aug)
-- Service ID: `srv-dbp41m5bedkc73fk4aug`
-- Repository branch: `feat/remove-supabase-runtime`
-- Dockerfile: `Dockerfile.staging` (does not download or embed the 1000 Genomes cohort)
-- Neon PostgreSQL database: separate free staging project in Singapore.
-- Runtime database role: `genomeguard_runtime`, not the database owner. It has CREATE/USAGE on `genomeguard_runtime` and read-only access to the normalized `genomeguard` schema. The role was tested for application-schema DDL and SELECT access.
-- Secrets are held in Render environment variables, not in Git or frontend code. The admin key was rotated after the public demo-key disclosure issue was found.
-
-Staging configuration:
-- `GG_DEMO_MODE=true`
-- `GG_ALLOW_TAMPER_DEMO=false`
-- `GG_EXPOSE_DEMO_ADMIN_KEY=false`
-- `GG_REAL_COHORT_FILE=`
-- `GG_DATASET_ID=synthetic-cohort-1`
-- `GG_DATABASE_URL` points to the direct Neon endpoint (not PgBouncer's `-pooler` endpoint).
-
-### Live checks performed
-
-| Check | Observed result |
-|---|---|
-| `GET /health/live` | HTTP 200 |
-| `GET /health` | HTTP 200; `storage_backend=postgresql` |
-| Cohort | 600 synthetic donors, 3,000 synthetic variants |
-| `GET /health/ready` | HTTP 503, expected for synthetic demo; gates remain fail-closed |
-| `GET /catalogue/sources` | HTTP 200, discovery-only metadata |
-| `GET /catalogue/datasets` | HTTP 200, empty until approved manifests are imported |
-| `GET /audit/verify` | HTTP 200, chain valid |
-| Research request | HTTP 201; synthetic request returned `permit_with_transform` |
-| Request history | HTTP 200; newly created synthetic request listed |
-| Admin endpoint without/wrong key | HTTP 401 |
-| Admin endpoint with rotated secret | HTTP 200 |
-| Public demo-account endpoint | HTTP 200; no `admin_key` field and no hosted admin secret |
-
-The hosted demo-account endpoint previously returned the configured admin key. This was a genuine security defect. It is fixed: admin-key disclosure now defaults off, is explicitly opt-in for local interactive development only, and the staging key was rotated. Hosted staging hides steward-only controls rather than exposing privileged credentials.
-
-The staging database is currently synthetic-only. Its readiness endpoint must remain not-ready: demo mode is enabled, real participant genotypes and participant consent are absent, and external audit anchoring, independently verified institutional identity, and durable-storage verification are not established.
-
-The request workflow has been exercised against PostgreSQL. A post-redeploy persistence check is still required on the latest staged commit; do not claim that a restore/recovery drill has been completed against this provider instance.
+The staging service is synthetic-only. Its readiness endpoint must remain HTTP 503/not-ready because demo mode is enabled and participant consent, real genotype provenance, external audit anchoring, institutional identity, and durable-storage verification are not established. A post-redeploy persistence check and provider-level backup/restore drill against this exact Neon staging project remain outstanding. CI's disposable PostgreSQL backup/restore test is not a substitute.
 
 ## Product capabilities and boundaries
 
-- Research request, review, and policy/risk workflow foundations.
+- Research request, policy, risk, transformation, anomaly-monitoring, and human-review workflow foundations.
 - Synthetic-data demonstration.
-- VCF parsing and QC with a clear distinction between QC success and import eligibility.
-- Public source discovery and catalogue provenance.
-- Consent logic that distinguishes participant records from dataset-level terms.
-- Hash-chained audit trail and PostgreSQL-backed store.
-- Encrypted backup/restore tooling and CI recovery tests.
-- GA4GH Beacon v2 and FHIR R4 validation workflows.
+- VCF parsing and QC with an explicit distinction between QC success and import eligibility.
+- Public-source discovery and catalogue provenance.
+- Dataset-level public-release policy mapping for the public 1000 Genomes research mode.
+- Simulated consent attributes only in local synthetic demo mode.
+- Hash-chained audit trail, audit verification, and unsigned checkpoint integrity envelopes.
+- PostgreSQL-backed store, native migrations, encrypted backup/restore tooling, and read-only audit verification.
+- GA4GH Beacon v2 schema validation and synthetic FHIR R4 Consent validation.
 
-These are research-software capabilities, not proof of lawful data import, clinical validation, or operational controls.
+These are research-software capabilities, not proof of lawful data import, participant-specific consent, clinical validity, or operational controls.
 
 ## Production release blockers
 
-| Area | Current evidence | Required before production or controlled data |
+| Area | Current evidence | Required before controlled-data or production use |
 |---|---|---|
-| Production deployment | Existing Render production service still deploys `main`, not this PR. | Review and merge only after checks pass; deploy exact reviewed commit and run live acceptance. |
-| Persistence | Production Render still uses SQLite. Separate staging Render uses Neon PostgreSQL. | Production-grade managed PostgreSQL, provider backups/PITR, offsite retention, tested restore and retention. |
-| Identity | API keys authenticate application roles. | OIDC identity and server-side verified organization membership. |
-| Consent | Staging uses simulated consent; dataset terms are not individual consent. | Source-specific rights review and participant-level consent where required, including withdrawal enforcement. |
-| Real data | No production import/reconciliation verified. | Steward-approved artifact, license/terms, assembly, checksum, sample/variant/call-count reconciliation and provenance. |
-| Audit | Local hash chain and unsigned integrity checkpoint. | Independent authenticated external anchoring/signing, key custody and monitoring. |
-| Security/privacy governance | Automated checks only. | Independent threat model, privacy, legal, ethics, security and operational review. |
-| Clinical validity | No clinically validated annotation or pathogenicity pipeline. | Qualified validation, regulatory assessment and expert oversight; never use prototype output for clinical decisions. |
+| Production deployment | Existing Render production service still deploys main. | Review and deploy an exact tested commit only after production configuration is prepared. |
+| Persistence | Production currently uses SQLite on an ephemeral filesystem. Staging uses PostgreSQL. | Dedicated production PostgreSQL, provider backups/PITR, retention, monitoring, and tested restore. |
+| Identity | API keys authenticate application roles only. | Institutional OIDC, verified organization membership, role lifecycle, MFA policy, revocation, and cross-tenant tests. |
+| Consent | Public research mode uses dataset-level terms; local demo uses synthetic consent. | Authoritative source-specific consent evidence, participant-level mapping where required, expiry/withdrawal enforcement at decision and release time, ethics/legal approval. |
+| Real data | No production import/reconciliation is verified. | Steward-approved artifact, reuse terms, reference assembly, checksums, sample/variant/call-count reconciliation, provenance, and import approval. |
+| Audit | Hash chain and unsigned checkpoint envelope. | Independently administered append-only anchor or signing service, key custody, trusted timestamps, monitoring, and verification drills. |
+| Security/privacy governance | Automated scans and tests only. | Independent threat-model, privacy, legal, ethics, penetration, and cryptographic review. |
+| Clinical validity | No clinically validated annotation/pathogenicity pipeline. | Qualified clinical validation, regulatory assessment, and expert oversight; never use prototype output for clinical decisions. |
+| Accessibility | Automated browser and axe checks. | Manual keyboard, screen-reader, and assistive-technology testing. |
+| Vercel preview | Provider returned build-rate-limit. | Resolve provider rate limit or use the verified same-origin Starlette deployment path for staging acceptance. |
 
-Do not weaken readiness gates to make deployment appear healthy.
+## Standards and open-source alignment
 
-## Recommended next sequence
+The implementation validates Beacon v2 responses against pinned GA4GH schemas and synthetic FHIR R4 Consent resources against the HL7 validator. DUO is used as a vocabulary for dataset-use terms, not as proof of individual consent. GA4GH AAI/Passports, Machine-Readable Consent Guidance, and DAC review standards are relevant future integration points. Existing systems such as NIH/Broad DUOS should be evaluated as reference implementations rather than recreated without institutional requirements and license review.
 
-1. Complete CI and security verification for the latest PR head.
-2. Deploy the exact tested branch commit to the synthetic-only staging service.
-3. Verify the same synthetic request and audit history survive a redeploy; then exercise the documented encrypted backup/restore procedure on staging.
-4. Complete OIDC and organization-level authorization before any controlled data.
-5. Complete legal/ethics/source review and consent provenance before real-data import.
-6. Only after independent review, plan production database, backup, monitoring and rollout.
-7. Merge and deploy production only after the exact commit and all release gates have passed.
+## Release sequence
+
+1. Finish exact-head CI and real-data image validation.
+2. Deploy the exact reviewed commit to synthetic-only staging through the authorized Render deployment path.
+3. Complete hosted route/UI acceptance and verify persistence across redeploy.
+4. Run provider-level encrypted backup/restore and define RPO/RTO.
+5. Implement and independently verify institutional identity and organization authorization before controlled data.
+6. Complete dataset rights, ethics, consent, withdrawal, and import reconciliation before participant-specific data.
+7. Add independent audit anchoring/signing and operational monitoring.
+8. Complete independent security/privacy review and manual accessibility testing.
+9. Only then consider production migration and release.
 
 ## Important limitations
 
-- Do not upload private participant genomic data to staging or production.
+- Do not upload private or controlled-access participant genomic data to the public research instance or synthetic staging.
 - Do not infer participant consent from dataset-level open-data terms.
 - Do not treat VCF QC as import approval or clinical validation.
 - Do not treat API keys as institutional identity.
-- Do not treat a green CI run or reachable frontend as production readiness.
-- No production service was changed, no paid service was provisioned, and no clinical approval is claimed.
+- Do not treat a green CI run, a successful schema validator, or a reachable frontend as production readiness.
+- Production was not changed, no paid service was provisioned, and no clinical approval is claimed.
 
 ## Related records
 
 - [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111)
-- [Current CI run #42708010499](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42708010499)
-- [Supabase-free deployment guide](supabase-free-deployment.md)
+- [Supabase-free deployment](supabase-free-deployment.md)
 - [Render staging setup](render-staging.md)
 - [Production deployment record](production-deployment.md)
-- [README](../README.md)
+- [Genomic dataset provenance and import gate](genomic-dataset-provenance-import-gate.md)
+- [Organization authorization and consent implementation status](organization-authorization-and-review.md)
+- [OWASP ASVS verification register](asvs-verification.md)
+- [Threat model](threat-model.md)
