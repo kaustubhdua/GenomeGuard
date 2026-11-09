@@ -31,3 +31,71 @@ def test_unsupported_postgres_url_fails_before_connecting():
 
     with pytest.raises(ValueError, match="GG_DATABASE_URL"):
         PostgresStore("sqlite:///not-postgres")
+
+def test_closed_provider_connection_is_reopened_with_runtime_search_path(monkeypatch):
+    from contextlib import nullcontext
+
+    from app.postgres_store import PostgresStore, _ConnectionCompat
+
+    class FakeConnection:
+        def __init__(self, closed):
+            self.closed = closed
+            self.statements = []
+
+        def transaction(self):
+            return nullcontext()
+
+        def execute(self, statement, args=()):
+            self.statements.append((statement, args))
+
+        def close(self):
+            self.closed = 1
+
+    old = FakeConnection(closed=1)
+    replacement = FakeConnection(closed=0)
+    calls = []
+
+    def connect(*args, **kwargs):
+        calls.append((args, kwargs))
+        return replacement
+
+    monkeypatch.setattr("app.postgres_store.psycopg.connect", connect)
+    store = object.__new__(PostgresStore)
+    store.database_url = "postgresql://example.invalid/db"
+    store.connect_timeout = 7
+    store._transaction_depth = 0
+    store.connection = old
+    store.db = _ConnectionCompat(old, store)
+
+    store._ensure_connection()
+
+    assert len(calls) == 1
+    assert calls[0][0] == (store.database_url,)
+    assert calls[0][1]["connect_timeout"] == 7
+    assert store.connection is replacement
+    assert store.db.connection is replacement
+    assert replacement.statements == [
+        ("SET search_path TO genomeguard_runtime, public", ()),
+    ]
+
+
+def test_closed_provider_connection_is_not_reopened_inside_transaction(monkeypatch):
+    import pytest
+    import psycopg
+
+    from app.postgres_store import PostgresStore
+
+    class ClosedConnection:
+        closed = 1
+
+    store = object.__new__(PostgresStore)
+    store.connection = ClosedConnection()
+    store._transaction_depth = 1
+    monkeypatch.setattr(
+        "app.postgres_store.psycopg.connect",
+        lambda *args, **kwargs: pytest.fail("must not reconnect mid-transaction"),
+    )
+
+    with pytest.raises(psycopg.OperationalError, match="closed during a transaction"):
+        store._ensure_connection()
+
