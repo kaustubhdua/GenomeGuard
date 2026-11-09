@@ -442,6 +442,7 @@ def test_catalogue_endpoints():
     c_data = c_resp.json()
     assert c_data["reference_assembly"] == "GRCh38"
     assert c_data["chromosome_count"] == 25
+    assert c_data["coverage_available"] is True
     chr22 = next(ch for ch in c_data["chromosomes"] if ch["chromosome"] == "22")
     assert chr22["data_coverage"]["variant_data_loaded"] is False
     assert chr22["data_coverage"]["variant_count"] == 0
