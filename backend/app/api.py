@@ -143,6 +143,34 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         return state["svc"]
 
     def requester(request: Request) -> dict:
+        authorization = request.headers.get("authorization", "")
+        if authorization.startswith("Bearer "):
+            if not (settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
+                    and settings.oidc_allowed_organizations):
+                raise ServiceError(503, "oidc_not_configured",
+                                   "institutional OIDC is not configured on this instance")
+            from app.identity import OIDCAuthenticationError, verify_access_token
+
+            try:
+                identity = verify_access_token(
+                    authorization[7:].strip(),
+                    issuer=settings.oidc_issuer,
+                    audience=settings.oidc_audience,
+                    jwks_url=settings.oidc_jwks_url,
+                    organization_claim=settings.oidc_organization_claim,
+                    allowed_organizations=settings.oidc_allowed_organizations,
+                )
+            except OIDCAuthenticationError:
+                raise ServiceError(401, "unauthorized", "invalid institutional bearer token") from None
+            r = S().authenticate_oidc(
+                identity.issuer, identity.subject, identity.organization_id,
+            )
+            if not r:
+                raise ServiceError(403, "identity_not_provisioned",
+                                   "verified identity is not provisioned for this organization")
+            return r
+        if settings.oidc_required:
+            raise ServiceError(401, "unauthorized", "institutional bearer token required")
         r = S().authenticate(request.headers.get("x-api-key"))
         if not r:
             raise ServiceError(401, "unauthorized", "missing or unknown X-API-Key")
@@ -262,6 +290,59 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if settings.expose_demo_admin_key:
             payload["admin_key"] = settings.admin_api_key
         return _j(payload)
+
+    @route("GET", "/auth/oidc", "Institutional OIDC API configuration (no secrets)", "public")
+    async def oidc_configuration(request):
+        configured = bool(
+            settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
+            and settings.oidc_allowed_organizations
+        )
+        return _j({
+            "enabled": configured,
+            "required": settings.oidc_required,
+            "issuer": settings.oidc_issuer if configured else None,
+            "audience": settings.oidc_audience if configured else None,
+            "organization_claim": settings.oidc_organization_claim if configured else None,
+        })
+
+    @route("POST", "/admin/oidc-bindings", "Bind a provisioned requester to a verified OIDC subject", "admin")
+    async def oidc_bind(request):
+        admin(request)
+        if not settings.oidc_issuer or not settings.oidc_allowed_organizations:
+            raise ServiceError(503, "oidc_not_configured", "institutional OIDC is not configured")
+        body = await _body(request)
+        requester_id = body.get("requester_id")
+        subject = body.get("subject")
+        organization_id = body.get("organization_id")
+        if isinstance(requester_id, bool) or not isinstance(requester_id, int) or requester_id < 1:
+            raise ServiceError(422, "invalid_request", "requester_id must be a positive integer")
+        if not isinstance(subject, str) or not 1 <= len(subject) <= 255:
+            raise ServiceError(422, "invalid_request", "subject must contain 1 to 255 characters")
+        if organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
+        try:
+            S().bind_oidc_identity(
+                requester_id, settings.oidc_issuer, subject, organization_id,
+            )
+        except ValueError as exc:
+            raise ServiceError(409, "identity_binding_conflict", str(exc)) from None
+        return _j({"bound": True, "requester_id": requester_id,
+                   "organization_id": organization_id}, 201)
+
+    @route("POST", "/admin/oidc-bindings/revoke", "Revoke an OIDC identity binding", "admin")
+    async def oidc_revoke(request):
+        admin(request)
+        if not settings.oidc_issuer:
+            raise ServiceError(503, "oidc_not_configured", "institutional OIDC is not configured")
+        body = await _body(request)
+        subject = body.get("subject")
+        organization_id = body.get("organization_id")
+        if not isinstance(subject, str) or not 1 <= len(subject) <= 255:
+            raise ServiceError(422, "invalid_request", "subject must contain 1 to 255 characters")
+        if organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
+        S().revoke_oidc_identity(settings.oidc_issuer, subject, organization_id)
+        return _j({"revoked": True, "organization_id": organization_id})
 
     @route("POST", "/admin/requesters", "Provision a requester API key (returned once)", "admin")
     async def provision_requester(request):
