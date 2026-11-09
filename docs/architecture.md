@@ -64,6 +64,10 @@ rules-based loop: it picks a read-only tool, reads the result, and may recommend
 - **Audited.** Tool calls and recommendations are written to the local hash chain. Endpoint:
   `POST /requests/{id}/copilot` (steward only).
 
+## Audit checkpoint trust boundary
+
+Audit checkpoints contain an unkeyed SHA-256 digest. The `signed_by` field is an attribution label only; it is not a cryptographic signature and does not authenticate the publisher. Verification checks structure, digest consistency, and the checkpointed audit-chain prefix. For authenticity and truncation resistance, export checkpoints to an independently controlled, authenticated system or have a separately managed signing service sign and retain them. Do not rely on a checkpoint stored only beside the database it is meant to protect.
+
 ## Modules
 
 | Module | Job |
