@@ -9,7 +9,8 @@ from app.config import Settings, validate_settings
 def secure_settings(**overrides):
     base = Settings(
         demo_mode=False,
-        database_url="postgresql://genomeguard:test@localhost:5432/genomeguard",
+        database_url="postgresql://runtime:test@localhost:5432/genomeguard",
+        migration_database_url="postgresql://owner:test@localhost:5432/genomeguard",
         admin_api_key="a-unique-admin-secret-with-more-than-32-chars",
         master_key=base64.b64encode(b"x" * 32).decode(),
         allow_tamper_demo=False,
@@ -28,6 +29,8 @@ def test_non_demo_settings_accept_postgresql_and_secure_keys():
     [
         ({"database_url": ""}, "GG_DATABASE_URL"),
         ({"database_url": "sqlite:///genomeguard.sqlite3"}, "GG_DATABASE_URL"),
+        ({"migration_database_url": ""}, "GG_MIGRATION_DATABASE_URL"),
+        ({"migration_database_url": "postgresql://runtime:test@localhost:5432/genomeguard"}, "distinct database roles"),
         ({"admin_api_key": "demo-admin-key"}, "GG_ADMIN_API_KEY"),
         ({"admin_api_key": ""}, "GG_ADMIN_API_KEY"),
         ({"admin_api_key": "short-secret"}, "GG_ADMIN_API_KEY"),
