@@ -120,7 +120,11 @@ CREATE POLICY donor_access_tenant_isolation ON donor_access
     current_setting('gg.admin_access', true) = 'on'
     OR EXISTS (
       SELECT 1 FROM requests r WHERE r.id = donor_access.request_id
-        AND r.organization_id = NULLIF(current_setting('gg.organization_id', true), '')
+        AND (
+          r.organization_id = NULLIF(current_setting('gg.organization_id', true), '')
+          OR (r.organization_id IS NULL
+              AND current_setting('gg.allow_unscoped_demo', true) = 'on')
+        )
     )
   )
   WITH CHECK (
