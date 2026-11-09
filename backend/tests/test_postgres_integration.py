@@ -228,4 +228,6 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
                 )
         pg_store.connection.execute("RESET ROLE")
     finally:
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
         pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
