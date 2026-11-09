@@ -38,9 +38,15 @@ CREATE TABLE IF NOT EXISTS relationships(id INTEGER PRIMARY KEY AUTOINCREMENT, d
   donor_b INTEGER, relation TEXT, meioses INTEGER, shared_fraction REAL);
 CREATE TABLE IF NOT EXISTS requesters(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, role TEXT,
   credential_level TEXT, institution TEXT, api_key_hash TEXT UNIQUE, created_at TEXT,
-  frozen_at TEXT);
+  frozen_at TEXT, organization_id TEXT);
+CREATE TABLE IF NOT EXISTS identity_bindings(
+  issuer TEXT NOT NULL, subject TEXT NOT NULL, organization_id TEXT NOT NULL,
+  requester_id INTEGER NOT NULL REFERENCES requesters(id), active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, revoked_at TEXT,
+  PRIMARY KEY(issuer, subject, organization_id));
+CREATE INDEX IF NOT EXISTS identity_bindings_requester ON identity_bindings(requester_id, active);
 CREATE TABLE IF NOT EXISTS requests(id INTEGER PRIMARY KEY AUTOINCREMENT, requester_id INTEGER,
-  ts TEXT, purpose TEXT, disease TEXT, is_commercial INTEGER, data_level TEXT,
+  organization_id TEXT, ts TEXT, purpose TEXT, disease TEXT, is_commercial INTEGER, data_level TEXT,
   cohort_filter_json TEXT, variant_filter_json TEXT, status TEXT);
 CREATE TABLE IF NOT EXISTS decisions(id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER
   UNIQUE, outcome TEXT, reasons_json TEXT, risk_json TEXT, transform_json TEXT,
@@ -76,6 +82,13 @@ class Store:
         self.db.row_factory = sqlite3.Row
         with self.lock:
             self.db.executescript(SCHEMA)
+            # Upgrade databases created before organization-scoped identities were introduced.
+            requester_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(requesters)")}
+            if "organization_id" not in requester_columns:
+                self.db.execute("ALTER TABLE requesters ADD COLUMN organization_id TEXT")
+            request_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(requests)")}
+            if "organization_id" not in request_columns:
+                self.db.execute("ALTER TABLE requests ADD COLUMN organization_id TEXT")
             self.db.commit()
 
     # ------------------------------------------------------------------ helpers
@@ -174,6 +187,42 @@ class Store:
     def requester_by_key(self, key_hash: str) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE api_key_hash=?", (key_hash,))
 
+    def add_identity_binding(
+        self, requester_id: int, issuer: str, subject: str, organization_id: str,
+    ) -> None:
+        """Bind a verified external subject to one provisioned requester and tenant."""
+        with self.lock:
+            existing = self.one("SELECT organization_id FROM requesters WHERE id=?", (requester_id,))
+            if not existing:
+                raise ValueError("requester does not exist")
+            current_org = existing.get("organization_id")
+            if current_org and current_org != organization_id:
+                raise ValueError("requester is already bound to a different organization")
+            self.x(
+                "INSERT INTO identity_bindings(issuer,subject,organization_id,requester_id,active,created_at) "
+                "VALUES(?,?,?,?,1,?)",
+                (issuer, subject, organization_id, requester_id, now_iso()),
+            )
+            self.x(
+                "UPDATE requesters SET organization_id=? WHERE id=?",
+                (organization_id, requester_id),
+            )
+
+    def requester_by_oidc(self, issuer: str, subject: str, organization_id: str) -> dict | None:
+        return self.one(
+            "SELECT r.* FROM requesters AS r JOIN identity_bindings AS b "
+            "ON b.requester_id=r.id WHERE b.issuer=? AND b.subject=? AND b.organization_id=? "
+            "AND b.active=1 AND r.organization_id=? AND r.frozen_at IS NULL",
+            (issuer, subject, organization_id, organization_id),
+        )
+
+    def revoke_identity_binding(self, issuer: str, subject: str, organization_id: str) -> None:
+        self.x(
+            "UPDATE identity_bindings SET active=0, revoked_at=? "
+            "WHERE issuer=? AND subject=? AND organization_id=?",
+            (now_iso(), issuer, subject, organization_id),
+        )
+
     # ------------------------------------------------------------------ donor ledger
     def add_donor_access(self, rows: list[tuple]) -> None:
         """rows: (donor_id, request_id, ts, purpose, disease, level, institution). One row per
@@ -206,12 +255,16 @@ class Store:
 
     # ------------------------------------------------------------------ requests/decisions
     def add_request(self, rid: int, ts: str, req: dict) -> int:
+        requester = self.requester(rid)
+        if not requester:
+            raise ValueError("requester does not exist")
         return self.x(
-            "INSERT INTO requests(requester_id,ts,purpose,disease,is_commercial,data_level,"
-            "cohort_filter_json,variant_filter_json,status) VALUES(?,?,?,?,?,?,?,?,?)",
-            (rid, ts, req["purpose"], req.get("disease"), int(req.get("is_commercial", False)),
-             req.get("data_level", "frequency"), json.dumps(req.get("cohort_filter") or {}),
-             json.dumps(req.get("variant_filter") or {}), "pending"))
+            "INSERT INTO requests(requester_id,organization_id,ts,purpose,disease,is_commercial,data_level,"
+            "cohort_filter_json,variant_filter_json,status) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (rid, requester.get("organization_id"), ts, req["purpose"], req.get("disease"),
+             int(req.get("is_commercial", False)), req.get("data_level", "frequency"),
+             json.dumps(req.get("cohort_filter") or {}), json.dumps(req.get("variant_filter") or {}),
+             "pending"))
 
     def set_request_status(self, req_id: int, status: str) -> None:
         self.x("UPDATE requests SET status=? WHERE id=?", (status, req_id))
