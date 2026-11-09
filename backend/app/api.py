@@ -226,6 +226,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "durable_storage_verified": False,
             "external_audit_anchor_verified": False,
             "institutional_identity_provider_verified": False,
+            "participant_consent_authority_configured": bool(
+                settings.consent_authority_required
+                and settings.consent_authority_issuer.startswith("https://")
+                and settings.consent_authority_public_key
+            ),
         }
 
     @route("GET", "/health/live", "Cheap process liveness probe; does not initialize the cohort or database", "public")
@@ -328,6 +333,22 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(409, "identity_binding_conflict", str(exc)) from None
         return _j({"bound": True, "requester_id": requester_id,
                    "organization_id": organization_id}, 201)
+
+    @route("POST", "/admin/consent-events", "Apply an externally signed participant consent event", "admin")
+    async def signed_consent_event(request):
+        admin(request)
+        if not settings.consent_authority_required or not (
+            settings.consent_authority_issuer and settings.consent_authority_public_key
+        ):
+            raise ServiceError(503, "consent_authority_not_configured",
+                               "a trusted participant consent authority is not configured")
+        body = await _body(request)
+        result = S().apply_signed_consent_event(
+            body,
+            public_key_b64=settings.consent_authority_public_key,
+            trusted_issuer=settings.consent_authority_issuer,
+        )
+        return _j({"applied": True, "participant": result}, 200)
 
     @route("POST", "/admin/oidc-bindings/revoke", "Revoke an OIDC identity binding", "admin")
     async def oidc_revoke(request):
