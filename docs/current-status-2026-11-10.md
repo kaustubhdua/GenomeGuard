@@ -17,7 +17,7 @@ GenomeGuard is a research prototype with a substantial, testable Python/Starlett
 - No Supabase URL, publishable key, browser Auth client, or Supabase Edge Function is required by the active frontend runtime.
 - Historical `supabase/` migrations and reports are retained as archival records only. They must not be applied to this runtime or new deployments.
 
-See [Supabase-free deployment guide](supabase-free-deployment.md) and the [current hosted deployment record](production-deployment.md).
+See the [Supabase-free deployment guide](supabase-free-deployment.md), [Render staging setup](render-staging.md), and the [current hosted deployment record](production-deployment.md).
 
 ## Verified on PR head
 
