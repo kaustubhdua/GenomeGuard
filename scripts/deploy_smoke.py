@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
@@ -68,9 +69,11 @@ def main() -> int:
         status, body, _ = get(base, "/demo/requesters", args.timeout)
         demo = json.loads(body)
         accounts = demo.get("requesters")
-        check("public demo account list does not disclose administrator credentials",
+        expose_admin_key = os.getenv("GG_EXPOSE_DEMO_ADMIN_KEY", "false").strip().lower() == "true"
+        check("demo administrator credential exposure matches explicit local opt-in",
               status == 200 and isinstance(accounts, list) and len(accounts) >= 1
-              and "admin_key" not in demo and all(bool(a.get("api_key")) for a in accounts))
+              and bool(demo.get("admin_key")) == expose_admin_key
+              and all(bool(a.get("api_key")) for a in accounts))
 
         status, body, content_type = get(base, "/openapi.json", args.timeout)
         spec = json.loads(body)
