@@ -5,6 +5,7 @@ services:
     ports: ["8000:8000"]
     environment:
       GG_DEMO_MODE: "true"
+      GG_EXPOSE_DEMO_ADMIN_KEY: "true" # local-only: never enable on a public deployment
       GG_ALLOW_TAMPER_DEMO: "true"          # lets the Audit page's tamper button work
       GG_ADMIN_API_KEY: "${GG_ADMIN_API_KEY:-demo-admin-key}"
       GG_MASTER_KEY: "${GG_MASTER_KEY:-}"   # unset = insecure development key (warning logged)
