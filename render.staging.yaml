@@ -7,7 +7,7 @@ services:
     plan: free
     region: singapore
     branch: feat/remove-supabase-runtime
-    autoDeploy: false
+    autoDeploy: true
     dockerfilePath: ./Dockerfile.staging
     dockerContext: .
     healthCheckPath: /health/live
