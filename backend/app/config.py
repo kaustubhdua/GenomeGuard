@@ -32,6 +32,11 @@ class Settings:
     )
     oidc_issuer: str = field(default_factory=lambda: _env("oidc_issuer", ""))
     oidc_audience: str = field(default_factory=lambda: _env("oidc_audience", ""))
+    oidc_client_id: str = field(default_factory=lambda: _env("oidc_client_id", ""))
+    oidc_redirect_uri: str = field(default_factory=lambda: _env("oidc_redirect_uri", ""))
+    oidc_scopes: str = field(
+        default_factory=lambda: _env("oidc_scopes", "openid profile email")
+    )
     oidc_jwks_url: str = field(default_factory=lambda: _env("oidc_jwks_url", ""))
     oidc_organization_claim: str = field(
         default_factory=lambda: _env("oidc_organization_claim", "organization_id")
@@ -99,6 +104,10 @@ def validate_settings(s: Settings) -> None:
             problems.append("GG_OIDC_ISSUER must be an HTTPS issuer URL when OIDC is required")
         if not s.oidc_audience.strip():
             problems.append("GG_OIDC_AUDIENCE must identify the registered API audience")
+        if not s.oidc_client_id.strip():
+            problems.append("GG_OIDC_CLIENT_ID must identify the registered public OIDC client")
+        if not s.oidc_redirect_uri.startswith("https://"):
+            problems.append("GG_OIDC_REDIRECT_URI must be the exact registered HTTPS callback URL")
         if not s.oidc_jwks_url.startswith("https://"):
             problems.append("GG_OIDC_JWKS_URL must be an HTTPS JWKS endpoint")
         if not s.oidc_organization_claim.strip() or not s.oidc_allowed_organizations:
