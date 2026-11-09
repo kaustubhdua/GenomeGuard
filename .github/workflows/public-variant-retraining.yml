@@ -33,7 +33,10 @@ jobs:
       - name: Install ML dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[ml]"
+          python -m pip install -e ".[dev,ml]"
+      - name: Test ClinVar label handling and offline VEP input preparation
+        run: |
+          PYTHONPATH=backend python -m pytest -q backend/tests/test_clinvar_vep_train.py backend/tests/test_clinvar_vep_offline.py
       - name: Prepare balanced ClinVar GRCh38 variant input
         run: |
           PYTHONPATH=backend python -m app.ml.clinvar_vep_train --max-variants 20000 --prepare-only
@@ -67,7 +70,7 @@ jobs:
         run: |
           PYTHONPATH=backend python -m app.ml.clinvar_vep_train \
             --max-variants 20000 \
-            --vep-jsonl .training-data/public-annotations/ensembl_vep_offline.jsonl
+            --vep-jsonl .training-data/public-annotations/ensembl_vep_offline.jsonl \\\n            --vep-version 116.3
       - name: Upload model, metrics, provenance and normalized annotation cache
         uses: actions/upload-artifact@v7
         with:
