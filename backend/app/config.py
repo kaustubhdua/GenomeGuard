@@ -24,6 +24,9 @@ class Settings:
     # Privileged URL used only for schema migrations; application queries use database_url.
     migration_database_url: str = field(default_factory=lambda: _env("migration_database_url", ""))
     oidc_required: bool = field(default_factory=lambda: _env("oidc_required", False, bool))
+    tenant_isolation_required: bool = field(
+        default_factory=lambda: _env("tenant_isolation_required", False, bool)
+    )
     oidc_issuer: str = field(default_factory=lambda: _env("oidc_issuer", ""))
     oidc_audience: str = field(default_factory=lambda: _env("oidc_audience", ""))
     oidc_jwks_url: str = field(default_factory=lambda: _env("oidc_jwks_url", ""))
@@ -84,6 +87,8 @@ def validate_settings(s: Settings) -> None:
         problems.append("GG_MIGRATION_DATABASE_URL must be a separate privileged PostgreSQL migration URL")
     if s.database_url.strip() == s.migration_database_url.strip():
         problems.append("GG_DATABASE_URL and GG_MIGRATION_DATABASE_URL must use distinct database roles")
+    if s.tenant_isolation_required and not s.oidc_required:
+        problems.append("GG_TENANT_ISOLATION_REQUIRED requires GG_OIDC_REQUIRED=true")
     if s.oidc_required:
         if not s.oidc_issuer.startswith("https://"):
             problems.append("GG_OIDC_ISSUER must be an HTTPS issuer URL when OIDC is required")
