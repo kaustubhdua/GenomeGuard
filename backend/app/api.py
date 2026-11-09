@@ -143,6 +143,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         return state["svc"]
 
     def requester(request: Request) -> dict:
+        cached = getattr(request.state, "authenticated_requester", None)
+        if cached is not None:
+            return cached
         authorization = request.headers.get("authorization", "")
         if authorization.startswith("Bearer "):
             if not (settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
@@ -168,12 +171,17 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if not r:
                 raise ServiceError(403, "identity_not_provisioned",
                                    "verified identity is not provisioned for this organization")
+            request.state.authenticated_requester = r
             return r
         if settings.oidc_required:
             raise ServiceError(401, "unauthorized", "institutional bearer token required")
         r = S().authenticate(request.headers.get("x-api-key"))
         if not r:
             raise ServiceError(401, "unauthorized", "missing or unknown X-API-Key")
+        if settings.tenant_isolation_required:
+            raise ServiceError(403, "tenant_identity_required",
+                               "a verified organization-bound OIDC identity is required")
+        request.state.authenticated_requester = r
         return r
 
     def admin(request: Request) -> None:
@@ -193,6 +201,23 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
             async def handler(request: Request):
                 try:
+                    if who in ("requester", "admin", "donor"):
+                        identity = requester(request) if who == "requester" else None
+                        with S().store.transaction():
+                            if who == "admin":
+                                S().store.set_admin_access()
+                            elif who == "donor" and settings.demo_mode:
+                                S().store.set_allow_unscoped_demo()
+                            elif identity and identity.get("organization_id"):
+                                S().store.set_tenant(identity["organization_id"])
+                            elif settings.demo_mode:
+                                S().store.set_allow_unscoped_demo()
+                            elif settings.tenant_isolation_required:
+                                raise ServiceError(
+                                    403, "tenant_identity_required",
+                                    "verified organization scope is required for this operation",
+                                )
+                            return await fn(request)
                     return await fn(request)
                 except ServiceError as e:
                     return _j(e.to_json(), e.status)
