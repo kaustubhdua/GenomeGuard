@@ -99,7 +99,7 @@ class PostgresStore(Store):
 
     def __init__(
         self, database_url: str, *, migration_database_url: str | None = None,
-        connect_timeout: int = 10,
+        connect_timeout: int = 10, run_migrations: bool = True,
     ) -> None:
         if not database_url or not database_url.startswith(("postgres://", "postgresql://")):
             raise ValueError("GG_DATABASE_URL must be a PostgreSQL runtime connection URL")
@@ -121,27 +121,41 @@ class PostgresStore(Store):
             psycopg.connect(
                 migration_database_url, connect_timeout=connect_timeout, row_factory=dict_row,
                 application_name="GenomeGuard-migrations",
-            ) if migration_database_url else self.connection
+            ) if run_migrations and migration_database_url else (
+                self.connection if run_migrations else None
+            )
         )
         try:
-            # Only the migration principal may create schemas or run DDL. The ordinary
-            # application connection receives a search_path after the owner creates it.
-            with self.migration_connection.transaction():
-                self.migration_connection.execute("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime")
-                self.migration_connection.execute(
-                    "SET search_path TO genomeguard_runtime, public"
-                )
+            if run_migrations:
+                # Only the migration principal may create schemas or run DDL. The ordinary
+                # application connection receives a search_path after the owner creates it.
+                with self.migration_connection.transaction():
+                    self.migration_connection.execute(
+                        "CREATE SCHEMA IF NOT EXISTS genomeguard_runtime"
+                    )
+                    self.migration_connection.execute(
+                        "SET search_path TO genomeguard_runtime, public"
+                    )
+            else:
+                # Operator tools that only provision records must never run schema DDL.
+                present = self.connection.execute(
+                    "SELECT EXISTS (SELECT 1 FROM pg_namespace "
+                    "WHERE nspname='genomeguard_runtime') AS present"
+                ).fetchone()["present"]
+                if not present:
+                    raise RuntimeError("GenomeGuard PostgreSQL schema is not migrated")
             with self.connection.transaction():
                 self.connection.execute("SET search_path TO genomeguard_runtime, public")
             self.db = _ConnectionCompat(self.connection, self)
-            self._migrate()
+            if run_migrations:
+                self._migrate()
         except Exception:
             self.connection.close()
-            if self.migration_connection is not self.connection:
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
                 self.migration_connection.close()
             raise
         finally:
-            if self.migration_connection is not self.connection:
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
                 self.migration_connection.close()
                 self.migration_connection = None
 
