@@ -903,9 +903,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(400, "invalid_assembly", "Choose GRCh37 or GRCh38.")
         svc = S()
         coverage_method = getattr(svc.store, "verified_public_chromosome_coverage", None)
-        if coverage_method is None:
-            raise CatalogueUnavailableError("The store has no verified chromosome-coverage query.")
-        coverage = await run_in_threadpool(coverage_method, assembly)
+        coverage_available = coverage_method is not None
+        coverage = []
+        if coverage_method is not None:
+            try:
+                coverage = await run_in_threadpool(coverage_method, assembly)
+            except CatalogueUnavailableError:
+                # Static reference lengths remain useful, but never imply that missing
+                # coverage data means zero observed variants when the query failed.
+                coverage_available = False
         positions_by_chromosome = {row["chromosome"]: row for row in coverage}
         # Standard human chromosome sizes for GRCh38 / GRCh37 (bp).
         GRCH38 = [
@@ -940,7 +946,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         rows = []
         for chrom, kind, length_bp in ref:
             coordinates = positions_by_chromosome.get(chrom)
-            loaded = coordinates is not None
+            loaded = coverage_available and coordinates is not None
             rows.append({
                 "chromosome": chrom, "kind": kind, "length_bp": length_bp,
                 "data_coverage": {
@@ -948,13 +954,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                     "first_position": coordinates["first_position"] if loaded else None,
                     "last_position": coordinates["last_position"] if loaded else None,
                     "variant_data_loaded": loaded,
+                    "coverage_status": "available" if coverage_available else "unavailable",
                 },
             })
         return _j({
             "reference_assembly": assembly, "chromosome_count": len(rows), "chromosomes": rows,
+            "coverage_available": coverage_available,
             "provenance_note": (
                 "Reference lengths are from the Genome Reference Consortium. Coverage comes only from normalized rows "
                 "belonging to approved, reconciled public manifests with the exact requested assembly."
+                if coverage_available else
+                "Reference lengths are from the Genome Reference Consortium. The coverage query is unavailable, "
+                "so no dataset coverage is asserted."
             ),
         })
     @route("GET", "/openapi.json", "Machine-readable endpoint list", "public")
