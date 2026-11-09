@@ -358,7 +358,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/auth/oidc", "Institutional OIDC API configuration (no secrets)", "public")
     async def oidc_configuration(request):
         configured = bool(
-            settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
+            settings.oidc_issuer and settings.oidc_audience and settings.oidc_client_id
+            and settings.oidc_redirect_uri and settings.oidc_jwks_url
             and settings.oidc_allowed_organizations
         )
         return _j({
@@ -366,6 +367,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "required": settings.oidc_required,
             "issuer": settings.oidc_issuer if configured else None,
             "audience": settings.oidc_audience if configured else None,
+            "client_id": settings.oidc_client_id if configured else None,
+            "redirect_uri": settings.oidc_redirect_uri if configured else None,
+            "scopes": settings.oidc_scopes if configured else None,
             "organization_claim": settings.oidc_organization_claim if configured else None,
         })
 
