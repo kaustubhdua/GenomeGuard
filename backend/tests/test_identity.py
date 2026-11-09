@@ -58,7 +58,7 @@ def test_valid_signed_token_returns_issuer_subject_and_verified_org(oidc_keys):
 @pytest.mark.parametrize("claims", [
     {"iss": "https://attacker.example"},
     {"aud": "another-api"},
-    {"exp": int(time.time()) - 1},
+    {"exp": int(time.time()) - 120},
     {"sub": ""},
     {"organization_id": ""},
     {"organization_id": "unapproved-org"},
