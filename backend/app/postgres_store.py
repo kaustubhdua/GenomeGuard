@@ -256,7 +256,7 @@ class PostgresStore(Store):
                    max(position) AS last_position
             FROM (
                 SELECT CASE
-                         WHEN upper(v.chromosome) LIKE 'CHR%'
+                         WHEN upper(v.chromosome) LIKE 'CHR%%'
                            THEN substring(upper(v.chromosome) FROM 4)
                          ELSE upper(v.chromosome)
                        END AS normalized_chromosome,
