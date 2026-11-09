@@ -1,7 +1,7 @@
 -- Source-sample mapping and append-only, signed consent-change event ledger.
-ALTER TABLE donors ADD COLUMN IF NOT EXISTS source_sample_id TEXT;
-CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_unique
-  ON donors(source_sample_id) WHERE source_sample_id IS NOT NULL;
+ALTER TABLE donors ADD COLUMN IF NOT EXISTS source_sample_id_hash TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_hash_unique
+  ON donors(source_sample_id_hash) WHERE source_sample_id_hash IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS consent_events (
   event_id TEXT PRIMARY KEY,
