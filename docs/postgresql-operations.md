@@ -67,9 +67,11 @@ Recommended starting policy for a dedicated production deployment:
 
 No retention schedule or backup job is automatically enabled by this repository. Operators must
 configure, monitor, and evidence it. The script
-`scripts/postgres_backup_restore_check.sh` creates a logical backup and restores it into a
-separately provisioned **empty** verification database; it intentionally refuses identical source
-and target URLs.
+`scripts/postgres_backup_restore_check.sh` streams a custom-format logical backup through `age`
+so plaintext is not written to disk, then restores it into a separately provisioned **empty**
+verification database. It compares the resolved server/database identity (not only URL strings),
+refuses a non-empty target before restoring, and checks the `genomeguard_runtime` schema actually
+used by `PostgresStore`.
 
 ## Manual verification
 
@@ -78,6 +80,8 @@ your shell (do not paste them into tickets or commit them):
 
 - `GG_DATABASE_URL`: source database connection URL.
 - `GG_RESTORE_TEST_URL`: connection URL for a dedicated empty restore-test database.
+- `GG_BACKUP_AGE_RECIPIENT`: age public recipient used to encrypt the temporary backup.
+- `GG_BACKUP_AGE_IDENTITY_FILE`: readable path to the matching age identity file.
 
 Run:
 
@@ -85,9 +89,11 @@ Run:
 bash scripts/postgres_backup_restore_check.sh
 ```
 
-The script verifies the restored schema, migration version, core row counts, and audit index
-continuity. It does not certify that a backup is encrypted offsite, that the provider's PITR works,
-or that the full application audit hash chain verifies. Run the application audit verifier against
+The script verifies the restored runtime schema, native migration version, core row counts, and
+audit index continuity. Its temporary backup is encrypted at rest with `age`, but the drill does
+not certify offsite retention, provider PITR, key escrow, or that the full application audit hash
+chain verifies. Run the application audit verifier against the restored database as a separate
+recovery acceptance step. The script's target database must be disposable and empty. Run the application audit verifier against
 the restored database as a separate recovery acceptance step.
 
 ## Concurrency and audit semantics
