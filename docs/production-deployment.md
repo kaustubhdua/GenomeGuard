@@ -17,34 +17,51 @@ Last audited: 28 October 2026.
 
 Render reports the current main commit as live. This confirms deployment status, not end-to-end runtime health. The available web verifier could not fetch the public URL or health endpoints, and the connected Vercel account could not independently inspect the current deployment content. Do not claim a live UI/API acceptance pass until the documented checks pass from a network-enabled runner.
 
+# Hosted deployment record
+
+Last audited: 10 November 2026.
+
+## Current public research instance
+
+- Public URL: https://genomeguard.onrender.com
+- Render service: `srv-dbev1ka9lscs738813t0` — [dashboard](https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0)
+- Hosting: Render web service, Free plan, Singapore region, Dockerfile `./Dockerfile`
+- Connected repository and branch: `kaustubhdua/GenomeGuard`, `main`; auto-deploy is enabled.
+- Latest provider-reported live deployment: `dep-dbhkcnijnfac73a7uk7g`
+- Latest live source commit: `42c1bb0f1fb1dfa34357bdc864fc276fb99509d4`
+- Provider service health-check path: empty (not configured).
+- The current code changes are in [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111), branch `feat/remove-supabase-runtime`; they are not deployed to this service.
+
+The latest observed `/health` response reported 600 samples and 3,000 variants, `storage_backend: sqlite`, and readiness `not_ready`. The public-cohort provenance is operator-declared; dataset-level public-release terms are not participant-specific consent. The latest observed `/health/ready` response was not ready. The live `/catalogue/sources` and `/catalogue/datasets` routes returned 404 because the deployed `main` revision predates the first-party catalogue routes on PR #111.
+
+These observations describe a public research prototype only. Do not upload private participant genomic data, identify individuals, or use the output for clinical decisions.
+
 ## Health and readiness configuration
 
-The repository's `render.yaml` declares `healthCheckPath: /health`, but Render's live service configuration reported an empty `healthCheckPath` during the 26 October audit. The setting could not be corrected with the available provider actions. This configuration drift remains open.
+The connected Render service currently reports an empty provider-side health-check path. The repository's current `render.yaml` uses `/health/live`, the cheap process liveness endpoint that does not initialize the cohort or database. Align the provider configuration with `/health/live` after reviewing the Render service change; do not use the readiness endpoint as the host liveness probe.
 
 Required verification:
-- Configure Render's health check path as `/health` in the service dashboard.
-- Confirm `GET /health` reports liveness and source provenance only.
+- Set and verify Render's health-check path as `/health/live`.
+- Confirm `GET /health/live` returns process liveness only.
 - Confirm `GET /health/ready` remains not-ready (HTTP 503) while production controls are absent.
-- Run read-only research-mode, API, route/UI, authorization, and accessibility smoke tests against the exact deployed commit.
+- Deploy the reviewed PR commit to an isolated staging service and run read-only API, route/UI, authorization, and accessibility smoke tests against that exact SHA.
 
 Do not treat a liveness response, deployment status, or green CI as production readiness.
 
-## PostgreSQL and Supabase status
+## PostgreSQL and legacy Supabase artifacts
 
-The opt-in PostgreSQL adapter and migration/recovery tooling were merged through [PR #33](https://github.com/kaustubhdua/GenomeGuard/pull/33). The Render service still has no verified GenomeGuard PostgreSQL connection: `GG_DATABASE_URL` is not configured. The deployed service therefore has no verified durable request/audit persistence. SQLite is stored at `/data/genomeguard.sqlite3` on an ephemeral filesystem. The adapter and its tests do not provision a database or prove production durability by themselves.
+The first-party PostgreSQL adapter and native migrations are maintained in `backend/app/postgres_store.py` and `backend/migrations/`. The connected Render service has no verified GenomeGuard PostgreSQL connection: `GG_DATABASE_URL` is not configured. It currently uses SQLite at `/data/genomeguard.sqlite3` on an ephemeral filesystem, so request/audit persistence across restart, redeploy, or free-instance spin-down is not guaranteed.
 
-The intended Supabase project is `common 1`, ID `hkyieaovolkethovyenb`, with GenomeGuard isolated in the `genomeguard` schema. This Supabase project is shared with a separate `bharatsim` schema and has BharatSim migration records too; keep project-specific schemas, grants, migrations, and data isolated and never run a GenomeGuard migration against another schema. The live database contains 13 GenomeGuard application tables, but the cohort, donor, genotype, request, decision, and audit tables have zero rows; no production cohort was fabricated or imported. The backend is not connected to this database.
+The active runtime architecture on PR #111 removes Supabase browser authentication, Edge Function routing, and database runtime dependencies. The historical `supabase/` migrations and old Supabase project notes are archival records of an earlier architecture; they are not used by the current application and must not be applied as part of this deployment. Do not connect GenomeGuard to the old shared Supabase project or reuse another application's schema.
 
-**Live security finding and follow-up:** the initial 27 October query found RLS disabled on all 13 GenomeGuard tables. On 28 October, the reviewed private-schema migration was applied and direct SQL verified RLS enabled on all 13 tables and no schema `USAGE` privilege for `anon`, `authenticated`, or `service_role`. The latest Supabase security advisor now reports `rls_enabled_no_policy` informational findings for GenomeGuard and BharatSim. GenomeGuard's no-policy state is intentional for this private schema: browser roles have no schema `USAGE` privilege and no Data API exposure is intended. This is defense in depth, not a complete authorization design. A dedicated database and reviewed server-side role/access model remain required. The reviewed defense-in-depth migration `supabase/migrations/20261027010000_private_schema_rls.sql` was applied to the live database on 28 October 2026 as migration `20261028180028` (`genomeguard_private_schema_rls`). Direct SQL verification confirmed RLS enabled on all 13 `genomeguard` tables and no `USAGE` privilege on the schema for `anon`, `authenticated`, or `service_role`. The migration is scoped to `genomeguard` and does not change the separate `bharatsim` schema. It intentionally creates no client-facing policies; the intended access model is a separately reviewed trusted server-side PostgreSQL connection. Do not expose private genomic tables through the Supabase Data API. This is defense in depth only: the Render backend is still not connected to this database, and production persistence is not verified.
+The PostgreSQL adapter, migration tests, and recovery scripts do not provision production infrastructure. The backup/restore drill now checks the actual `genomeguard_runtime` schema, refuses a non-empty restore target, encrypts its temporary dump with age, and verifies the restored audit hash chain. CI exercises this against disposable PostgreSQL databases; this does not prove provider-level backups, offsite retention, key custody, PITR, or a production restore drill.
 
 Required before production:
-1. Configure the actual dedicated PostgreSQL connection string as Render secret `GG_DATABASE_URL` using the provider dashboards. Never paste it into chat, commit it, or expose it to browser code. Prefer a dedicated GenomeGuard-only database rather than a shared application project for production.
-2. Verify migrations, least-privilege server connection, request ownership, concurrent writes, audit ordering, and failure behavior against the deployed service.
-3. Prove records survive restart and redeploy.
-4. Configure backup retention and recovery objectives; restore into an isolated database and run integrity/application acceptance checks.
-5. Correct and verify Render's provider-side health-check path (`/health`) and run a live smoke test against the exact deployed commit.
-
-Do not use a temporary free database as a production fix. Render's free PostgreSQL databases expire after 30 days and do not provide managed backups. See [Render free-plan limitations](https://render.com/docs/free) and [Postgres recovery and backups](https://render.com/docs/postgresql-backups). Supabase's [production checklist](https://supabase.com/docs/guides/deployment/going-into-prod) recommends RLS with appropriate policies, reviewing security findings, load testing, and a verified backup strategy.
+1. Provision a dedicated PostgreSQL database with supported backups/recovery and least-privilege runtime credentials.
+2. Configure `GG_DATABASE_URL` as a server-side secret; never put it in browser or `NEXT_PUBLIC_*` variables.
+3. Verify migrations, request ownership, concurrent writes, audit ordering, and failure behavior against staging.
+4. Prove records survive restart/redeploy and complete a separately controlled encrypted backup and restore drill.
+5. Configure monitoring, retention, key custody, and incident response.
 
 ## Vercel frontend status
 
