@@ -31,13 +31,9 @@ export async function render() {
     return root;
   }
   root.append(h("h1", {}, "Data requests"),
-    h("p", { class: "lede" }, state.authToken
-      ? isSteward()
-        ? "Review pending requests from your active organization. Approval records a governance decision; it does not release genomic data."
-        : "Submit a research request to your organization's steward. This Supabase workflow records the request for human review; it does not run the genomic policy engine or release data."
-      : isSteward()
-        ? "Every request from every account. Open one to review it."
-        : "Ask for allele frequencies. GenomeGuard checks source policy, scores re-identification risk, applies protections and records the decision in the audit log."));
+    h("p", { class: "lede" }, isSteward()
+      ? "Review requests from authorized API-key holders. Decisions are evaluated by the GenomeGuard policy and risk engine."
+      : "Submit an authorized research request. GenomeGuard checks source policy, scores disclosure risk, applies protections and records the decision in the audit log."));
   const provision = provisionSection();
   if (provision) root.append(provision);
   const out = h("div", {});
@@ -136,14 +132,11 @@ function listSection(res) {
 
 function formSection(out) {
   const st = state.demo ? { ...PRESETS[0].body } : {
-    purpose: "general_research", disease: null, data_level: state.authToken ? "aggregate" : "frequency", is_commercial: false,
+    purpose: "general_research", disease: null, data_level: "frequency", is_commercial: false,
     cohort_filter: {}, variant_filter: { min_maf: 0.01, limit: 20 },
   };
-  const levels = state.authToken ? ["aggregate", "frequency", "variant", "individual"] : LEVELS;
-  const activeMembership = (state.authAccess?.memberships || []).find((m) =>
-    m.status === "active" && m.organization_status === "active");
-  const defaultName = state.authUser?.user_metadata?.full_name ||
-    (state.authUser?.email ? state.authUser.email.split("@")[0] : "");
+  const levels = LEVELS;
+  const defaultName = "";
   const f = {};
   const sel = (id, label, opts, val) => {
     f[id] = h("select", { id, onchange: sync }, opts.map((o) => h("option", { value: o }, o === "" ? "any / none" : o.replaceAll("_", " "))));
@@ -154,7 +147,6 @@ function formSection(out) {
   const preview = h("div", { "aria-live": "polite" });
   const msg = h("div", {});
   const form = h("div", { class: "form" },
-    state.authToken ? inp("name", "Researcher name", defaultName) : null,
     sel("purpose", "Purpose", PURPOSES, st.purpose),
     state.demo ? sel("disease", "Disease area", DISEASES, st.disease || "")
       : inp("disease", "Research topic label (metadata only; no disease phenotype data in this cohort)", st.disease || ""),
@@ -168,7 +160,6 @@ function formSection(out) {
     if (f.pop.value.trim()) cf.population = f.pop.value.trim();
     if (f.coh.value.trim()) cf.cohort_id = f.coh.value.trim();
     return {
-      ...(state.authToken ? { name: f.name.value.trim(), institution: activeMembership?.organization || "" } : {}),
       purpose: f.purpose.value, disease: f.disease.value || null, data_level: f.level.value,
       is_commercial: f.com.checked, cohort_filter: cf,
       variant_filter: { min_maf: Number(f.maf.value), limit: Number(f.lim.value), ...(state.demo ? { include_planted: Number(f.pl.value) } : {}) },
@@ -176,7 +167,6 @@ function formSection(out) {
   }
   function load(b) {
     f.purpose.value = b.purpose; f.disease.value = b.disease || ""; f.level.value = b.data_level; f.com.checked = !!b.is_commercial;
-    if (f.name && !f.name.value) f.name.value = defaultName;
     f.pop.value = b.cohort_filter.population || ""; f.coh.value = b.cohort_filter.cohort_id || "";
     f.maf.value = b.variant_filter.min_maf; f.lim.value = b.variant_filter.limit;
     if (f.pl) f.pl.value = b.variant_filter.include_planted || 0;
@@ -187,10 +177,6 @@ function formSection(out) {
   let previewRun = 0;
   async function refreshPreview() {
     const run = ++previewRun;
-    if (state.authToken) {
-      preview.replaceChildren(notice("info", "This authenticated Supabase workflow records a request for organization review. The full policy engine, privacy-risk calculation, and genomic data-release path have not been migrated to this API. No data is released."));
-      return;
-    }
     const b = body();
     const q = new URLSearchParams({ purpose: b.purpose, commercial: String(b.is_commercial), data_level: b.data_level });
     if (b.disease) q.set("disease", b.disease);
@@ -250,7 +236,7 @@ function formSection(out) {
   const reqs = state.demo ? state.demo.requesters : [];
   const att = reqs.find((r) => r.name === "Probe Account");
   const wrap = h("div", { class: "ledger" },
-    row("New request", state.authToken
+    row("New request", false
       ? "Submit a request to your active organization. A steward review is required; this does not release data."
       : state.demo ? "Fill in or pick a preset" : "Submit a query against the public cohort and documented dataset policy mapping",
       state.demo ? h("div", { class: "presets" }, PRESETS.map((p) => h("button", { class: "ghost", title: p.why, onclick: () => load(p.body) }, p.name))) : null, form,
