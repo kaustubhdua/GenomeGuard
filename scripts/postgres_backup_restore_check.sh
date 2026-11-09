@@ -6,7 +6,7 @@ set -euo pipefail
 : "${GG_BACKUP_AGE_RECIPIENT:?Set an age public recipient for encrypting the temporary backup}"
 : "${GG_BACKUP_AGE_IDENTITY_FILE:?Set a path to the age identity file used to decrypt the backup}"
 
-for tool in pg_dump pg_restore psql age; do
+for tool in pg_dump pg_restore psql age python3; do
   command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 2; }
 done
 if [[ ! -r "$GG_BACKUP_AGE_IDENTITY_FILE" ]]; then
@@ -91,4 +91,13 @@ UNION ALL SELECT 'audit_log', count(*) FROM genomeguard_runtime.audit_log
 ORDER BY table_name;
 SQL
 
-echo "Restore smoke check passed. Verify the full audit hash chain with the application verifier before accepting recovery."
+echo "Verifying the restored PostgreSQL audit hash chain..."
+if [[ -n "${GG_AUDIT_CHECKPOINT_FILE:-}" ]]; then
+  PYTHONPATH=backend GG_DATABASE_URL="$GG_RESTORE_TEST_URL" \
+    python3 scripts/verify_postgres_audit.py --checkpoint "$GG_AUDIT_CHECKPOINT_FILE"
+else
+  PYTHONPATH=backend GG_DATABASE_URL="$GG_RESTORE_TEST_URL" \
+    python3 scripts/verify_postgres_audit.py
+fi
+
+echo "Restore smoke check and audit-chain verification passed. External checkpoint verification is required to detect valid-prefix truncation."
