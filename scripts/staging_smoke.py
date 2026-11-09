@@ -93,8 +93,21 @@ def main() -> int:
         status, datasets = get_json(base, "/catalogue/datasets", args.timeout)
         check("unapproved datasets are not listed",
               status == 200 and datasets.get("dataset_count") == 0, f"HTTP {status}")
-        status, _ = get_json(base, "/catalogue/chromosomes", args.timeout)
-        check("chromosome catalogue route responds", status == 200, f"HTTP {status}")
+        status, chromosomes = get_json(base, "/catalogue/chromosomes", args.timeout)
+        rows = chromosomes.get("chromosomes") or []
+        coverage_statuses = {
+            row.get("data_coverage", {}).get("coverage_status") for row in rows
+        }
+        check("chromosome reference catalogue responds without inventing coverage",
+              status == 200 and chromosomes.get("chromosome_count") == 25
+              and len(rows) == 25 and coverage_statuses <= {"available", "unavailable"},
+              f"HTTP {status}, count={len(rows)}, coverage={chromosomes.get('coverage_available')}")
+        if chromosomes.get("coverage_available") is False:
+            check("unavailable chromosome coverage is explicitly labelled",
+                  coverage_statuses == {"unavailable"})
+        else:
+            check("empty staging chromosome coverage is not presented as loaded",
+                  all(row.get("data_coverage", {}).get("variant_data_loaded") is False for row in rows))
     except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
         check("staging smoke completed", False, f"{type(exc).__name__}: {str(exc)[:240]}")
 
