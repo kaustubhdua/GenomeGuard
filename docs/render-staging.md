@@ -1,38 +1,60 @@
 # Render staging setup
 
-The separate Render Blueprint in `render.staging.yaml` is a synthetic-only staging service for the Supabase-free branch. It uses `Dockerfile.staging`, which deliberately does not download, build, or embed the public 1000 Genomes cohort. A regression test enforces this boundary. It does not replace or adopt the production Render service.
+The synthetic-only staging service is already provisioned separately from production:
 
-## Required environment values
+- Public URL: https://genomeguard-staging.onrender.com
+- Render dashboard: https://dashboard.render.com/web/srv-dbp41m5bedkc73fk4aug
+- Branch: `feat/remove-supabase-runtime`
+- Image: `Dockerfile.staging` (no public 1000 Genomes download or embedded real cohort)
+- Plan/region: Render Free / Singapore
+- Database: separate Neon Free PostgreSQL project in Singapore
 
-In the new Render staging service, set the required manual values under **Environment**:
+The Render service is not the production service. The existing production service continues to deploy `main` and was not changed.
 
-- `GG_DATABASE_URL`: use a **direct, non-pooled Neon PostgreSQL connection string** for the `genomeguard` database and `genomeguard_owner` role. The hostname must not contain `-pooler`.
-- `GG_MASTER_KEY`: base64-encoded random 32-byte key. Generate one locally with:
+## Staging environment and trust boundaries
 
-  ```bash
-  python -c 'import os,base64; print(base64.b64encode(os.urandom(32)).decode())'
-  ```
+The staging service uses a dedicated `genomeguard_runtime` database role, not the owner role. It has:
+- `USAGE` and `CREATE` on `genomeguard_runtime` so the app can apply its versioned runtime migrations;
+- read-only access to the normalized `genomeguard` reference schema;
+- no owner or superuser privileges.
 
-Render generates `GG_ADMIN_API_KEY` from the Blueprint. The Blueprint sets `GG_DEMO_MODE=true`, disables the tamper demo, sets `GG_EXPOSE_DEMO_ADMIN_KEY=false`, clears `GG_REAL_COHORT_FILE`, and uses `GG_DATASET_ID=synthetic-cohort-1`. Do not change staging to real-data mode. The public demo-account endpoint must never return the staging administrator key; the hosted demo therefore hides steward-only controls. The runtime database role is scoped to `genomeguard_runtime` and has read-only access to the normalized public-reference schema; it is not the database owner.
+The database URL is a direct, non-pooled Neon connection string. Neon transaction-mode PgBouncer connections do not preserve session-level `SET` state such as `search_path`; this application retains a long-running psycopg connection and applies migrations, so use the direct hostname without `-pooler`.
 
-## Why the Neon connection must be direct
+Staging environment values are stored only in Render:
+- `GG_DATABASE_URL`: direct connection as `genomeguard_runtime`.
+- `GG_MASTER_KEY`: random base64-encoded 32-byte key.
+- `GG_ADMIN_API_KEY`: unique rotated secret; never place it in Git or a browser variable.
+- `GG_DEMO_MODE=true`
+- `GG_ALLOW_TAMPER_DEMO=false`
+- `GG_EXPOSE_DEMO_ADMIN_KEY=false`
+- `GG_REAL_COHORT_FILE=`
+- `GG_DATASET_ID=synthetic-cohort-1`
 
-GenomeGuard's PostgreSQL adapter retains a long-running psycopg connection, sets `search_path`, and applies versioned migrations. Neon documents that its pooled endpoint uses PgBouncer in transaction mode and does not preserve session-level `SET` state such as `search_path`; Neon recommends direct connections for schema migrations and workloads needing session state.
+The public `/demo/requesters` endpoint returns synthetic researcher personas only. It must never return a hosted administrator credential. The hosted UI hides steward-only controls rather than exposing a privileged key. `GG_EXPOSE_DEMO_ADMIN_KEY=true` is a local-development-only opt-in.
 
-In the Neon Console, open **Connect** for the staging branch, database, and role, then switch **Connection pooling** off before copying the connection string. A pooled URI contains `-pooler` in its hostname; do not use it for this adapter.
+## Live staging acceptance already performed
 
-References:
+- `GET /health/live`: HTTP 200.
+- `GET /health`: HTTP 200 and `storage_backend=postgresql`.
+- Synthetic cohort loads: 600 donors and 3,000 variants.
+- `GET /catalogue/sources` and `/catalogue/datasets`: HTTP 200.
+- `GET /audit/verify`: HTTP 200, valid chain.
+- Public demo endpoint: no `admin_key` field.
+- Old administrator key after rotation: HTTP 401.
+- Missing administrator key: HTTP 401.
+- Rotated administrator key: HTTP 200 on the protected audit route.
+- Synthetic researcher request: HTTP 201, `permit_with_transform`; request history and audit chain show the write.
+
+`GET /health/ready` returns HTTP 503 intentionally. This service is a synthetic demo; participant consent, real genotype provenance, external audit anchoring, institutional identity, and durable-storage verification are not established. Do not change staging to real-data mode or weaken these readiness gates.
+
+A post-redeploy persistence check and provider-level backup/restore drill against this exact Neon staging project remain to be completed. CI's disposable PostgreSQL backup/restore integration tests do not substitute for those provider-level checks.
+
+## Blueprint
+
+`render.staging.yaml` remains a reproducible Blueprint description for this separate service. It is not a replacement for the live service's current dashboard settings. Review its plan before applying it to any other Render workspace or project.
+
+## References
+
 - [Neon connection pooling and transaction-mode limitations](https://neon.com/docs/connect/connection-pooling)
 - [Neon connection method guidance](https://neon.com/docs/connect/choose-connection)
-
-## First deployment acceptance
-
-After supplying the two manual values and approving the Render Blueprint plan:
-
-1. Wait for the separate staging deployment to build and become live.
-2. Check `/health/live`, then `/health` and `/health/ready`.
-3. Confirm the reported storage backend is PostgreSQL and schema migration versions 1 and 2 are recorded.
-4. Verify that the synthetic cohort seeds successfully and that request/audit rows persist across a staging restart.
-5. Exercise same-origin catalogue, request, decision, audit, export, and browser workflows against the staging service.
-
-A green build or successful schema creation is not proof of provider-level backup/restore, participant consent, institutional identity, or clinical readiness. Keep the existing production service unchanged until a separate reviewed release decision.
+- [Render staging dashboard](https://dashboard.render.com/web/srv-dbp41m5bedkc73fk4aug)
