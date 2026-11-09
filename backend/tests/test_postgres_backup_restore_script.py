@@ -1,9 +1,13 @@
 """Safety contracts for the PostgreSQL backup/restore drill script."""
 from pathlib import Path
+import subprocess
 
-SCRIPT = (
-    Path(__file__).resolve().parents[2] / "scripts" / "postgres_backup_restore_check.sh"
-).read_text(encoding="utf-8")
+SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "postgres_backup_restore_check.sh"
+SCRIPT = SCRIPT_PATH.read_text(encoding="utf-8")
+
+
+def test_backup_restore_script_has_valid_bash_syntax():
+    subprocess.run(["bash", "-n", str(SCRIPT_PATH)], check=True, capture_output=True, text=True)
 
 
 def test_backup_restore_targets_the_actual_postgres_runtime_schema():
