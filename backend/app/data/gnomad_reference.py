@@ -107,8 +107,6 @@ def import_to_database(args) -> dict:
     inserted = 0
     batch: list[tuple] = []
     with psycopg.connect(database_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SET ROLE genomeguard_reference_importer")
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute(
