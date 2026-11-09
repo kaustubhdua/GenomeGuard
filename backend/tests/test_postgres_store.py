@@ -81,8 +81,8 @@ def test_closed_provider_connection_is_reopened_with_runtime_search_path(monkeyp
 
 
 def test_closed_provider_connection_is_not_reopened_inside_transaction(monkeypatch):
-    import pytest
     import psycopg
+    import pytest
 
     from app.postgres_store import PostgresStore
 
@@ -187,7 +187,9 @@ def test_read_query_retries_once_after_server_side_disconnect(monkeypatch):
     store.database_url = "postgresql://example.invalid/db"
     store.connect_timeout = 7
     store._transaction_depth = 0
-    store.lock = __import__("threading").RLock()
+    import threading
+
+    store.lock = threading.RLock()
     store.connection = first
     store.db = _ConnectionCompat(first, store)
 
