@@ -1,5 +1,6 @@
 from app.service import _encryption_provenance
 
+
 def test_synthetic_provenance_does_not_claim_public_cohort_is_embedded():
     label = _encryption_provenance("synthetic")
     assert "synthetic-only cohort" in label
