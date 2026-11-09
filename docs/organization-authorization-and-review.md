@@ -1,89 +1,59 @@
-# Organization authorization and review workflow
+# Institutional organization authorization and consent — implementation status
 
-## Scope
+**Status: not implemented in the active first-party runtime.** This document is a boundary statement and implementation plan, not a description of deployed controls.
 
-Migration `20261029180000_genomeguard_organization_consent_workflows.sql` adds server-side organization and membership records, an evidence-backed participant-consent ledger, organization-scoped request records, and a reviewer action.
+## Current runtime contract
 
-No organizations, memberships, consent records, or participants are seeded. A new Supabase Auth user is not automatically a researcher or reviewer. Until a trusted operator provisions and activates the appropriate organization and membership, request submission fails closed.
+The active application is the first-party Python/Starlette API. The browser does not use Supabase Auth, Supabase Edge Functions, PostgREST, or the legacy Supabase organization/consent migrations.
 
-## Authorization rules
+Current credentials are application API keys:
+- X-API-Key authenticates a provisioned researcher application role.
+- X-Admin-Key authenticates a steward/reviewer application role.
+- X-Donor-Key is reserved for the synthetic donor demonstration.
+- Demo personas and keys are available only when explicit demo mode is enabled.
 
-- The requester's role and institution are resolved from the active server-side membership and organization, not trusted from browser fields.
-- A user must have exactly one active organization membership to submit a request. Multiple active memberships fail closed rather than selecting an organization silently.
-- A reviewer must have an active `reviewer` or `organization_admin` membership.
-- Review actions are limited to requests belonging to the reviewer's organization.
-- Review decisions are persisted to `genomeguard.decisions`, update request status, and append an `api_events` record.
-- Approval transitions to `approved_pending_release`; it does not release genomic data.
-- The membership and consent tables have RLS enabled and no direct grants to browser roles.
-- The RPCs are executable only by `service_role`; the Edge Function validates the Supabase bearer token and supplies the verified user ID server-side.
+These keys do **not** establish a person's real-world identity, institutional affiliation, organization membership, ethics approval, data-access committee approval, or participant consent. A researcher label or institution string supplied to the application is not proof of identity.
 
-## Supabase Auth sign-in and membership status
+## Organization authorization: required future control
 
-The static frontend now provides Supabase Auth email/password sign-in, account creation, and sign-out using the project's browser-safe publishable key. Access and refresh tokens remain in tab memory; the UI does not persist credentials to local or session storage. A successful Auth sign-in is not treated as authorization.
+Before controlled-access or participant-specific datasets are enabled, an institutional deployment must integrate a trusted identity provider using OIDC (or an institution-approved equivalent). The server must validate issuer, audience, signature, expiry, nonce/state and relevant authentication context; resolve organization membership from a trusted server-side source; and enforce authorization on every protected API route.
 
-After sign-in, the frontend calls `GET /me`, which invokes the service-role-only `gg_get_my_access_status(uuid)` RPC using the user ID verified from the bearer token. The response contains only that user's own organization memberships and an explicit access state:
+Required authorization properties:
+- deny by default when identity, organization, role, or policy evidence is missing or ambiguous;
+- scope requests, reviews, datasets, exports, and audit views to the authorized organization;
+- enforce separation of researcher, reviewer, consent-steward, administrator, and operator duties;
+- prevent users from self-assigning roles or choosing trusted organization IDs in browser input;
+- support session/key revocation, expiry, credential rotation, MFA policy, and access review;
+- test cross-user and cross-tenant denial against the exact deployed release.
 
-- `active`: exactly one active membership in an active organization;
-- `ambiguous_memberships`: more than one active membership, which blocks request workflows until an administrator resolves it;
-- `pending_or_inactive`: one or more memberships exist but none is active;
-- `no_membership`: the account has no organization membership.
+GA4GH AAI and Passports are relevant interoperability references; they are not a drop-in substitute for institutional identity proofing or local authorization policy.
 
-The frontend explains pending/no-membership states instead of allowing an authenticated but unprovisioned user to submit or review requests. Account creation does not create an organization, activate a membership, or grant a role. Email-confirmation delivery and the successful browser sign-in path still require live user-level verification.
+## Participant consent: required future control
 
-## Request review API
+The current public 1000 Genomes research mode uses a dataset-level public-release policy mapping. Local demo mode uses synthetic consent attributes. Neither is participant-specific consent for GenomeGuard's use case. The active first-party runtime does not currently provide an authoritative participant-consent ledger or a complete consent withdrawal enforcement path.
 
-`POST /requests/{request_id}/review`
+Before participant-specific data workflows are enabled, the data controller must define and operate:
+- an authoritative, access-controlled consent evidence source and provenance chain;
+- participant and dataset identity reconciliation that avoids exposing identifiers to researchers;
+- permitted purposes, data categories, recipients, jurisdiction, expiry, and policy version;
+- withdrawal, expiry, correction, and re-consent lifecycle handling;
+- a mandatory decision-time check so withdrawn, expired, missing, or ambiguous consent blocks access and downstream release;
+- evidence of the consent source and decision inputs in a privacy-minimizing audit record;
+- institutional ethics, legal, privacy, and data-access committee approval.
 
-Request JSON:
+A FHIR R4 Consent export or a DUO code is an interoperability representation, not proof that consent is valid, current, attributable to a participant, or legally sufficient.
 
-```json
-{
-  "outcome": "approved",
-  "reason": "The stated research purpose meets the reviewed criteria; release remains separately gated."
-}
-```
+## Review and release separation
 
-Allowed outcomes: `approved`, `denied`, `needs_more_information`. Every outcome requires a reason. The API returns a generic authorization/unavailability error when the RPC fails, without disclosing cross-organization request existence.
+A human review workflow must distinguish request review from actual data release. Approval should create a reviewed, time-bounded authorization state; it must not itself expose genotypes. A separate release gate must re-check identity, organization, purpose, dataset terms, participant consent where applicable, expiry/withdrawal, policy version, and output-risk controls at the moment of release.
 
-## Consent ledger limitations
+## GA4GH references
 
-`participant_consent_records` supports scoped evidence references, allowed purposes/data levels, verification metadata, expiry and withdrawal status. It does not itself verify a source document, identify a real-world person, or automatically authorize data release. The table is empty until consent evidence is verified through an approved governance process. No private participant data should be imported into this shared research project.
+- Data Use Ontology (DUO): https://www.ga4gh.org/product/data-use-ontology-duo/ — standardized machine-readable data-use terms.
+- Machine-Readable Consent Guidance: https://www.ga4gh.org/product/machine-readable-consent-guidance-mrcg/ — mapping consent language to DUO.
+- GA4GH AAI and Passports: https://www.ga4gh.org/product/authorisation-and-authentication-infrastructure-aai/ and https://www.ga4gh.org/product/passports/ — researcher authorization interoperability.
+- GA4GH Data Security Infrastructure Policy: https://github.com/ga4gh/data-security/blob/master/DSIP/DSIP_v4.0.md — access-control, authorization, and minimum-privilege guidance.
 
-Participant consent withdrawal must be wired into the full authorization decision path before participant-specific data workflows are enabled. The current schema and request/review endpoints are not a claim that this complete path is already operational.
+## Release rule
 
-## Provisioning and deployment
-
-Membership provisioning must be performed through a separately authorized administrative procedure; there is no public endpoint to create organizations, promote roles, or create consent evidence. The organization, consent, review-history, and steward-queue migrations are applied to the live shared Supabase project. No organizations, memberships, or consent records have been provisioned. Do not mark production readiness true until the deployed Edge Function, database grants, live positive/negative tests, consent lifecycle and recovery controls are independently verified.
-
-
-## Consent withdrawal API
-
-`POST /consents/{consent_uuid}/withdraw`
-
-Request JSON:
-
-```json
-{ "reason": "Withdrawal recorded by the authorized consent steward." }
-```
-
-The route requires a valid Supabase bearer token and an active `consent_steward` membership for the organization owning the consent record. Reviewer and organization-admin roles do not implicitly grant consent-withdrawal authority. The database marks the record withdrawn and appends a governance event. Repeated withdrawal is idempotent. This records a governance state change; the data-release policy must still check consent status on every relevant request before any participant-specific release can be enabled.
-
-
-## Steward review queue API
-
-`GET /steward/requests?limit=50&offset=0` returns the active review queue for the caller's single active organization. The Edge Function verifies the Supabase bearer token, then calls the service-role-only `gg_list_review_queue` RPC with the verified Auth user ID. The database resolves the organization and reviewer role from `organization_memberships`; it never trusts an organization ID or role supplied by the browser.
-
-- Pagination is bounded to 1–100 rows and offsets from 0–100,000.
-- Only `pending_review` and `needs_more_information` requests are returned.
-- Requester name and institution are visible only to an authorized reviewer in the same active organization.
-- A researcher, a user without an active reviewer/admin membership, or a reviewer with multiple active organizations is rejected.
-- The RPC is `SECURITY DEFINER` with an empty search path and is executable only by `service_role`; browser roles cannot call it directly.
-- Approval remains `approved_pending_release`; this queue does not release genomic data.
-
-The migration and Edge Function are deployed to Supabase project `common 1` as migration `genomeguard_steward_review_queue` and Edge Function version 8. The live RPC's privilege boundary and fail-closed response for an unprovisioned user were verified. A successful queue read and review action remain unverified because the project currently has no provisioned organizations or memberships.
-
-## Request detail and history API
-
-`GET /requests/{request_id}` requires a valid Supabase bearer token and an active membership in the request's organization. Researchers can retrieve their own requests; reviewers and organization administrators can inspect requests in their organization. A cross-organization or otherwise unauthorized request returns the same not-found response as an unavailable request.
-
-The response includes the persisted request fields, current decision, and recorded API event history. It does not include genotype calls or raw participant rows. The endpoint reports that it did not release data; a review approval remains a governance decision only.
+Until the identity, organization, consent, withdrawal, and decision-time release controls above are implemented and independently verified, keep the service limited to synthetic demonstrations and reviewed public aggregate/research data under source-specific terms. Do not upload private or controlled-access participant genomic data. Do not describe the current runtime as institutionally authenticated, participant-consent-aware, legally compliant, or production-ready.
