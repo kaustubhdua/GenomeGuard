@@ -56,5 +56,5 @@ jobs:
           ! grep -R -E 'supabase\.co|SUPABASE_|/functions/v1/|/auth/v1/' frontend/src
       - name: Verify native database migration runner covers all numbered files
         run: |
-          grep -q 'glob("\[0-9\]\[0-9\]\[0-9\]_\*.sql")' backend/app/postgres_store.py
+          grep -Fq '_MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql")' backend/app/postgres_store.py
           grep -q 'schema_migrations' backend/app/postgres_store.py
