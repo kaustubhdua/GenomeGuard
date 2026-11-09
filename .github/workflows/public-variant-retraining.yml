@@ -14,6 +14,7 @@ on:
     paths:
       - .github/workflows/public-variant-retraining.yml
       - backend/app/ml/clinvar_vep_train.py
+      - backend/tests/test_clinvar_vep_offline.py
 
 permissions:
   contents: read
@@ -25,7 +26,7 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -33,15 +34,47 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[ml]"
-      - name: Download, integrate, train and evaluate public annotations
+      - name: Prepare balanced ClinVar GRCh38 variant input
         run: |
-          PYTHONPATH=backend python -m app.ml.clinvar_vep_train --max-variants 20000
-      - name: Upload model, metrics, provenance and annotation cache
-        uses: actions/upload-artifact@v4
+          PYTHONPATH=backend python -m app.ml.clinvar_vep_train --max-variants 20000 --prepare-only
+      - name: Cache the version-matched Ensembl VEP GRCh38 cache
+        uses: actions/cache@v4
+        with:
+          path: .training-data/public-annotations/.vep
+          key: ensembl-vep-116.3-grch38-${{ runner.os }}
+      - name: Install Ensembl VEP 116.3 offline cache
+        run: |
+          docker pull ensemblorg/ensembl-vep:release_116.3
+          if [ ! -d .training-data/public-annotations/.vep/homo_sapiens/116_GRCh38 ]; then
+            docker run --rm \
+              -v "$PWD/.training-data/public-annotations:/data" \
+              ensemblorg/ensembl-vep:release_116.3 \
+              INSTALL.pl -c /data/.vep -a cf -s homo_sapiens -y GRCh38
+          fi
+          test -d .training-data/public-annotations/.vep/homo_sapiens/116_GRCh38
+      - name: Annotate every selected variant with local offline VEP
+        run: |
+          docker run --rm \
+            -v "$PWD/.training-data/public-annotations:/data" \
+            ensemblorg/ensembl-vep:release_116.3 \
+            vep --cache --offline --dir_cache /data/.vep \
+              --assembly GRCh38 --format vcf --json --no_stats \
+              --buffer_size 5000 --fork 2 --force_overwrite \
+              --input_file /data/clinvar_selected_for_vep.vcf \
+              --output_file /data/ensembl_vep_offline.jsonl
+          test -s .training-data/public-annotations/ensembl_vep_offline.jsonl
+      - name: Train and evaluate gene-disjoint research baselines
+        run: |
+          PYTHONPATH=backend python -m app.ml.clinvar_vep_train \
+            --max-variants 20000 \
+            --vep-jsonl .training-data/public-annotations/ensembl_vep_offline.jsonl
+      - name: Upload model, metrics, provenance and normalized annotation cache
+        uses: actions/upload-artifact@v7
         with:
           name: genomeguard-public-variant-research-model
           path: |
             artifacts/clinvar-vep/
             .training-data/public-annotations/ensembl_vep_annotations.jsonl
+            .training-data/public-annotations/clinvar_selected_for_vep.vcf
           if-no-files-found: error
           retention-days: 30
