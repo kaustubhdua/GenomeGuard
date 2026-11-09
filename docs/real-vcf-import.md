@@ -2,7 +2,7 @@
 
 ## What this importer does
 
-`python -m app.data.vcf_import` validates an operator-supplied VCF and, when explicitly requested, writes normalized variant and genotype-call rows into private GenomeGuard tables. It records the exact artifact SHA-256 and import metadata in a pre-existing `genomeguard.variant_dataset_manifest` entry. The importer cannot approve its own source: a trusted steward must separately register and approve the exact source metadata before import. It does not download data, infer consent, or create participant-consent records.
+`python -m app.data.vcf_import` validates an operator-supplied VCF and, when explicitly requested, writes normalized variant and genotype-call rows into the standalone PostgreSQL `genomeguard` schema. The schema is created by `backend/migrations/002_normalized_public_references.sql`. It records the exact artifact SHA-256 and import metadata in a pre-existing `genomeguard.variant_dataset_manifest` entry. The importer cannot approve its own source: a trusted steward must separately register and approve the exact source metadata before import. It does not download data, infer consent, or create participant-consent records.
 
 The normalized model is deliberately separate from the legacy `genomeguard.variants` / `genomeguard.genotypes` tables because the latter store a packed genotype blob with implicit variant ordering. Importing into those tables without an explicit encoding contract could silently mis-map calls.
 
@@ -145,7 +145,7 @@ Do not run the example as written. The review decision and exact checksum must b
 
 ## Actual import
 
-Only after the dry run succeeds and the manifest is approved, configure `DATABASE_URL` in the trusted operator environment. The importer explicitly executes `SET ROLE genomeguard_importer`; that `NOLOGIN` role is provisioned by the importer-privileges migration and has only the required manifest-update, normalized-table, and sequence grants. The connection user must be authorized to assume that role. The database login used by `DATABASE_URL` must be explicitly granted membership in `genomeguard_importer` so `SET ROLE genomeguard_importer` can succeed; do not grant that membership to browser-facing or general application roles. Never place the connection string in frontend variables, Git, shell history, screenshots or logs.
+Only after the dry run succeeds and the manifest is approved, configure `GG_IMPORT_DATABASE_URL` in the trusted operator environment (the importer falls back to `GG_DATABASE_URL`, then `DATABASE_URL`). The native importer does not require Supabase, PostgREST, RLS, or `SET ROLE`; authorization is determined by the PostgreSQL login supplied to the command. For least privilege, create a dedicated operator login and grant it `USAGE` on schema `genomeguard`, `SELECT`/`UPDATE` on `variant_dataset_manifest`, `SELECT`/`INSERT` on `dataset_samples`, `dataset_variants`, and `dataset_genotype_calls`, and `USAGE`/`SELECT` on the two generated ID sequences. Do not grant this role to the web-facing application or browser users. Never place the connection string in frontend variables, Git, shell history, screenshots or logs.
 
 The import writes no synthetic rows. It does not enable data release, create consent, or prove that a particular use is ethically or legally authorized. The participant-specific consent path and a governed release function must be completed and tested before private-cohort workflows are enabled.
 
