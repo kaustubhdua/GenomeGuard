@@ -107,14 +107,12 @@ class PostgresStore(Store):
             database_url, connect_timeout=connect_timeout, row_factory=dict_row,
             application_name="GenomeGuard",
         )
-        # Keep GenomeGuard objects isolated from other applications sharing a Supabase project.
+        # Keep runtime tables isolated from normalized genomic reference tables.
         # The database URL is a server-side secret; never put it in frontend/Vercel public env vars.
         try:
             with self.connection.transaction():
-                # The Supabase project already contains a separate normalized governance
-                # schema named genomeguard. The legacy Python Store has a different table
-                # contract (notably donors/variants/cohort_metadata), so never run its
-                # CREATE TABLE migration into that schema. Use an isolated runtime schema.
+                # Legacy service tables and normalized public references have separate
+                # schemas because they intentionally use different data contracts.
                 schema_exists = self.connection.execute(
                     "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'genomeguard_runtime') AS present"
                 ).fetchone()["present"]
@@ -132,35 +130,43 @@ class PostgresStore(Store):
             raise
 
     def _migrate(self) -> None:
-        migration = _MIGRATIONS / "001_initial_postgres.sql"
-        if not migration.is_file():
-            raise RuntimeError(f"PostgreSQL migration is missing: {migration.name}")
-        with self.lock, self.connection.transaction():
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS schema_migrations "
-                "(version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
-            )
-            applied = self.connection.execute(
-                "SELECT version FROM schema_migrations WHERE version=1"
-            ).fetchone()
-            if applied:
-                return
-            # Migration files contain only DDL statements without procedural blocks.
-            # Remove full-line SQL comments before splitting statements. Splitting raw SQL
-            # on semicolons otherwise leaves the trailing comment text attached to the first DDL.
-            sql = "\n".join(
-                line for line in migration.read_text(encoding="utf-8").splitlines()
-                if not line.lstrip().startswith("--")
-            )
-            for statement in sql.split(";"):
-                if statement.strip():
-                    self.connection.execute(statement)
-            self.connection.execute("INSERT INTO schema_migrations(version) VALUES (1)")
+        """Apply each numbered native PostgreSQL migration exactly once."""
+        if not _MIGRATIONS.is_dir():
+            raise RuntimeError(f"PostgreSQL migrations directory is missing: {_MIGRATIONS}")
+        migrations = []
+        for path in sorted(_MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql")):
+            prefix = path.name.split("_", 1)[0]
+            if prefix.isdigit():
+                migrations.append((int(prefix), path))
+        if not migrations or migrations[0][0] != 1:
+            raise RuntimeError("PostgreSQL migration 001_initial_postgres.sql is required")
+        with self.lock:
+            for version, migration in migrations:
+                with self.connection.transaction():
+                    self.connection.execute(
+                        "CREATE TABLE IF NOT EXISTS schema_migrations "
+                        "(version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+                    )
+                    applied = self.connection.execute(
+                        "SELECT version FROM schema_migrations WHERE version=%s", (version,)
+                    ).fetchone()
+                    if applied:
+                        continue
+                    sql = "\n".join(
+                        line for line in migration.read_text(encoding="utf-8").splitlines()
+                        if not line.lstrip().startswith("--")
+                    )
+                    for statement in sql.split(";"):
+                        if statement.strip():
+                            self.connection.execute(statement)
+                    self.connection.execute(
+                        "INSERT INTO schema_migrations(version) VALUES (%s)", (version,)
+                    )
 
     def lookup_population_frequencies(
         self, chromosome: str, position: int, reference: str, alternate: str, assembly: str,
     ) -> dict:
-        """Read public aggregate frequencies under a narrowly scoped database role."""
+        """Read approved public aggregate frequencies in a read-only transaction."""
         statement = """
             SELECT
                 m.dataset_key, m.source_name, m.source_release, m.source_url,
@@ -180,7 +186,6 @@ class PostgresStore(Store):
         try:
             with self.lock, self.connection.transaction():
                 self.connection.execute("SET TRANSACTION READ ONLY")
-                self.connection.execute("SET LOCAL ROLE genomeguard_reference_reader")
                 self.connection.execute("SET LOCAL statement_timeout = '3000ms'")
                 rows = self.connection.execute(
                     statement, (chromosome, position, reference, alternate, assembly),
