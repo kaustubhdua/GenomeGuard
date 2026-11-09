@@ -1,24 +1,5 @@
 # Hosted deployment record
 
-Last audited: 28 October 2026.
-
-## Current public research instance
-
-- Public URL: https://genomeguard.onrender.com
-- Hosting: Render web service, free plan, Singapore region
-- Service ID: `srv-dbev1ka9lscs738813t0`
-- Current Render deployment: `dep-dbg42osipgvc73eesutg`, status `live`
-- Deployed source commit: `a100921c98dbb194e365f76d32f9340700b2c196` (merge of PR #43)
-- Runtime: Docker, Python 3.12 image, Uvicorn
-- Dataset: public 1000 Genomes / IGSR chromosome 22 genotype calls, 600 samples × 3,000 variants
-- Policy provenance: versioned mapping of published dataset-level public-release terms; not participant-specific consent and not independent legal review
-- Hosted demo mode and destructive audit-tampering mode: disabled
-- Explanations: built-in templates; no live LLM configured
-
-Render reports the current main commit as live. This confirms deployment status, not end-to-end runtime health. The available web verifier could not fetch the public URL or health endpoints, and the connected Vercel account could not independently inspect the current deployment content. Do not claim a live UI/API acceptance pass until the documented checks pass from a network-enabled runner.
-
-# Hosted deployment record
-
 Last audited: 10 November 2026.
 
 ## Current public research instance
@@ -30,7 +11,7 @@ Last audited: 10 November 2026.
 - Latest provider-reported live deployment: `dep-dbhkcnijnfac73a7uk7g`
 - Latest live source commit: `42c1bb0f1fb1dfa34357bdc864fc276fb99509d4`
 - Provider service health-check path: empty (not configured).
-- The current code changes are in [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111), branch `feat/remove-supabase-runtime`; they are not deployed to this service.
+- Current code changes are in [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111), branch `feat/remove-supabase-runtime`; they are not deployed to this service.
 
 The latest observed `/health` response reported 600 samples and 3,000 variants, `storage_backend: sqlite`, and readiness `not_ready`. The public-cohort provenance is operator-declared; dataset-level public-release terms are not participant-specific consent. The latest observed `/health/ready` response was not ready. The live `/catalogue/sources` and `/catalogue/datasets` routes returned 404 because the deployed `main` revision predates the first-party catalogue routes on PR #111.
 
@@ -38,7 +19,7 @@ These observations describe a public research prototype only. Do not upload priv
 
 ## Health and readiness configuration
 
-The connected Render service currently reports an empty provider-side health-check path. The repository's current `render.yaml` uses `/health/live`, the cheap process liveness endpoint that does not initialize the cohort or database. Align the provider configuration with `/health/live` after reviewing the Render service change; do not use the readiness endpoint as the host liveness probe.
+The connected Render service currently reports an empty provider-side health-check path. The repository's current `render.yaml` uses `/health/live`, the cheap process liveness endpoint that does not initialize the cohort or database. Align the provider configuration with `/health/live`; do not use the readiness endpoint as the host liveness probe.
 
 Required verification:
 - Set and verify Render's health-check path as `/health/live`.
@@ -54,7 +35,7 @@ The first-party PostgreSQL adapter and native migrations are maintained in `back
 
 The active runtime architecture on PR #111 removes Supabase browser authentication, Edge Function routing, and database runtime dependencies. The historical `supabase/` migrations and old Supabase project notes are archival records of an earlier architecture; they are not used by the current application and must not be applied as part of this deployment. Do not connect GenomeGuard to the old shared Supabase project or reuse another application's schema.
 
-The PostgreSQL adapter, migration tests, and recovery scripts do not provision production infrastructure. The backup/restore drill now checks the actual `genomeguard_runtime` schema, refuses a non-empty restore target, encrypts its temporary dump with age, and verifies the restored audit hash chain. CI exercises this against disposable PostgreSQL databases; this does not prove provider-level backups, offsite retention, key custody, PITR, or a production restore drill.
+The PostgreSQL adapter, migration tests, and recovery scripts do not provision production infrastructure. The backup/restore drill checks the actual `genomeguard_runtime` schema, refuses a non-empty restore target, encrypts its temporary dump with age, and verifies the restored audit hash chain. CI is configured to exercise this against disposable PostgreSQL databases; this does not prove provider-level backups, offsite retention, key custody, PITR, or a production restore drill.
 
 Required before production:
 1. Provision a dedicated PostgreSQL database with supported backups/recovery and least-privilege runtime credentials.
@@ -67,11 +48,12 @@ Required before production:
 
 - Project: `genome-guard` — [Vercel project](https://vercel.com/jyc-website/genome-guard)
 - Project ID: `prj_Q2uhnuLdzXTo4JoZUXqzhW6YuICT`
-- Settings updated: root directory `frontend`, static/Other framework, output directory `.`, preview SSO protection.
-- GitHub-triggered preview for PR #43 was reported `READY`.
-- A production deployment and public route-by-route acceptance test are **not independently verified**. Direct production deployment creation was denied by the connected Vercel API, and current deployment-list access is denied.
+- Settings: root directory `frontend`, static/Other framework, output directory `.`, preview SSO protection.
+- Latest combined Vercel status checked for PR #111 head `8584ebbe657109213df3d4889f902ea68869de5e`: **failure**, target reports `build-rate-limit`.
+- An earlier preview status on an older commit succeeded, but it is not evidence that the latest head has a usable preview.
+- Production deployment and public route-by-route acceptance are **not verified**.
 
-The frontend rewrites API requests to the Render service. Vercel is not a replacement for durable backend storage. Promote a production deployment only after the UI and API acceptance tests pass and the private-data security controls are in place.
+The frontend rewrites API requests to the Render service. Vercel is not a replacement for durable backend storage. Do not promote a production deployment until preview build limits are resolved, the UI/API acceptance tests pass, and private-data security controls are in place.
 
 ## Explicit production blockers
 
