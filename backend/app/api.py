@@ -181,8 +181,26 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if settings.tenant_isolation_required:
             raise ServiceError(403, "tenant_identity_required",
                                "a verified organization-bound OIDC identity is required")
+        if settings.demo_mode and not r.get("organization_id"):
+            r = {**r, "_allow_unscoped_demo": True}
         request.state.authenticated_requester = r
         return r
+
+    def scoped_requester_call(identity: dict, fn, *args, **kwargs):
+        with S().store.transaction():
+            if identity.get("organization_id"):
+                S().store.set_tenant(identity["organization_id"])
+            elif identity.get("_allow_unscoped_demo") and settings.demo_mode:
+                S().store.set_allow_unscoped_demo()
+            elif settings.tenant_isolation_required:
+                raise ServiceError(403, "tenant_identity_required",
+                                   "verified organization scope is required")
+            return fn(*args, **kwargs)
+
+    def admin_call(fn, *args, **kwargs):
+        with S().store.transaction():
+            S().store.set_admin_access()
+            return fn(*args, **kwargs)
 
     def admin(request: Request) -> None:
         if not S().is_admin(request.headers.get("x-admin-key")):
@@ -201,23 +219,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
             async def handler(request: Request):
                 try:
-                    if who in ("requester", "admin", "donor"):
-                        identity = requester(request) if who == "requester" else None
-                        with S().store.transaction():
-                            if who == "admin":
-                                S().store.set_admin_access()
-                            elif who == "donor" and settings.demo_mode:
-                                S().store.set_allow_unscoped_demo()
-                            elif identity and identity.get("organization_id"):
-                                S().store.set_tenant(identity["organization_id"])
-                            elif settings.demo_mode:
-                                S().store.set_allow_unscoped_demo()
-                            elif settings.tenant_isolation_required:
-                                raise ServiceError(
-                                    403, "tenant_identity_required",
-                                    "verified organization scope is required for this operation",
-                                )
-                            return await fn(request)
+                    if who == "requester":
+                        requester(request)  # authenticate before entering the handler
                     return await fn(request)
                 except ServiceError as e:
                     return _j(e.to_json(), e.status)
@@ -415,8 +418,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/me", "Who am I, my budget", "requester")
     async def me(request):
         r = requester(request)
+        budget = scoped_requester_call(r, S().budget, r["id"])
         return _j({"id": r["id"], "name": r["name"], "tier": r["credential_level"],
-                   "frozen": r["id"] in S().monitor.frozen, **S().budget(r["id"])})
+                   "frozen": r["id"] in S().monitor.frozen, **budget})
 
     @route("POST", "/requests", "Submit a data request; returns decision, explanation, risk, "
            "transform summary and (if released) aggregate data", "requester")
@@ -425,7 +429,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         svc = S()
         require_governed_data(svc)
         body = await _body(request)
-        d = await run_in_threadpool(svc.submit, r, body)
+        d = await run_in_threadpool(scoped_requester_call, r, svc.submit, r, body)
         return _j(d if svc.is_admin(request.headers.get("x-admin-key")) else requester_view(d), 201)
 
     @route("GET", "/beacon/g_variants", "GA4GH Beacon v2 style allele lookup, governed by the "
@@ -549,7 +553,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             approve = action == "approve"
         who = str(b.get("reviewer", "reviewer"))[:32]
         d = await run_in_threadpool(
-            S().review, request.path_params["id"], who, approve, action,
+            admin_call, S().review, request.path_params["id"], who, approve, action,
         )
         return _j(d)
 
@@ -559,7 +563,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         body = await _body(request)
         who = str(body.get("reviewer", "reviewer"))[:32]
         result = await run_in_threadpool(
-            S().release_approved, request.path_params["id"], who,
+            admin_call, S().release_approved, request.path_params["id"], who,
         )
         return _j(result)
 
@@ -569,16 +573,20 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def copilot(request):
         admin(request)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
-        return _j(await run_in_threadpool(S().copilot_review, request.path_params["id"], refresh))
+        return _j(await run_in_threadpool(
+            admin_call, S().copilot_review, request.path_params["id"], refresh,
+        ))
 
     @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model); "
            "steward-only because it describes withheld variants and registry relatives", "admin")
     async def exposure(request):
         admin(request)
         rid = request.path_params["id"]
-        if not S().store.decision(rid, with_release=False):
-            raise ServiceError(404, "not_found", "no such request")
-        return _j(S().exposure(rid))
+        def exposure():
+            if not S().store.decision(rid, with_release=False):
+                raise ServiceError(404, "not_found", "no such request")
+            return S().exposure(rid)
+        return _j(admin_call(exposure))
 
     @route("GET", "/consent/summary", "How many donors would be eligible (counts only)",
            "requester")
@@ -600,7 +608,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         svc = S()
         require_governed_data(svc)
         body = await _body(request)
-        return _j(svc.preview(r, body))
+        return _j(scoped_requester_call(r, svc.preview, r, body))
 
     @route("GET", "/variants/search", "Exact coordinate or variant-ID lookup; metadata only", "public")
     async def variant_search(request):
@@ -862,7 +870,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/anomalies", "Per-requester timelines and alerts", "admin")
     async def anomalies(request):
         admin(request)
-        return _j(S().anomalies())
+        return _j(admin_call(S().anomalies))
 
     @route("POST", "/requesters/{id:int}/freeze", "Freeze an account", "admin")
     async def freeze(request):
@@ -879,14 +887,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def compliance(request):
         admin(request)
         q = request.query_params
-        return _j(await run_in_threadpool(S().compliance_report, q.get("from"), q.get("to")))
+        return _j(await run_in_threadpool(
+            admin_call, S().compliance_report, q.get("from"), q.get("to"),
+        ))
 
     @route("GET", "/reports/compliance/export",
            "Downloadable cryptographic compliance evidence pack (DPDP, GDPR, HIPAA)", "admin")
     async def compliance_export(request):
         admin(request)
         q = request.query_params
-        evidence = await run_in_threadpool(S().compliance_evidence_pack, q.get("from"), q.get("to"))
+        evidence = await run_in_threadpool(
+            admin_call, S().compliance_evidence_pack, q.get("from"), q.get("to"),
+        )
         return _j(evidence)
 
     @route("GET", "/eval/results", "Stored red-team evaluation metrics", "public")
