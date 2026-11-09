@@ -20,7 +20,7 @@ async function renderAssembly(assembly, sample = false) {
   if (!response.ok) {
     root.append(notice("warn",
       h("strong", {}, "Chromosome coverage service is not reachable from this deployment."),
-      h("p", { class: "muted" }, "The live Supabase chromosome catalogue could not be loaded. Check the connection and try again; no placeholder counts are shown."),
+      h("p", { class: "muted" }, "The GenomeGuard chromosome catalogue could not be loaded. Check the connection and try again; no placeholder counts are shown."),
       h("p", { class: "fine" }, "Technical status: HTTP " + (response.status || "network error")),
       h("button", { onclick: showSample }, "View illustrative preview")));
     root.append(card("What this page will show", "No simulated records",
