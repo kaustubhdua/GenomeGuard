@@ -28,7 +28,7 @@ Native migration `backend/migrations/002_normalized_public_references.sql` adds 
 - a human-reviewed data-use status and accurately described consent basis;
 - import status and measured sample, variant, and genotype-call counts.
 
-The ledger is not a substitute for verifying a source or consent. It intentionally has no browser grants and RLS is enabled. Server-side access must be provided through a narrowly scoped, reviewed function; do not grant broad direct access to the table.
+The ledger is not a substitute for verifying a source or consent. These native PostgreSQL tables have no browser grants, and this migration does not enable row-level security (RLS). Access is controlled by PostgreSQL schema/table privileges: keep ownership with a migration role, grant the application role only the minimum required read permissions, and never grant untrusted clients direct database access. Any future direct multi-tenant database access requires separately reviewed RLS policies and negative isolation tests.
 
 A dataset cannot be marked `loaded` unless non-zero variant, sample, and genotype-call counts and an import timestamp are recorded, and the data-use status is approved. The schema does not itself validate biological correctness.
 
