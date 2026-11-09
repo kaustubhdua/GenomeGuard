@@ -73,7 +73,7 @@ ui-smoke:
 		$(PY) -m uvicorn app.main:app --port 8767 > /tmp/gg-ui-smoke.log 2>&1 & echo $$! > /tmp/gg-ui-smoke.pid
 	sleep 8
 	@set -e; trap 'kill `cat /tmp/gg-ui-smoke.pid`' EXIT; \
-		$(PY) scripts/deploy_smoke.py --base http://127.0.0.1:8767; \
+		GG_EXPOSE_DEMO_ADMIN_KEY=true $(PY) scripts/deploy_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/live_ui_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/ui_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/non_demo_ui_smoke.py --base http://127.0.0.1:8767
