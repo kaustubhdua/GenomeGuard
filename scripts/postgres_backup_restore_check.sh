@@ -55,7 +55,7 @@ pg_dump --dbname="$GG_DATABASE_URL" --format=custom --no-owner --no-privileges \
 
 echo "Restoring encrypted backup into the separately provisioned empty verification database..."
 age --decrypt --identity "$GG_BACKUP_AGE_IDENTITY_FILE" "$encrypted_file" \
-  | pg_restore --dbname="$GG_RESTORE_TEST_URL" --no-owner --no-privileges --exit-on-error -
+  | pg_restore --dbname="$GG_RESTORE_TEST_URL" --no-owner --no-privileges --exit-on-error
 
 echo "Checking restored GenomeGuard runtime schema and audit sequence..."
 psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$GG_RESTORE_TEST_URL" <<'SQL'
