@@ -30,7 +30,7 @@ class CatalogueUnavailableError(RuntimeError):
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cohort_metadata(id INTEGER PRIMARY KEY CHECK(id=1), dataset_id TEXT NOT NULL, metadata_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS donors(id INTEGER PRIMARY KEY, cohort_id TEXT, population TEXT,
-  consent_json TEXT, family_id INTEGER, withdrawn_at TEXT);
+  consent_json TEXT, family_id INTEGER, withdrawn_at TEXT, source_sample_id TEXT);
 CREATE TABLE IF NOT EXISTS genotypes(donor_id INTEGER PRIMARY KEY, genotype_blob BLOB);
 CREATE TABLE IF NOT EXISTS variants(id INTEGER PRIMARY KEY, chrom TEXT, pos INTEGER, ref TEXT,
   alt TEXT, maf REAL, is_rare INTEGER, planted INTEGER);
@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS audit_log(idx INTEGER PRIMARY KEY, ts TEXT, actor TEX
   payload_json TEXT, prev_hash TEXT, hash TEXT);
 CREATE TABLE IF NOT EXISTS donor_access(id INTEGER PRIMARY KEY AUTOINCREMENT, donor_id INTEGER,
   request_id INTEGER, ts TEXT, purpose TEXT, disease TEXT, level TEXT, institution TEXT);
+CREATE TABLE IF NOT EXISTS consent_events(
+  event_id TEXT PRIMARY KEY, donor_id INTEGER NOT NULL, dataset_id TEXT NOT NULL,
+  event_type TEXT NOT NULL, consent_json TEXT NOT NULL, source_issuer TEXT NOT NULL,
+  source_record_sha256 TEXT NOT NULL, effective_at TEXT NOT NULL, received_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS donor_access_donor ON donor_access(donor_id);
 CREATE TABLE IF NOT EXISTS alerts(id INTEGER PRIMARY KEY AUTOINCREMENT, requester_id INTEGER,
   ts TEXT, kind TEXT, score REAL, details_json TEXT, action_taken TEXT);
@@ -86,6 +90,9 @@ class Store:
             requester_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(requesters)")}
             if "organization_id" not in requester_columns:
                 self.db.execute("ALTER TABLE requesters ADD COLUMN organization_id TEXT")
+            donor_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(donors)")}
+            if "source_sample_id" not in donor_columns:
+                self.db.execute("ALTER TABLE donors ADD COLUMN source_sample_id TEXT")
             request_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(requests)")}
             if "organization_id" not in request_columns:
                 self.db.execute("ALTER TABLE requests ADD COLUMN organization_id TEXT")
@@ -144,9 +151,13 @@ class Store:
                   float(v["maf"][i]), int(v["is_rare"][i]), int(i in planted))
                  for i in range(len(v["pos"]))])
             for dn in cohort.donors:
-                d.execute("INSERT INTO donors VALUES(?,?,?,?,?,?)",
-                          (dn["id"], dn["cohort_id"], dn["population"], json.dumps(dn["consent"]),
-                           dn["family_id"], "2026-01-01T00:00:00" if dn["withdrawn"] else None))
+                d.execute(
+                    "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at,source_sample_id) "
+                    "VALUES(?,?,?,?,?,?,?)",
+                    (dn["id"], dn["cohort_id"], dn["population"], json.dumps(dn["consent"]),
+                     dn["family_id"], "2026-01-01T00:00:00" if dn["withdrawn"] else None,
+                     dn.get("source_sample_id")),
+                )
                 blob = crypto.encrypt(master, dataset_id, dn["id"],
                                       _blob(cohort.genotypes[dn["id"] - 1]))
                 d.execute("INSERT INTO genotypes VALUES(?,?)", (dn["id"], blob))
@@ -242,6 +253,27 @@ class Store:
 
     def set_donor_consent(self, donor_id: int, consent: dict) -> None:
         self.x("UPDATE donors SET consent_json=? WHERE id=?", (json.dumps(consent), donor_id))
+
+    def donor_by_source_sample_id(self, source_sample_id: str) -> dict | None:
+        return self.one(
+            "SELECT id, consent_json, withdrawn_at FROM donors WHERE source_sample_id=?",
+            (source_sample_id,),
+        )
+
+    def consent_event_exists(self, event_id: str) -> bool:
+        return bool(self.one("SELECT 1 AS present FROM consent_events WHERE event_id=?", (event_id,)))
+
+    def record_consent_event(
+        self, event_id: str, donor_id: int, dataset_id: str, event_type: str,
+        consent: dict, source_issuer: str, source_record_sha256: str, effective_at: str,
+    ) -> None:
+        self.x(
+            "INSERT INTO consent_events(event_id,donor_id,dataset_id,event_type,consent_json,"
+            "source_issuer,source_record_sha256,effective_at,received_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (event_id, donor_id, dataset_id, event_type, json.dumps(jsonable(consent)),
+             source_issuer, source_record_sha256, effective_at, now_iso()),
+        )
 
     def requester(self, rid: int) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE id=?", (rid,))
