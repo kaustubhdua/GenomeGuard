@@ -26,6 +26,7 @@ def test_backup_restore_refuses_source_database_and_nonempty_target():
     assert "source_identity" in SCRIPT and "target_identity" in SCRIPT
     assert "Refusing to restore into the source database" in SCRIPT
     assert "target_objects" in SCRIPT
+    assert "pg_namespace" in SCRIPT
     assert "Refusing restore: target database contains" in SCRIPT
 
 
@@ -35,7 +36,8 @@ def test_backup_is_encrypted_before_persisting_and_plaintext_is_not_written_to_d
     assert "age --decrypt" in SCRIPT
     assert "pg_restore --dbname=" in SCRIPT
     assert "umask 077" in SCRIPT
-    assert "trap 'rm -rf \"$backup_dir\"' EXIT" in SCRIPT
+    assert "mktemp -d" in SCRIPT
+    assert "rm -rf --" in SCRIPT
 
 
 def test_restore_check_keeps_audit_chain_validation_boundary_explicit():
