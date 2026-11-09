@@ -17,16 +17,16 @@ GenomeGuard is a research prototype with a substantial, testable Python/Starlett
 - No Supabase URL, publishable key, browser Auth client, or Supabase Edge Function is required by the active frontend runtime.
 - Historical `supabase/` migrations and reports are retained as archival records only. They must not be applied to this runtime or new deployments.
 
-See [Supabase-free deployment guide](supabase-free-deployment.md).
+See [Supabase-free deployment guide](supabase-free-deployment.md) and the [current hosted deployment record](production-deployment.md).
 
 ## Verified on PR head
 
 - Branch: `feat/remove-supabase-runtime`
-- Commit tested: `2254541bc9d8860bcfb22aeaff94b73efaa88404`
+- Commit tested: `1bf0872bb64a33449ad10cdfdbf3dd21fd157d06`
 - PR: [#111 — Remove Supabase from GenomeGuard runtime](https://github.com/kaustubhdua/GenomeGuard/pull/111)
-- CI: [run #874 — success](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42697223073)
-- Vercel preview status: success.
-- Security verification and deployment configuration checks: success for this head.
+- CI: [run #42701970895 — success](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42701970895)
+- Vercel preview status: blocked by `build-rate-limit` on this head; no current preview deployment is verified.
+- Security verification: [run #42701970484 — success](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42701970484). Deployment configuration: [run #42701970402 — success](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42701970402). GA4GH Beacon v2 schema validation: [run #42701970418 — success](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42701970418).
 
 CI verified:
 1. Dependency setup, lint, and seed.
@@ -37,8 +37,9 @@ CI verified:
 6. Steward VCF QC upload, malformed and gzip input, oversized-file rejection, JSON/text exports, sample-identifier redaction, and no browser JavaScript errors.
 7. Guided-tour workflow and non-demo UI smoke.
 8. Screenshot artifact upload for review.
+9. Encrypted PostgreSQL custom-format backup piped through `age`, restore into a separate empty database, runtime-schema/migration/row-count/audit-index checks, and a read-only audit-chain verification against the restored PostgreSQL database.
 
-The UI suite reported **ALL UI CHECKS PASSED**, zero axe critical/serious findings on the tested pages, no horizontal overflow at tested phone widths, and no JavaScript errors in the tested workflows. This is automated coverage, not a substitute for manual assistive-technology testing or independent accessibility certification.
+The CI run reported **ALL UI CHECKS PASSED**, zero axe critical/serious findings on the tested pages, no horizontal overflow at tested phone widths, and no JavaScript errors in the tested workflows. The recovery drill also passed on the same head. These are automated checks, not a substitute for manual assistive-technology testing, independent accessibility certification, provider-level backup verification, or a live production restore drill. This is automated coverage, not a substitute for manual assistive-technology testing or independent accessibility certification.
 
 ## What the application currently provides
 
@@ -47,8 +48,8 @@ The UI suite reported **ALL UI CHECKS PASSED**, zero axe critical/serious findin
 - VCF parsing and QC with explicit distinction between QC success and import eligibility.
 - Source discovery and catalogue foundations with source/policy provenance.
 - Consent-policy logic that can distinguish participant records from dataset-level terms.
-- Audit-chain implementation and tests.
-- PostgreSQL-backed code paths and integration tests.
+- Audit-chain implementation, malformed-anchor/checkpoint regression tests, and a read-only PostgreSQL audit verifier.
+- PostgreSQL-backed code paths, integration tests, and a disposable encrypted backup/restore recovery drill.
 - A first-party API and a same-origin browser runtime.
 
 These capabilities must not be overstated: an implemented module or passing synthetic/integration test does not prove that a real institution has configured it, that a dataset has been lawfully imported, or that an analysis is clinically validated.
@@ -58,11 +59,11 @@ These capabilities must not be overstated: an implemented module or passing synt
 | Area | Current evidence | Required before production/controlled data |
 |---|---|---|
 | Hosted API deployment | Render service is still configured to deploy `main`, not the PR branch. | Review/merge the code, deploy the exact tested commit, and run live acceptance against that commit. |
-| Persistence | Last verified Render deployment used SQLite. No connected PostgreSQL instance was available in the Render workspace. | Configure PostgreSQL with least-privilege credentials; verify migrations, restart persistence, backup, isolated restore, and retention. |
+| Persistence | Last verified Render deployment used SQLite. No connected PostgreSQL instance was available in the Render workspace. Disposable PostgreSQL integration and encrypted backup/restore tests pass in CI. | Configure a dedicated provider PostgreSQL instance with least-privilege credentials; verify persistence across restart/redeploy, provider backups, offsite retention, PITR, restore, and retention. |
 | Identity | API keys authenticate application roles. | Integrate independently verified OIDC identity and enforce verified organization membership server-side. |
 | Consent and data-use rights | Dataset-level public terms are not participant-specific consent. | Establish source-specific terms and participant-level consent where required; verify withdrawal and authorization at every release boundary. |
 | Real data | No production import/reconciliation was verified. | Review exact artifact, license/terms, assembly, checksum, sample/variant/call counts, and provenance before import. |
-| Audit | Hash-chained audit code exists. | Configure independent external anchoring, key custody, monitoring, and tested recovery. |
+| Audit | Hash-chained audit code and a read-only PostgreSQL verifier exist; exported checkpoints are unsigned/unkeyed integrity envelopes. CI verifies a restored audit chain. | Configure independent authenticated external anchoring/signing, key custody, monitoring, and a provider-level recovery drill. |
 | Security/privacy governance | Automated checks pass on the branch. | Independent threat-model, privacy, legal, ethics, security, and operational reviews. |
 | Clinical validity | No validated clinical annotation or pathogenicity model is established. | Separate clinical validation, regulatory assessment, and qualified expert oversight; never use prototype output as a clinical decision. |
 
@@ -94,3 +95,8 @@ Do not weaken readiness gates to make deployment appear healthy. The readiness e
 - [Supabase-free deployment guide](supabase-free-deployment.md)
 - [Historical live-readiness audit, 3 November 2026](live-readiness-audit-2026-11-03.md)
 - [README](../README.md)
+
+
+## Latest hosted deployment observation
+
+The connected Render service still deploys `main` at commit `42c1bb0f1fb1dfa34357bdc864fc276fb99509d4`, uses SQLite on the free plan, and has no verified `GG_DATABASE_URL`. The PR branch is not deployed. The latest Vercel status on the tested PR head is blocked by `build-rate-limit`. See [production deployment record](production-deployment.md).
