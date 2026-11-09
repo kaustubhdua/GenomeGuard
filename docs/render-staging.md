@@ -1,6 +1,6 @@
 # Render staging setup
 
-The separate Render Blueprint in `render.staging.yaml` is a synthetic-only staging service for the Supabase-free branch. It does not replace or adopt the production Render service.
+The separate Render Blueprint in `render.staging.yaml` is a synthetic-only staging service for the Supabase-free branch. It uses `Dockerfile.staging`, which deliberately does not download, build, or embed the public 1000 Genomes cohort. A regression test enforces this boundary. It does not replace or adopt the production Render service.
 
 ## Required environment values
 
@@ -13,7 +13,7 @@ In the new Render staging service, set the required manual values under **Enviro
   python -c 'import os,base64; print(base64.b64encode(os.urandom(32)).decode())'
   ```
 
-Render generates `GG_ADMIN_API_KEY` from the Blueprint. The Blueprint sets `GG_DEMO_MODE=true`, disables the tamper demo, clears `GG_REAL_COHORT_FILE`, and uses `GG_DATASET_ID=synthetic-cohort-1`. Do not change staging to real-data mode.
+Render generates `GG_ADMIN_API_KEY` from the Blueprint. The Blueprint sets `GG_DEMO_MODE=true`, disables the tamper demo, clears `GG_REAL_COHORT_FILE`, and uses `GG_DATASET_ID=synthetic-cohort-1`. Do not change staging to real-data mode. The runtime database role is scoped to `genomeguard_runtime` and has read-only access to the normalized public-reference schema; it is not the database owner.
 
 ## Why the Neon connection must be direct
 
