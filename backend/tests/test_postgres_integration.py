@@ -142,6 +142,11 @@ def test_postgres_empty_population_reference_lookup_is_truthful(pg_store):
     assert result == {"status": "empty", "matches": [], "truncated": False}
 
 
+def test_postgres_empty_public_chromosome_coverage_is_available(pg_store):
+    assert pg_store.verified_public_chromosome_coverage("GRCh38") == []
+    assert pg_store.verified_public_datasets() == []
+
+
 def test_postgres_native_migrations_are_idempotent(pg_store):
     url = os.environ["GG_TEST_DATABASE_URL"]
     reopened = PostgresStore(url)
