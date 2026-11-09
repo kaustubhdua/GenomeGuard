@@ -50,6 +50,8 @@ API keys are not institutional identity verification. Do not treat a named reque
 
 The old Supabase migrations and Edge Function implementation are retained as historical migration artifacts only; they are not part of the runtime, build, or deployment path. Do not apply them as part of a new installation.
 
+The public demo-account endpoint returns only synthetic researcher personas. It never returns a hosted administrator credential. Local interactive development may explicitly opt in with `GG_EXPOSE_DEMO_ADMIN_KEY=true`; never enable this setting on a public deployment. The hosted synthetic staging service deliberately disables steward controls rather than exposing an admin key.
+
 ## Get started
 
 Requirements: Python 3.11 or newer and the make utility.
