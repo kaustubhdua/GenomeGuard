@@ -859,7 +859,7 @@ class GenomeGuardService:
         ):
             raise ServiceError(422, "invalid_consent", "population restriction is invalid")
         consent_date = incoming.get("consent_date")
-        if not isinstance(consent_date, str) or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", consent_date):
+        if not isinstance(consent_date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", consent_date):
             raise ServiceError(422, "invalid_consent", "participant consent_date must be YYYY-MM-DD")
         from datetime import date
         try:
