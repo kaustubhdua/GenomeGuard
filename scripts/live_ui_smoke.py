@@ -120,8 +120,6 @@ def main() -> int:
             page.set_default_timeout(args.timeout)
             page.goto(base + "/#/overview", wait_until="domcontentloaded")
             page.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
-            if steward_enabled:
-                page.locator("#who").select_option("steward")
             for route in MOBILE_PAGES:
                 try:
                     page.goto(base + "/" + route, wait_until="domcontentloaded")
