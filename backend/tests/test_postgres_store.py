@@ -38,8 +38,9 @@ def test_closed_provider_connection_is_reopened_with_runtime_search_path(monkeyp
     from app.postgres_store import PostgresStore, _ConnectionCompat
 
     class FakeConnection:
-        def __init__(self, closed):
+        def __init__(self, closed, broken=False):
             self.closed = closed
+            self.broken = broken
             self.statements = []
 
         def transaction(self):
@@ -87,6 +88,7 @@ def test_closed_provider_connection_is_not_reopened_inside_transaction(monkeypat
 
     class ClosedConnection:
         closed = 1
+        broken = False
 
     store = object.__new__(PostgresStore)
     store.connection = ClosedConnection()
@@ -99,3 +101,42 @@ def test_closed_provider_connection_is_not_reopened_inside_transaction(monkeypat
     with pytest.raises(psycopg.OperationalError, match="closed during a transaction"):
         store._ensure_connection()
 
+
+def test_broken_provider_session_is_reopened_even_before_closed_flag_changes(monkeypatch):
+    from contextlib import nullcontext
+
+    from app.postgres_store import PostgresStore, _ConnectionCompat
+
+    class FakeConnection:
+        def __init__(self, closed, broken):
+            self.closed = closed
+            self.broken = broken
+            self.statements = []
+
+        def transaction(self):
+            return nullcontext()
+
+        def execute(self, statement, args=()):
+            self.statements.append((statement, args))
+
+        def close(self):
+            self.closed = 1
+
+    old = FakeConnection(closed=0, broken=True)
+    replacement = FakeConnection(closed=0, broken=False)
+    monkeypatch.setattr("app.postgres_store.psycopg.connect", lambda *args, **kwargs: replacement)
+
+    store = object.__new__(PostgresStore)
+    store.database_url = "postgresql://example.invalid/db"
+    store.connect_timeout = 7
+    store._transaction_depth = 0
+    store.connection = old
+    store.db = _ConnectionCompat(old, store)
+
+    store._ensure_connection()
+
+    assert store.connection is replacement
+    assert store.db.connection is replacement
+    assert replacement.statements == [
+        ("SET search_path TO genomeguard_runtime, public", ()),
+    ]
