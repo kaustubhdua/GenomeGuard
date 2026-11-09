@@ -36,6 +36,15 @@ class Settings:
             if item.strip()
         )
     )
+    consent_authority_required: bool = field(
+        default_factory=lambda: _env("consent_authority_required", False, bool)
+    )
+    consent_authority_issuer: str = field(
+        default_factory=lambda: _env("consent_authority_issuer", "")
+    )
+    consent_authority_public_key: str = field(
+        default_factory=lambda: _env("consent_authority_public_key", "")
+    )
     db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
@@ -84,6 +93,16 @@ def validate_settings(s: Settings) -> None:
             problems.append("GG_OIDC_JWKS_URL must be an HTTPS JWKS endpoint")
         if not s.oidc_organization_claim.strip() or not s.oidc_allowed_organizations:
             problems.append("GG_OIDC_ORGANIZATION_CLAIM and GG_OIDC_ALLOWED_ORGANIZATIONS are required")
+    if s.consent_authority_required:
+        import base64
+        try:
+            consent_key = base64.b64decode(s.consent_authority_public_key, validate=True)
+        except (ValueError, base64.binascii.Error):
+            consent_key = b""
+        if not s.consent_authority_issuer.startswith("https://"):
+            problems.append("GG_CONSENT_AUTHORITY_ISSUER must be an HTTPS issuer")
+        if len(consent_key) != 32:
+            problems.append("GG_CONSENT_AUTHORITY_PUBLIC_KEY must be base64 for a 32-byte Ed25519 key")
     if s.admin_api_key == "demo-admin-key" or len(s.admin_api_key.strip()) < 32:
         problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:
