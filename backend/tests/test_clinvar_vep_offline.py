@@ -74,7 +74,7 @@ def test_prepare_only_creates_vcf_without_requiring_vep_annotations(tmp_path, mo
          "ReviewStatus": "criteria provided, single submitter", "GeneSymbol": "GENE2"},
     ]
     with gzip.open(source, "wt", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\\t")
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
         writer.writeheader()
         writer.writerows(rows)
 
