@@ -1,0 +1,43 @@
+# Standalone PostgreSQL deployment profile; no Supabase services or credentials.
+# Copy the required values from docs/supabase-free-deployment.md into your shell or .env file.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: genomeguard
+      POSTGRES_USER: genomeguard
+      POSTGRES_PASSWORD: ${GG_POSTGRES_PASSWORD:?Set GG_POSTGRES_PASSWORD in the environment}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - genomeguard-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U genomeguard -d genomeguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${GG_BIND_ADDRESS:-127.0.0.1}:8000:8000"
+    environment:
+      GG_DEMO_MODE: "false"
+      GG_ALLOW_TAMPER_DEMO: "false"
+      GG_DATABASE_URL: postgresql://genomeguard:${GG_POSTGRES_PASSWORD}@db:5432/genomeguard
+      GG_MASTER_KEY: ${GG_MASTER_KEY:?Set GG_MASTER_KEY in the environment}
+      GG_ADMIN_API_KEY: ${GG_ADMIN_API_KEY:?Set GG_ADMIN_API_KEY in the environment}
+      GG_REAL_COHORT_FILE: /app/data_real/1000g_phase3_chr22.npz
+      GG_DATASET_ID: igsr-1000g-phase3-public-release
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  genomeguard-postgres:
