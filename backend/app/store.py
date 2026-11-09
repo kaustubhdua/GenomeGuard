@@ -9,6 +9,7 @@ does, once at start-up, to build the in-memory Dataset.
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import sqlite3
 import threading
@@ -31,7 +32,7 @@ class CatalogueUnavailableError(RuntimeError):
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cohort_metadata(id INTEGER PRIMARY KEY CHECK(id=1), dataset_id TEXT NOT NULL, metadata_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS donors(id INTEGER PRIMARY KEY, cohort_id TEXT, population TEXT,
-  consent_json TEXT, family_id INTEGER, withdrawn_at TEXT, source_sample_id TEXT);
+  consent_json TEXT, family_id INTEGER, withdrawn_at TEXT, source_sample_id_hash TEXT);
 CREATE TABLE IF NOT EXISTS genotypes(donor_id INTEGER PRIMARY KEY, genotype_blob BLOB);
 CREATE TABLE IF NOT EXISTS variants(id INTEGER PRIMARY KEY, chrom TEXT, pos INTEGER, ref TEXT,
   alt TEXT, maf REAL, is_rare INTEGER, planted INTEGER);
@@ -59,8 +60,8 @@ CREATE TABLE IF NOT EXISTS audit_log(idx INTEGER PRIMARY KEY, ts TEXT, actor TEX
   payload_json TEXT, prev_hash TEXT, hash TEXT);
 CREATE TABLE IF NOT EXISTS donor_access(id INTEGER PRIMARY KEY AUTOINCREMENT, donor_id INTEGER,
   request_id INTEGER, ts TEXT, purpose TEXT, disease TEXT, level TEXT, institution TEXT);
-CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_unique
-  ON donors(source_sample_id) WHERE source_sample_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_hash_unique
+  ON donors(source_sample_id_hash) WHERE source_sample_id_hash IS NOT NULL;
 CREATE TABLE IF NOT EXISTS consent_events(
   event_id TEXT PRIMARY KEY, donor_id INTEGER NOT NULL, dataset_id TEXT NOT NULL,
   event_type TEXT NOT NULL, consent_json TEXT NOT NULL, source_issuer TEXT NOT NULL,
@@ -95,8 +96,12 @@ class Store:
             if "organization_id" not in requester_columns:
                 self.db.execute("ALTER TABLE requesters ADD COLUMN organization_id TEXT")
             donor_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(donors)")}
-            if "source_sample_id" not in donor_columns:
-                self.db.execute("ALTER TABLE donors ADD COLUMN source_sample_id TEXT")
+            if "source_sample_id_hash" not in donor_columns:
+                self.db.execute("ALTER TABLE donors ADD COLUMN source_sample_id_hash TEXT")
+            self.db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_hash_unique "
+                "ON donors(source_sample_id_hash) WHERE source_sample_id_hash IS NOT NULL"
+            )
             request_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(requests)")}
             if "organization_id" not in request_columns:
                 self.db.execute("ALTER TABLE requests ADD COLUMN organization_id TEXT")
@@ -187,11 +192,12 @@ class Store:
                  for i in range(len(v["pos"]))])
             for dn in cohort.donors:
                 d.execute(
-                    "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at,source_sample_id) "
+                    "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at,source_sample_id_hash) "
                     "VALUES(?,?,?,?,?,?,?)",
                     (dn["id"], dn["cohort_id"], dn["population"], json.dumps(dn["consent"]),
                      dn["family_id"], "2026-01-01T00:00:00" if dn["withdrawn"] else None,
-                     dn.get("source_sample_id")),
+                     hashlib.sha256(dn["source_sample_id"].encode("utf-8")).hexdigest()
+                     if dn.get("source_sample_id") else None),
                 )
                 blob = crypto.encrypt(master, dataset_id, dn["id"],
                                       _blob(cohort.genotypes[dn["id"] - 1]))
@@ -291,8 +297,8 @@ class Store:
 
     def donor_by_source_sample_id(self, source_sample_id: str) -> dict | None:
         return self.one(
-            "SELECT id, consent_json, withdrawn_at FROM donors WHERE source_sample_id=?",
-            (source_sample_id,),
+            "SELECT id, consent_json, withdrawn_at FROM donors WHERE source_sample_id_hash=?",
+            (hashlib.sha256(source_sample_id.encode("utf-8")).hexdigest(),),
         )
 
     def consent_event_exists(self, event_id: str) -> bool:
