@@ -171,6 +171,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if not r:
                 raise ServiceError(403, "identity_not_provisioned",
                                    "verified identity is not provisioned for this organization")
+            if r.get("role") != "researcher":
+                raise ServiceError(403, "role_not_allowed",
+                                   "this identity is not provisioned for researcher access")
             request.state.authenticated_requester = r
             return r
         if settings.oidc_required:
@@ -203,6 +206,34 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             return fn(*args, **kwargs)
 
     def admin(request: Request) -> None:
+        authorization = request.headers.get("authorization", "")
+        if authorization.startswith("Bearer "):
+            if not (settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
+                    and settings.oidc_allowed_organizations):
+                raise ServiceError(503, "oidc_not_configured",
+                                   "institutional OIDC is not configured on this instance")
+            from app.identity import OIDCAuthenticationError, verify_access_token
+
+            try:
+                identity = verify_access_token(
+                    authorization[7:].strip(),
+                    issuer=settings.oidc_issuer,
+                    audience=settings.oidc_audience,
+                    jwks_url=settings.oidc_jwks_url,
+                    organization_claim=settings.oidc_organization_claim,
+                    allowed_organizations=settings.oidc_allowed_organizations,
+                )
+            except OIDCAuthenticationError:
+                raise ServiceError(401, "unauthorized", "invalid institutional bearer token") from None
+            principal = S().authenticate_oidc(
+                identity.issuer, identity.subject, identity.organization_id,
+            )
+            if not principal or principal.get("role") not in {"reviewer", "steward", "admin"}:
+                raise ServiceError(403, "steward_identity_required",
+                                   "a provisioned reviewer or steward identity is required")
+            return
+        if settings.oidc_admin_required:
+            raise ServiceError(401, "unauthorized", "institutional reviewer bearer token required")
         if not S().is_admin(request.headers.get("x-admin-key")):
             raise ServiceError(401, "unauthorized", "admin key required (X-Admin-Key)")
 
