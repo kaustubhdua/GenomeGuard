@@ -54,12 +54,25 @@ The CI run reported **ALL UI CHECKS PASSED**, zero axe critical/serious findings
 
 These capabilities must not be overstated: an implemented module or passing synthetic/integration test does not prove that a real institution has configured it, that a dataset has been lawfully imported, or that an analysis is clinically validated.
 
+## Isolated PostgreSQL staging database verification
+
+On 10 November 2026, a separate Neon Free project named `genomeguard-staging` was provisioned in Singapore using PostgreSQL 16. It is not the production database and is not connected to the existing Render service.
+
+The two active repository migrations were applied to this empty staging database using the runtime schema/search-path contract implemented by `PostgresStore`:
+
+- `genomeguard_runtime`: 13 tables, including `schema_migrations`.
+- `genomeguard`: 6 normalized reference-data tables.
+- Migration ledger: versions 1 and 2 recorded.
+- Verification found zero rows in cohort metadata, donors, genotypes, audit log, dataset manifests, normalized samples, normalized variants, and normalized genotype calls.
+
+No participant, cohort, or genomic data was imported. This validates the schema DDL and migration ordering, not the live application's database connection or restart-persistence behaviour. The Neon credential has not been copied into Render; a separate Render staging service and a server-side secret binding remain to be configured manually. The existing production Render service remains unchanged.
+
 ## Production release blockers
 
 | Area | Current evidence | Required before production/controlled data |
 |---|---|---|
 | Hosted API deployment | Render service is still configured to deploy `main`, not the PR branch. | Review/merge the code, deploy the exact tested commit, and run live acceptance against that commit. |
-| Persistence | Last verified Render deployment used SQLite. No connected PostgreSQL instance was available in the Render workspace. Disposable PostgreSQL integration and encrypted backup/restore tests pass in CI. | Configure a dedicated provider PostgreSQL instance with least-privilege credentials; verify persistence across restart/redeploy, provider backups, offsite retention, PITR, restore, and retention. |
+| Persistence | Existing Render production deployment still uses SQLite. Separate Neon Free PostgreSQL staging project has the exact two repository migrations applied and verified empty; it is not connected to Render. Disposable PostgreSQL integration and encrypted backup/restore tests pass in CI. | Bind the Neon staging URI as a server-side secret on a separate staging service; verify application migrations, synthetic-data persistence across restart/redeploy, and recovery. Production additionally requires an appropriately governed durable database, provider backups, offsite retention, PITR, restore, and retention. |
 | Identity | API keys authenticate application roles. | Integrate independently verified OIDC identity and enforce verified organization membership server-side. |
 | Consent and data-use rights | Dataset-level public terms are not participant-specific consent. | Establish source-specific terms and participant-level consent where required; verify withdrawal and authorization at every release boundary. |
 | Real data | No production import/reconciliation was verified. | Review exact artifact, license/terms, assembly, checksum, sample/variant/call counts, and provenance before import. |
