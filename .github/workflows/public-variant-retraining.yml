@@ -70,7 +70,8 @@ jobs:
         run: |
           PYTHONPATH=backend python -m app.ml.clinvar_vep_train \
             --max-variants 20000 \
-            --vep-jsonl .training-data/public-annotations/ensembl_vep_offline.jsonl \\\n            --vep-version 116.3
+            --vep-jsonl .training-data/public-annotations/ensembl_vep_offline.jsonl \
+            --vep-version 116.3
       - name: Upload model, metrics, provenance and normalized annotation cache
         uses: actions/upload-artifact@v7
         with:
