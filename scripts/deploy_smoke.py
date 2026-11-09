@@ -68,9 +68,9 @@ def main() -> int:
         status, body, _ = get(base, "/demo/requesters", args.timeout)
         demo = json.loads(body)
         accounts = demo.get("requesters")
-        check("demo account list available without printing secrets",
+        check("public demo account list does not disclose administrator credentials",
               status == 200 and isinstance(accounts, list) and len(accounts) >= 1
-              and bool(demo.get("admin_key")) and all(bool(a.get("api_key")) for a in accounts))
+              and "admin_key" not in demo and all(bool(a.get("api_key")) for a in accounts))
 
         status, body, content_type = get(base, "/openapi.json", args.timeout)
         spec = json.loads(body)
