@@ -7,7 +7,7 @@
 
 **Legacy live research API:** https://genomeguard.onrender.com — its public health response reports a 1000 Genomes source, 600 donors, and 3,000 variants, but this provenance is operator-declared and has not been independently authenticated. The same response has an unresolved `consent_records_matched=600` discrepancy despite describing dataset-level policy, not participant-specific consent. The current production frontend is behind GitHub mainline. Do not treat these values as verified participant-consent or dataset evidence.
 
-GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Advisory AI components explain evidence for reviewers; deterministic application code remains responsible for access decisions.
+GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Offline advisory agents use deterministic templates and a bounded rules planner to explain evidence for reviewers; no hosted AI provider or API key is used, and deterministic application code remains responsible for access decisions.
 
 > **Research software — not for clinical or production use.** The hosted research instance uses public 1000 Genomes genotype data and a dataset-level public-release policy mapping; local demo mode still uses synthetic data. The policy mapping is not participant-specific consent, and requester API keys are not verified institutional identities. The service has not undergone independent security, privacy, clinical, or legal review. It must not be used for private participant data or clinical decisions.
 
@@ -34,7 +34,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
 | Hosting and persistence | The first-party Python/Starlette API serves the frontend and all application routes; SQLite supports local development and PostgreSQL supports durable deployments | No managed backend or hosted authentication service is required. Production still requires operator-managed PostgreSQL, persistent storage, backups, and identity governance. |
 
-These boundaries are intentional and should remain visible in the interface and any exported results.
+These boundaries are intentional and should remain visible in the interface and any exported results. See the [current implementation and release status](docs/current-status-2026-11-10.md) for the latest verified CI evidence and production blockers.
 
 ## Backend and identity
 
