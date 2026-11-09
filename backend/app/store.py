@@ -12,6 +12,7 @@ import io
 import json
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -82,6 +83,7 @@ class Store:
     def __init__(self, path: str = ":memory:") -> None:
         self.path = path
         self.lock = threading.RLock()
+        self._transaction_depth = 0
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         with self.lock:
@@ -110,8 +112,29 @@ class Store:
     def x(self, sql: str, args: tuple = ()) -> int:
         with self.lock:
             cur = self.db.execute(sql, args)
-            self.db.commit()
+            if self._transaction_depth == 0:
+                self.db.commit()
             return cur.lastrowid or 0
+
+    @contextmanager
+    def transaction(self):
+        """Serialize a complete service mutation and roll back nested failures atomically."""
+        with self.lock:
+            outermost = self._transaction_depth == 0
+            self._transaction_depth += 1
+            if outermost:
+                self.db.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+            except Exception:
+                if outermost:
+                    self.db.rollback()
+                raise
+            else:
+                if outermost:
+                    self.db.commit()
+            finally:
+                self._transaction_depth -= 1
 
     # ------------------------------------------------------------------ dataset
     def has_dataset(self) -> bool:
