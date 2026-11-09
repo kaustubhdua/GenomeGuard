@@ -19,7 +19,27 @@ services:
       - key: GG_DATASET_ID
         value: igsr-1000g-phase3-public-release
       - key: GG_DATABASE_URL
-        sync: false   # Dedicated PostgreSQL URL; never reuse another project's database
+        sync: false   # Restricted runtime-role URL; no schema ownership or migration privileges
+      - key: GG_MIGRATION_DATABASE_URL
+        sync: false   # Separate owner URL, used only during startup migrations and then closed
+      - key: GG_OIDC_REQUIRED
+        value: "true"
+      - key: GG_OIDC_ISSUER
+        sync: false
+      - key: GG_OIDC_AUDIENCE
+        sync: false
+      - key: GG_OIDC_JWKS_URL
+        sync: false
+      - key: GG_OIDC_ORGANIZATION_CLAIM
+        value: organization_id
+      - key: GG_OIDC_ALLOWED_ORGANIZATIONS
+        sync: false
+      - key: GG_CONSENT_AUTHORITY_REQUIRED
+        value: "true"
+      - key: GG_CONSENT_AUTHORITY_ISSUER
+        sync: false
+      - key: GG_CONSENT_AUTHORITY_PUBLIC_KEY
+        sync: false
       - key: GG_MASTER_KEY
         sync: false   # set by hand: python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
       - key: GG_ADMIN_API_KEY
