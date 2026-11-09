@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from app.service import _encryption_provenance
 
 
