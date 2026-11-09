@@ -682,8 +682,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def audit_verify(request):
         q = request.query_params
         anchor = None
-        if q.get("anchor_length") and q.get("anchor_hash"):
-            anchor = {"length": int(q["anchor_length"]), "head_hash": q["anchor_hash"]}
+        has_length = q.get("anchor_length") is not None
+        has_hash = q.get("anchor_hash") is not None
+        if has_length != has_hash:
+            raise ServiceError(400, "invalid_anchor", "anchor_length and anchor_hash must be supplied together")
+        if has_length:
+            raw_length = q["anchor_length"]
+            raw_hash = q["anchor_hash"]
+            if not raw_length.isdecimal() or not re.fullmatch(r"[0-9a-f]{64}", raw_hash):
+                raise ServiceError(400, "invalid_anchor", "anchor_length must be a non-negative integer and anchor_hash must be 64 lowercase hexadecimal characters")
+            anchor = {"length": int(raw_length), "head_hash": raw_hash}
         return _j(S().audit.verify(anchor))
 
     @route("GET", "/audit/head", "Current head hash: copy it somewhere outside the system",
@@ -695,6 +703,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
            "public")
     async def audit_checkpoint(request):
         signer = request.query_params.get("signer", "system")
+        if not signer.strip() or len(signer) > 128:
+            raise ServiceError(400, "invalid_signer_label", "signer label must contain 1–128 characters")
         return _j(S().audit.checkpoint(signed_by=signer))
 
     @route("POST", "/audit/verify-checkpoint", "Verify a checkpoint against internal digest and chain",
