@@ -433,6 +433,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         name = body.get("name")
         institution = body.get("institution")
         level = body.get("credential_level", "registered")
+        role = body.get("role", "researcher")
         if not isinstance(name, str) or not 2 <= len(name.strip()) <= 120:
             raise ServiceError(422, "invalid_request", "name must contain 2 to 120 characters")
         if not isinstance(institution, str) or not 2 <= len(institution.strip()) <= 200:
@@ -440,11 +441,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if level not in ("registered", "controlled"):
             raise ServiceError(422, "invalid_request",
                                "credential_level must be registered or controlled")
+        if role not in ("researcher", "reviewer", "steward"):
+            raise ServiceError(422, "invalid_request",
+                               "role must be researcher, reviewer or steward")
         key = secrets.token_urlsafe(32)
-        requester_id = S().create_requester(name.strip(), "researcher", level,
-                                            institution.strip(), key)
-        return _j({"id": requester_id, "name": name.strip(), "institution": institution.strip(),
-                   "credential_level": level, "api_key": key, "shown_once": True}, 201)
+        requester_id = S().create_requester(name.strip(), role, level, institution.strip(), key)
+        result = {"id": requester_id, "name": name.strip(), "institution": institution.strip(),
+                  "role": role, "credential_level": level}
+        if not settings.oidc_required:
+            result.update(api_key=key, shown_once=True)
+        else:
+            result["identity_binding_required"] = True
+        return _j(result, 201)
 
     @route("GET", "/me", "Who am I, my budget", "requester")
     async def me(request):
