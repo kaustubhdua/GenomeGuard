@@ -142,8 +142,8 @@ def test_broken_provider_session_is_reopened_even_before_closed_flag_changes(mon
     ]
 
 def test_read_query_reconnects_before_using_broken_provider_session(monkeypatch):
-    from contextlib import nullcontext
     import threading
+    from contextlib import nullcontext
 
     from app.postgres_store import PostgresStore, _ConnectionCompat
 
