@@ -95,12 +95,20 @@ ORDER BY table_name;
 SQL
 
 echo "Verifying the restored PostgreSQL audit hash chain..."
+python_bin="${GG_PYTHON:-}"
+if [[ -z "$python_bin" ]]; then
+  if [[ -x .venv/bin/python ]]; then
+    python_bin=".venv/bin/python"
+  else
+    python_bin="python3"
+  fi
+fi
 if [[ -n "${GG_AUDIT_CHECKPOINT_FILE:-}" ]]; then
   PYTHONPATH=backend GG_DATABASE_URL="$GG_RESTORE_TEST_URL" \
-    python3 scripts/verify_postgres_audit.py --checkpoint "$GG_AUDIT_CHECKPOINT_FILE"
+    "$python_bin" scripts/verify_postgres_audit.py --checkpoint "$GG_AUDIT_CHECKPOINT_FILE"
 else
   PYTHONPATH=backend GG_DATABASE_URL="$GG_RESTORE_TEST_URL" \
-    python3 scripts/verify_postgres_audit.py
+    "$python_bin" scripts/verify_postgres_audit.py
 fi
 
 echo "Restore smoke check and audit-chain verification passed. External checkpoint verification is required to detect valid-prefix truncation."
