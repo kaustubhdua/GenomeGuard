@@ -30,7 +30,7 @@ docker compose up --build
 
 The Compose profile is explicitly a demo: it enables synthetic personas, uses a local volume, and has a development-only admin-key fallback. Do not expose this profile to the public internet.
 
-## Non-demo deployment
+## Standalone PostgreSQL deployment\n\nA local PostgreSQL-backed research deployment can be started with Docker Compose. The profile binds the API to loopback by default, waits for PostgreSQL health, and runs the native numbered migrations automatically:\n\n```bash\nexport GG_POSTGRES_PASSWORD=\"$(python -c 'import secrets; print(secrets.token_urlsafe(32))')\nexport GG_MASTER_KEY=\"$(python -c 'import os,base64; print(base64.b64encode(os.urandom(32)).decode())')\nexport GG_ADMIN_API_KEY=\"$(python -c 'import secrets; print(secrets.token_urlsafe(48))')\ndocker compose -f docker-compose.postgres.yml up --build\n```\n\nThis is a self-hosted research deployment profile, not a certification of production readiness. Protect the `.env` file if you use one, do not expose the database port, configure encrypted backups and tested restores, and keep the API behind TLS and a verified identity boundary before any controlled-data use. The public 1000 Genomes policy is dataset-level reuse permission, not individual participant consent.\n\n## Non-demo deployment
 
 Configure all of the following in the server environment (never in frontend variables):
 
