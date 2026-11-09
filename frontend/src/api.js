@@ -55,8 +55,11 @@ async function call(path, {
 }
 
 function authHeaders() {
-  if (isSteward() && state.demo) return { "X-Admin-Key": state.demo.admin_key };
-  if (isSteward() && state.adminKey) return { "X-Admin-Key": state.adminKey };
+  if (isSteward()) {
+    if (state.demo?.admin_key) return { "X-Admin-Key": state.demo.admin_key };
+    if (state.adminKey) return { "X-Admin-Key": state.adminKey };
+    return {};
+  }
   if (state.who) return { "X-API-Key": state.who };
   return {};
 }
@@ -83,7 +86,7 @@ export function uploadVcfQc(file, assembly, expectedSha256, signal) {
 
 // steward-level call regardless of who the app is acting as (admin key from the demo accounts)
 export function stewardApi(path, opts = {}) {
-  const headers = state.demo ? { "X-Admin-Key": state.demo.admin_key } :
+  const headers = state.demo?.admin_key ? { "X-Admin-Key": state.demo.admin_key } :
     state.adminKey ? { "X-Admin-Key": state.adminKey } : {};
   return call(path, { ...opts, headers });
 }
@@ -149,6 +152,8 @@ export async function boot() {
   const reqs = state.demo.requesters || [];
   // Preserve an in-memory selection during this tab's lifetime, but never
   // restore credentials from browser storage after a reload.
-  if (state.who === "steward" || reqs.some((r) => r.api_key === state.who)) return;
+  if (state.who === "steward" && state.demo.admin_key) return;
+  if (state.who === "steward" && !state.demo.admin_key) setWho("");
+  if (reqs.some((r) => r.api_key === state.who)) return;
   if (!state.who) setWho(reqs.length ? reqs[0].api_key : "");
 }
