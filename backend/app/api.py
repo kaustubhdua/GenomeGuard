@@ -253,10 +253,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "demo mode is off")
         reqs = {r["name"]: r for r in S().store.requesters()}
-        return _j({"admin_key": settings.admin_api_key, "requesters": [
+        payload = {"requesters": [
             {"id": reqs[n]["id"], "name": n, "role": ro, "tier": lv, "api_key": k,
              "frozen": reqs[n]["frozen_at"] is not None}
-            for n, ro, lv, _i, k in DEMO_REQUESTERS if n in reqs]})
+            for n, ro, lv, _i, k in DEMO_REQUESTERS if n in reqs]}
+        # This is a public endpoint. Never return the hosted administrator credential.
+        # Local interactive demos may explicitly opt in to the local-only workflow.
+        if settings.expose_demo_admin_key:
+            payload["admin_key"] = settings.admin_api_key
+        return _j(payload)
 
     @route("POST", "/admin/requesters", "Provision a requester API key (returned once)", "admin")
     async def provision_requester(request):
