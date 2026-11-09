@@ -29,8 +29,8 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/audit` | Audit log (newest first) with chain verification | admin |
 | GET | `/audit/verify` | Recompute the hash chain; optional external anchor | public |
 | GET | `/audit/head` | Current head hash: copy it somewhere outside the system | public |
-| GET | `/audit/checkpoint` | Export an audit checkpoint for offline or cross-system anchoring | public |
-| POST | `/audit/verify-checkpoint` | Verify an exported checkpoint against the live chain | public |
+| GET | `/audit/checkpoint` | Export an unsigned audit integrity checkpoint; `signed_by` is an attribution label, not a signature | public |
+| POST | `/audit/verify-checkpoint` | Verify checkpoint structure, its unkeyed digest, and the anchored audit prefix | public |
 | POST | `/admin/tamper/{idx:int}` | DEMO ONLY: corrupt one audit entry | admin |
 | POST | `/admin/untamper` | DEMO ONLY: remove the tamper-demo marker | admin |
 | GET | `/anomalies` | Per-requester timelines and alerts | admin |
@@ -81,3 +81,6 @@ or persist the VCF. The configured GenomeGuard server receives the genomic file;
 only a trusted deployment. The response uses `[uploaded VCF]` rather than echoing the
 source filename. Assembly selection is compared with recognized VCF header labels and
 is not a reference-sequence or REF-allele verification.
+
+
+**Audit checkpoint limitation:** the checkpoint digest is unkeyed and does not authenticate who published it. Store exported checkpoints in an independently controlled, authenticated system; a separate signing/anchoring service is required for authenticity and reliable truncation detection.
