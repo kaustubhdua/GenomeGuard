@@ -699,7 +699,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def audit_head(request):
         return _j(S().audit.head())
 
-    @route("GET", "/audit/checkpoint", "Verifiable cryptographic checkpoint of audit head",
+    @route("GET", "/audit/checkpoint", "Export unsigned audit integrity checkpoint; signer is an attribution label only",
            "public")
     async def audit_checkpoint(request):
         signer = request.query_params.get("signer", "system")
@@ -707,7 +707,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(400, "invalid_signer_label", "signer label must contain 1–128 characters")
         return _j(S().audit.checkpoint(signed_by=signer))
 
-    @route("POST", "/audit/verify-checkpoint", "Verify a checkpoint against internal digest and chain",
+    @route("POST", "/audit/verify-checkpoint", "Verify checkpoint structure, unkeyed digest, and anchored audit prefix",
            "public")
     async def audit_verify_checkpoint(request):
         body = await _body(request)
