@@ -1,8 +1,10 @@
 import base64
+import hashlib
 from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from app.core.audit_chain import canonical_json
@@ -40,7 +42,10 @@ def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
     public = base64.b64encode(private.public_key().public_bytes(
         serialization.Encoding.Raw, serialization.PublicFormat.Raw,
     )).decode()
-    svc.store.x("UPDATE donors SET source_sample_id=? WHERE id=1", ("SOURCE-SAMPLE-001",))
+    svc.store.x(
+        "UPDATE donors SET source_sample_id_hash=? WHERE id=1",
+        (hashlib.sha256(b"SOURCE-SAMPLE-001").hexdigest(),),
+    )
     event = signed_event(private, svc.dataset_id)
 
     result = svc.apply_signed_consent_event(
