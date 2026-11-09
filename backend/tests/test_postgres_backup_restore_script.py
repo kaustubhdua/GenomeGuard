@@ -48,3 +48,14 @@ def test_restore_drill_runs_the_application_audit_chain_verifier():
     assert "scripts/verify_postgres_audit.py" in SCRIPT
     assert 'GG_DATABASE_URL="$GG_RESTORE_TEST_URL"' in SCRIPT
     assert "GG_AUDIT_CHECKPOINT_FILE" in SCRIPT
+
+
+
+def test_audit_verifier_is_read_only_and_does_not_run_migrations():
+    verifier = (
+        Path(__file__).resolve().parents[2] / "scripts" / "verify_postgres_audit.py"
+    ).read_text(encoding="utf-8")
+    assert 'options="-c default_transaction_read_only=on"' in verifier
+    assert "PostgresStore" not in verifier
+    assert "genomeguard_runtime.audit_log" in verifier
+    assert "from app.core.audit_chain import canonical_json, verify" in verifier
