@@ -32,15 +32,23 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | Render still hosts the legacy Python research API; the common 1 Supabase project has an isolated GenomeGuard schema and a deployed Edge Function | GitHub mainline includes Supabase Auth, request/review API paths, and public source/dataset/chromosome catalogues. The Vercel production frontend is not yet updated to that commit. The full Python policy/risk engine, normalized cohort import, audit parity, and durable production cutover are not complete. No genomic dataset is loaded in Supabase. |
+| Hosting and persistence | The first-party Python/Starlette API serves the frontend and all application routes; SQLite supports local development and PostgreSQL supports durable deployments | No managed backend or hosted authentication service is required. Production still requires operator-managed PostgreSQL, persistent storage, backups, and identity governance. |
 
 These boundaries are intentional and should remain visible in the interface and any exported results.
 
-## Supabase account access
+## Backend and identity
 
-The hosted frontend includes Supabase email/password sign-in and account creation. New accounts do not automatically receive research access: an authorized administrator must provision an active organization membership. The current Supabase request workflow supports organization-scoped request submission and steward review only. It does not run the full genomic policy engine, disclosure-risk calculation, participant-specific consent checks, or genomic data release. Approvals remain pending separate release controls.
+GenomeGuard does not require Supabase, a hosted authentication provider, a browser publishable key, or a third-party Edge Function. The browser calls the same-origin Python API. Local development runs entirely on the machine; hosted deployments use the configured GenomeGuard API and a PostgreSQL database.
 
-Public source discovery is informational only. A source appearing in the catalogue does not mean its exact artifact has been approved, downloaded, checksum-verified, imported, or made available for research. The verified dataset catalogue intentionally remains empty until the complete import and provenance gate is satisfied.
+The current application authentication contract is first-party API-key authentication:
+- researchers use individually provisioned `X-API-Key` credentials;
+- stewards use the `X-Admin-Key` credential;
+- donor-facing demo workflows use a separate `X-Donor-Key`;
+- demo personas and demo credentials are available only when explicit demo mode is enabled.
+
+API keys are not institutional identity verification. Do not treat a named requester record as proof of affiliation, participant consent, or legal authorization. For institutional deployments, place the API behind an independently operated OIDC identity provider and enforce organization membership server-side before enabling controlled-data workflows.
+
+The old Supabase migrations and Edge Function implementation are retained as historical migration artifacts only; they are not part of the runtime, build, or deployment path. Do not apply them as part of a new installation.
 
 ## Get started
 
@@ -103,9 +111,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Production assurance implementation status](docs/production-assurance-implementation-2026-10-26.md)
 - [OWASP ASVS verification register](docs/asvs-verification.md)
 - [Incident response and recovery runbooks](docs/incident-response.md)
-- [Supabase + Vercel deployment guide](docs/supabase-vercel-deployment.md)
-- [Supabase schema isolation notes](docs/supabase-schema-notes.md)
-- [Supabase-only backend migration plan and acceptance gates](docs/supabase-only-migration-plan.md)
+- [Supabase-free deployment](docs/supabase-free-deployment.md)
 
 ## Security and privacy
 
