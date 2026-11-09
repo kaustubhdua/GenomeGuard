@@ -21,6 +21,8 @@ def _env(name: str, default, cast=str):
 class Settings:
     # PostgreSQL is selected when GG_DATABASE_URL is set; SQLite remains for local demo/testing.
     database_url: str = field(default_factory=lambda: _env("database_url", ""))
+    # Privileged URL used only for schema migrations; application queries use database_url.
+    migration_database_url: str = field(default_factory=lambda: _env("migration_database_url", ""))
     db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
@@ -55,7 +57,11 @@ def validate_settings(s: Settings) -> None:
     # A production-looking configuration must never silently fall back to local SQLite.
     # SQLite on an ephemeral hosting filesystem cannot satisfy the persistence contract.
     if not s.database_url.strip().startswith(("postgres://", "postgresql://")):
-        problems.append("GG_DATABASE_URL must be a PostgreSQL connection URL in non-demo mode")
+        problems.append("GG_DATABASE_URL must be a PostgreSQL runtime connection URL in non-demo mode")
+    if not s.migration_database_url.strip().startswith(("postgres://", "postgresql://")):
+        problems.append("GG_MIGRATION_DATABASE_URL must be a separate privileged PostgreSQL migration URL")
+    if s.database_url.strip() == s.migration_database_url.strip():
+        problems.append("GG_DATABASE_URL and GG_MIGRATION_DATABASE_URL must use distinct database roles")
     if s.admin_api_key == "demo-admin-key" or len(s.admin_api_key.strip()) < 32:
         problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:
