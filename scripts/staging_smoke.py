@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -33,10 +34,30 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="https://genomeguard-staging.onrender.com")
     parser.add_argument("--timeout", type=int, default=25)
+    parser.add_argument("--expected-commit", default="")
+    parser.add_argument("--retries", type=int, default=60)
+    parser.add_argument("--retry-delay", type=int, default=15)
     args = parser.parse_args()
     base = args.base.rstrip("/")
     if not base.startswith(("https://", "http://")):
         parser.error("--base must be an absolute http:// or https:// URL")
+
+    if args.expected_commit:
+        deployed = None
+        for attempt in range(args.retries):
+            try:
+                _, health_probe = get_json(base, "/health", args.timeout)
+                deployed = (health_probe.get("deployment") or {}).get("git_commit")
+                if deployed == args.expected_commit:
+                    break
+            except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
+                pass
+            print(f"[WAIT] staging commit {deployed or 'unavailable'}; expected {args.expected_commit} "
+                  f"({attempt + 1}/{args.retries})")
+            if attempt + 1 < args.retries:
+                time.sleep(args.retry_delay)
+        check("staging serves the exact pull-request head commit",
+              deployed == args.expected_commit, f"deployed={deployed}, expected={args.expected_commit}")
 
     try:
         status, live = get_json(base, "/health/live", args.timeout)
