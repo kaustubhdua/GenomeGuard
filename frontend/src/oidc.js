@@ -40,8 +40,8 @@ async function discover(issuer) {
       || !metadata.response_types_supported.includes("code")) {
     throw new Error("The OIDC provider does not advertise authorization-code flow.");
   }
-  if (Array.isArray(metadata.code_challenge_methods_supported)
-      && !metadata.code_challenge_methods_supported.includes("S256")) {
+  if (!Array.isArray(metadata.code_challenge_methods_supported)
+      || !metadata.code_challenge_methods_supported.includes("S256")) {
     throw new Error("The OIDC provider must support PKCE S256.");
   }
   return metadata;
@@ -76,7 +76,9 @@ async function verifyIdToken(token, metadata, clientId, expectedNonce) {
   if (!jwksResponse.ok) throw new Error("Could not retrieve the institution's signing keys.");
   const jwks = await jwksResponse.json();
   const jwk = (jwks.keys || []).find((item) => item.kid === header.kid && item.use !== "enc");
-  if (!jwk) throw new Error("The institution's ID-token signing key was not found.");
+  if (!jwk || (jwk.alg && jwk.alg !== header.alg)) {
+    throw new Error("The institution's ID-token signing key was not found or did not match.");
+  }
   let key;
   let algorithm;
   if (header.alg === "RS256" && jwk.kty === "RSA") {
@@ -147,6 +149,11 @@ export async function completeOidcCallback(config) {
   }
 
   const metadata = await discover(config.issuer);
+  const responseIssuer = url.searchParams.get("iss");
+  if ((responseIssuer && responseIssuer !== config.issuer)
+      || (metadata.authorization_response_iss_parameter_supported && !responseIssuer)) {
+    throw new Error("The authorization response issuer did not match the configured institution.");
+  }
   const form = new URLSearchParams({
     grant_type: "authorization_code",
     client_id: config.client_id,
