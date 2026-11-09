@@ -6,21 +6,21 @@ Updated: 10 November 2026
 
 GenomeGuard is a research prototype with a first-party Python/Starlette API and browser application. The Supabase-free runtime is implemented on [PR #111](https://github.com/kaustubhdua/GenomeGuard/pull/111), branch feat/remove-supabase-runtime.
 
-**The code-level implementation is under exact-head validation. The synthetic staging service is not yet confirmed on the current branch head. Production is not ready.** CI success does not prove lawful data use, participant consent, institutional identity, clinical validity, provider-level disaster recovery, or production readiness.
+**The Supabase-free research prototype is implemented and deployed to synthetic staging at the current reviewed branch head.** On 10 November 2026, staging API, authorization, provenance, audit, public UI, and mobile browser acceptance passed; the full backend/PostgreSQL, encrypted backup/restore, evaluation, demo, and static checks passed on the reviewed code head. The final browser/accessibility CI job is recorded below. Production is not ready. CI success does not prove lawful data use, participant consent, institutional identity, clinical validity, provider-level disaster recovery, or production readiness.
 
 ## Current source and validation snapshot
 
-- Current branch head: 4587941f4ed0c20bda71e1927e72442732876e32
-- PR: https://github.com/kaustubhdua/GenomeGuard/pull/111
-- Deployment configuration checks: [run 597](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541556) — success on current head.
-- GA4GH Beacon v2 schema validation: [run 287](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541604) — success on current head.
-- FHIR R4 Consent validation: [run 249](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541578) — success on current head.
-- Security verification: [run 607](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541832) — success on current head, including secret scanning, CodeQL Python/JavaScript, and Python dependency audit.
-- Full CI: [run 957](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541579) — lint and seed completed successfully; backend suite including PostgreSQL integration tests was still running at this snapshot.
-- Real-data image build: [run 227](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541584) — running.
-- Synthetic staging acceptance: [run 24](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42715541730) — running; waiting for the exact branch head to be deployed.
+- Reviewed branch tip: c768a209a254905e60de37d2d1631cf21a74443e (PR #111 remains open and unmerged).
+- Runtime reconnect hardening: 0ac6014eba7917b7aec82bcb4d50b23f3ce1687c; regression tests and lint correction are included in the current branch tip.
+- Deployment configuration checks: [run 607](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42719959013) — success.
+- GA4GH Beacon v2 schema validation: [run 297](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42719959217) — success.
+- FHIR R4 Consent validation: [run 259](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42719959341) — success.
+- Security verification: [run 617](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42719959259) — success, including secret scanning, CodeQL Python/JavaScript, and Python dependency audit.
+- Real-data image build: [run 237](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42719959039) — success.
+- Synthetic staging acceptance: [run 34](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42719959301) — success, including live API and hosted browser/mobile checks.
+- Full CI: [run 967](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42719959038) — lint, seed, backend/PostgreSQL suite, encrypted backup/restore, eval-smoke, full eval, demo, JavaScript syntax, and Python compilation passed; hosted browser/accessibility steps were still running at this snapshot.
 
-Earlier implementation head 395fdbc2177e98a6597fa468e9b5402aca713c89 passed the complete CI suite, staging acceptance, security verification, GA4GH Beacon v2 validation, FHIR R4 validation, and real-data image build. Do not treat that prior-head result as proof for the current head.
+The latest exact-head checks supersede earlier in-progress snapshots. The staging deployment is dep-dbp5bgmgekts73e904pg and serves the current reviewed branch tip.
 
 ## Current architecture
 
@@ -40,12 +40,14 @@ Earlier implementation head 395fdbc2177e98a6597fa468e9b5402aca713c89 passed the 
 - Branch: feat/remove-supabase-runtime
 - Dockerfile: Dockerfile.staging; it does not embed or download the real 1000 Genomes cohort.
 - Database: separate Neon PostgreSQL staging database.
-- Last confirmed live deployment: 395fdbc2177e98a6597fa468e9b5402aca713c89.
-- Current PR head has not been confirmed live. The Render provider currently reports auto-deploy enabled, but no deployment newer than 395fdbc appeared in the provider deployment history at the last check.
+- Last confirmed live deployment: c768a209a254905e60de37d2d1631cf21a74443e (dep-dbp5bgmgekts73e904pg, successful).
+- Render reports provider auto-deploy enabled, but pushes did not reliably produce a deploy; the reviewed branch head was deployed manually to staging and then verified by the acceptance workflow.
 - The live Render service has no provider-side health-check path configured; the checked-in Blueprint declares /health/live.
-- The checked-in Blueprint deliberately keeps auto-deploy disabled, as required by the deployment-configuration CI gate. The live service's existing auto-deploy setting therefore differs from the Blueprint.
+- The checked-in Blueprint deliberately keeps auto-deploy disabled, as required by the deployment-configuration CI gate. The live service's existing auto-deploy setting therefore differs from the Blueprint and should be reconciled through a reviewed infrastructure change.
 
-The staging service is synthetic-only. Its readiness endpoint must remain HTTP 503/not-ready because demo mode is enabled and participant consent, real genotype provenance, external audit anchoring, institutional identity, and durable-storage verification are not established. A post-redeploy persistence check and provider-level backup/restore drill against this exact Neon staging project remain outstanding. CI's disposable PostgreSQL backup/restore test is not a substitute.
+The staging service is synthetic-only. Live Neon PostgreSQL checks confirmed 600 synthetic donors, 3,000 synthetic variants, 600 genotype rows, and 16 audit rows; normalized public-dataset manifests/samples/variants/genotype calls are all zero. The readiness endpoint must remain HTTP 503/not-ready because demo mode is enabled and participant consent, real genotype provenance, external audit anchoring, institutional identity, and durable-storage verification are not established. No Neon snapshot schedule or snapshots were configured at the time of inspection. CI's disposable PostgreSQL encrypted backup/restore test is not a substitute for a provider-level backup/restore drill or PITR verification.
+
+The live staging connection currently authenticates as the database owner role (genomeguard_owner, which has database/role-creation privileges). A separate genomeguard_runtime role exists, but the deployed service is not yet using a restricted runtime credential. Split migration-owner and application-runtime credentials before any controlled-data or production deployment. GitHub branch protection could not be enabled on this plan because the account had reached its protected-branch limit; preserve review and required-check discipline manually until repository governance is resolved.
 
 ## Product capabilities and boundaries
 
