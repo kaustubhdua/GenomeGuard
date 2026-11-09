@@ -140,3 +140,59 @@ def test_broken_provider_session_is_reopened_even_before_closed_flag_changes(mon
     assert replacement.statements == [
         ("SET search_path TO genomeguard_runtime, public", ()),
     ]
+
+def test_read_query_retries_once_after_server_side_disconnect(monkeypatch):
+    import psycopg
+
+    from app.postgres_store import PostgresStore, _ConnectionCompat
+
+    class Cursor:
+        def fetchall(self):
+            return [{"ok": True}]
+
+    class FakeConnection:
+        def __init__(self, *, broken=False, fail=False):
+            self.closed = 0
+            self.broken = broken
+            self.fail = fail
+            self.statements = []
+
+        def execute(self, statement, args=()):
+            self.statements.append((statement, args))
+            if self.fail:
+                self.fail = False
+                self.broken = True
+                raise psycopg.OperationalError("server administratively terminated connection")
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def close(self):
+            self.closed = 1
+
+        def transaction(self):
+            from contextlib import nullcontext
+            return nullcontext()
+
+    first = FakeConnection(fail=True)
+    second = FakeConnection()
+    connections = iter((first, second))
+    monkeypatch.setattr(
+        "app.postgres_store.psycopg.connect",
+        lambda *args, **kwargs: next(connections),
+    )
+
+    store = object.__new__(PostgresStore)
+    store.database_url = "postgresql://example.invalid/db"
+    store.connect_timeout = 7
+    store._transaction_depth = 0
+    store.lock = __import__("threading").RLock()
+    store.connection = first
+    store.db = _ConnectionCompat(first, store)
+
+    assert store.q("SELECT 1") == [{"ok": True}]
+    assert first.closed == 1
+    assert store.connection is second
+    assert second.statements == [("SELECT 1", ())]
+
