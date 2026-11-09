@@ -453,6 +453,26 @@ class PostgresStore(Store):
                 )
                 return entry
 
+    def set_tenant(self, organization_id: str) -> None:
+        """Set transaction-local tenant context after OIDC binding validation."""
+        if not organization_id or self._transaction_depth < 1:
+            raise RuntimeError("tenant context requires an active transaction and organization ID")
+        self.connection.execute(
+            "SELECT set_config('gg.organization_id', %s, true)", (organization_id,),
+        )
+
+    def set_admin_access(self) -> None:
+        """Enable cross-tenant RLS access only inside an already-authenticated admin request."""
+        if self._transaction_depth < 1:
+            raise RuntimeError("admin context requires an active transaction")
+        self.connection.execute("SELECT set_config('gg.admin_access', 'on', true)")
+
+    def set_allow_unscoped_demo(self) -> None:
+        """Allow unscoped legacy API keys only in the synthetic demo transaction."""
+        if self._transaction_depth < 1:
+            raise RuntimeError("demo context requires an active transaction")
+        self.connection.execute("SELECT set_config('gg.allow_unscoped_demo', 'on', true)")
+
     def close(self) -> None:
         with self.lock:
             self.connection.close()
