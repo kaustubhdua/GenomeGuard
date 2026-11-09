@@ -461,6 +461,27 @@ def test_catalogue_endpoints():
     assert bad.status_code == 400
 
 
+def test_chromosome_reference_lengths_remain_available_when_coverage_query_fails(monkeypatch):
+    from app.store import CatalogueUnavailableError
+
+    svc, client = make_client()
+
+    def unavailable(_assembly):
+        raise CatalogueUnavailableError("simulated reference-store outage")
+
+    monkeypatch.setattr(svc.store, "verified_public_chromosome_coverage", unavailable)
+    response = client.get("/catalogue/chromosomes?assembly=GRCh38")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["chromosome_count"] == 25
+    assert data["coverage_available"] is False
+    assert "no dataset coverage is asserted" in data["provenance_note"]
+    assert all(row["data_coverage"]["coverage_status"] == "unavailable"
+               for row in data["chromosomes"])
+    assert all(row["data_coverage"]["variant_data_loaded"] is False
+               for row in data["chromosomes"])
+
+
 def test_public_source_catalogue_is_discovery_only_and_keeps_review_boundaries():
     _, c = make_client()
     response = c.get("/catalogue/sources")
