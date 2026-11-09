@@ -242,6 +242,17 @@ def test_audit_endpoints_and_tamper_demo_over_http():
     assert c.get("/audit/verify").json()["first_broken_index"] == 4
     assert c.get(f"/audit/verify?anchor_length={head['length']}&anchor_hash={head['head_hash']}"
                  ).json()["ok"] is False
+    assert c.get("/audit/verify?anchor_length=not-a-number&anchor_hash=" + "0" * 64).status_code == 400
+    assert c.get("/audit/verify?anchor_length=0").status_code == 400
+    assert c.get("/audit/verify?anchor_length=-1&anchor_hash=" + "0" * 64).status_code == 400
+    assert c.get("/audit/verify?anchor_length=0&anchor_hash=bad").status_code == 400
+    assert c.get("/audit/checkpoint?signer=" + "x" * 129).status_code == 400
+    checkpoint = c.get("/audit/checkpoint").json()
+    assert c.post("/audit/verify-checkpoint", json=checkpoint).json()["valid"] is True
+    malformed = dict(checkpoint, length="not-an-integer")
+    assert c.post("/audit/verify-checkpoint", json=malformed).json() == {
+        "valid": False, "reason": "malformed_checkpoint"
+    }
 
 
 def test_tamper_endpoint_403_when_disabled():
