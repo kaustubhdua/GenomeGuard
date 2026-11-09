@@ -23,6 +23,19 @@ class Settings:
     database_url: str = field(default_factory=lambda: _env("database_url", ""))
     # Privileged URL used only for schema migrations; application queries use database_url.
     migration_database_url: str = field(default_factory=lambda: _env("migration_database_url", ""))
+    oidc_required: bool = field(default_factory=lambda: _env("oidc_required", False, bool))
+    oidc_issuer: str = field(default_factory=lambda: _env("oidc_issuer", ""))
+    oidc_audience: str = field(default_factory=lambda: _env("oidc_audience", ""))
+    oidc_jwks_url: str = field(default_factory=lambda: _env("oidc_jwks_url", ""))
+    oidc_organization_claim: str = field(
+        default_factory=lambda: _env("oidc_organization_claim", "organization_id")
+    )
+    oidc_allowed_organizations: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            item.strip() for item in _env("oidc_allowed_organizations", "").split(",")
+            if item.strip()
+        )
+    )
     db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
@@ -62,6 +75,15 @@ def validate_settings(s: Settings) -> None:
         problems.append("GG_MIGRATION_DATABASE_URL must be a separate privileged PostgreSQL migration URL")
     if s.database_url.strip() == s.migration_database_url.strip():
         problems.append("GG_DATABASE_URL and GG_MIGRATION_DATABASE_URL must use distinct database roles")
+    if s.oidc_required:
+        if not s.oidc_issuer.startswith("https://"):
+            problems.append("GG_OIDC_ISSUER must be an HTTPS issuer URL when OIDC is required")
+        if not s.oidc_audience.strip():
+            problems.append("GG_OIDC_AUDIENCE must identify the registered API audience")
+        if not s.oidc_jwks_url.startswith("https://"):
+            problems.append("GG_OIDC_JWKS_URL must be an HTTPS JWKS endpoint")
+        if not s.oidc_organization_claim.strip() or not s.oidc_allowed_organizations:
+            problems.append("GG_OIDC_ORGANIZATION_CLAIM and GG_OIDC_ALLOWED_ORGANIZATIONS are required")
     if s.admin_api_key == "demo-admin-key" or len(s.admin_api_key.strip()) < 32:
         problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:
