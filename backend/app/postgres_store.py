@@ -97,9 +97,17 @@ class PostgresStore(Store):
     backend = "postgresql"
     durable = True  # means PostgreSQL is configured, not that provider backups are verified
 
-    def __init__(self, database_url: str, *, connect_timeout: int = 10) -> None:
+    def __init__(
+        self, database_url: str, *, migration_database_url: str | None = None,
+        connect_timeout: int = 10,
+    ) -> None:
         if not database_url or not database_url.startswith(("postgres://", "postgresql://")):
-            raise ValueError("GG_DATABASE_URL must be a PostgreSQL connection URL")
+            raise ValueError("GG_DATABASE_URL must be a PostgreSQL runtime connection URL")
+        if migration_database_url and (
+            not migration_database_url.startswith(("postgres://", "postgresql://"))
+            or migration_database_url == database_url
+        ):
+            raise ValueError("GG_MIGRATION_DATABASE_URL must be a distinct PostgreSQL owner URL")
         self.path = "postgresql"
         self.database_url = database_url
         self.connect_timeout = connect_timeout
@@ -107,30 +115,35 @@ class PostgresStore(Store):
         self._transaction_depth = 0
         self.connection = psycopg.connect(
             database_url, connect_timeout=connect_timeout, row_factory=dict_row,
-            application_name="GenomeGuard",
+            application_name="GenomeGuard-runtime",
         )
-        # Keep runtime tables isolated from normalized genomic reference tables.
-        # The database URL is a server-side secret; never put it in frontend/Vercel public env vars.
+        self.migration_connection = (
+            psycopg.connect(
+                migration_database_url, connect_timeout=connect_timeout, row_factory=dict_row,
+                application_name="GenomeGuard-migrations",
+            ) if migration_database_url else self.connection
+        )
         try:
+            # Only the migration principal may create schemas or run DDL. The ordinary
+            # application connection receives a search_path after the owner creates it.
+            with self.migration_connection.transaction():
+                self.migration_connection.execute("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime")
+                self.migration_connection.execute(
+                    "SET search_path TO genomeguard_runtime, public"
+                )
             with self.connection.transaction():
-                # Legacy service tables and normalized public references have separate
-                # schemas because they intentionally use different data contracts.
-                schema_exists = self.connection.execute(
-                    "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'genomeguard_runtime') AS present"
-                ).fetchone()["present"]
-                if not schema_exists:
-                    self.connection.execute("CREATE SCHEMA genomeguard_runtime")
                 self.connection.execute("SET search_path TO genomeguard_runtime, public")
-        except Exception:
-            self.connection.close()
-            raise
-        self.db = _ConnectionCompat(self.connection, self)
-        try:
+            self.db = _ConnectionCompat(self.connection, self)
             self._migrate()
         except Exception:
             self.connection.close()
+            if self.migration_connection is not self.connection:
+                self.migration_connection.close()
             raise
-
+        finally:
+            if self.migration_connection is not self.connection:
+                self.migration_connection.close()
+                self.migration_connection = None
 
     def _ensure_connection(self) -> None:
         """Reconnect after provider restarts without retrying an interrupted transaction.
@@ -158,7 +171,7 @@ class PostgresStore(Store):
         self.db.connection = connection
 
     def _migrate(self) -> None:
-        """Apply each numbered native PostgreSQL migration exactly once."""
+        """Apply numbered native migrations using the separate owner connection."""
         if not _MIGRATIONS.is_dir():
             raise RuntimeError(f"PostgreSQL migrations directory is missing: {_MIGRATIONS}")
         migrations = []
@@ -168,26 +181,27 @@ class PostgresStore(Store):
                 migrations.append((int(prefix), path))
         if not migrations or migrations[0][0] != 1:
             raise RuntimeError("PostgreSQL migration 001_initial_postgres.sql is required")
+        conn = self.migration_connection or self.connection
         with self.lock:
             for version, migration in migrations:
-                with self.connection.transaction():
-                    self.connection.execute(
+                with conn.transaction():
+                    conn.execute(
                         "CREATE TABLE IF NOT EXISTS schema_migrations "
                         "(version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
                     )
-                    applied = self.connection.execute(
+                    applied = conn.execute(
                         "SELECT version FROM schema_migrations WHERE version=%s", (version,)
                     ).fetchone()
                     if applied:
                         continue
-                    sql = "\n".join(
+                    sql = "\\n".join(
                         line for line in migration.read_text(encoding="utf-8").splitlines()
                         if not line.lstrip().startswith("--")
                     )
                     for statement in sql.split(";"):
                         if statement.strip():
-                            self.connection.execute(statement)
-                    self.connection.execute(
+                            conn.execute(statement)
+                    conn.execute(
                         "INSERT INTO schema_migrations(version) VALUES (%s)", (version,)
                     )
 
