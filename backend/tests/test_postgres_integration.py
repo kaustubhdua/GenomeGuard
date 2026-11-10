@@ -142,7 +142,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -218,15 +218,74 @@ def test_postgres_runtime_role_cannot_mutate_audit_or_migration_ledgers(pg_store
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','INSERT') AS consent_insert, "
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','UPDATE') AS consent_update, "
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','DELETE') AS consent_delete, "
-            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') AS consent_truncate"
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') AS consent_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','SELECT') AS donors_select, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','INSERT') AS donors_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','UPDATE') AS donors_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','DELETE') AS donors_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','INSERT') AS variants_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','UPDATE') AS variants_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','DELETE') AS variants_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','INSERT') AS genotypes_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','UPDATE') AS genotypes_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','DELETE') AS genotypes_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','INSERT') AS relationships_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','UPDATE') AS relationships_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','DELETE') AS relationships_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','INSERT') AS metadata_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','UPDATE') AS metadata_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','DELETE') AS metadata_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donor_access','INSERT') AS donor_access_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donor_access','UPDATE') AS donor_access_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donor_access','DELETE') AS donor_access_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','INSERT') AS alerts_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','UPDATE') AS alerts_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','DELETE') AS alerts_delete"
         )[0]
         assert privileges == {
             "audit_insert": True, "audit_update": False, "audit_delete": False,
             "audit_truncate": False, "migrations_select": True, "migrations_insert": False,
             "consent_select": True, "consent_insert": True, "consent_update": False,
             "consent_delete": False, "consent_truncate": False,
+            "donors_select": True, "donors_insert": False, "donors_update": True, "donors_delete": False,
+            "variants_insert": False, "variants_update": False, "variants_delete": False,
+            "genotypes_insert": False, "genotypes_update": False, "genotypes_delete": False,
+            "relationships_insert": False, "relationships_update": False, "relationships_delete": False,
+            "metadata_insert": False, "metadata_update": False, "metadata_delete": False,
+            "donor_access_insert": True, "donor_access_update": False, "donor_access_delete": False,
+            "alerts_insert": True, "alerts_update": False, "alerts_delete": False,
         }
         pg_store.connection.execute("RESET ROLE")
+
+
+
+def test_postgres_donor_consent_updates_require_admin_scope(pg_store):
+    connection = pg_store.connection
+    donor_id = 999999
+    connection.execute(
+        "INSERT INTO donors(id,cohort_id,population,consent_json) VALUES (%s,%s,%s,%s)",
+        (donor_id, "rls-test", "TST", "{}"),
+    )
+    connection.commit()
+    try:
+        with pg_store.transaction():
+            connection.execute("SET ROLE genomeguard_runtime")
+            blocked = connection.execute(
+                "UPDATE donors SET withdrawn_at='2026-11-10T00:00:00Z' WHERE id=%s",
+                (donor_id,),
+            )
+            assert blocked.rowcount == 0
+            connection.execute("SELECT set_config('gg.admin_access','on',true)")
+            allowed = connection.execute(
+                "UPDATE donors SET withdrawn_at='2026-11-10T00:00:00Z' WHERE id=%s",
+                (donor_id,),
+            )
+            assert allowed.rowcount == 1
+            connection.execute("RESET ROLE")
+    finally:
+        connection.execute("DELETE FROM donors WHERE id=%s", (donor_id,))
+        connection.commit()
+
 
 
 def test_postgres_empty_population_reference_lookup_is_truthful(pg_store):
