@@ -1328,16 +1328,15 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
             from app.postgres_store import PostgresStore
 
             migration_url = s.migration_database_url or None
+            # Web workers must never execute DDL. Migrations are applied by the
+            # deployment/CI migration job using the owner credential; the running
+            # service connects only with the restricted runtime principal.
             store = PostgresStore(
                 s.database_url,
                 migration_database_url=migration_url,
+                run_migrations=False,
             )
-            if migration_url:
-                store.assert_least_privilege_runtime()
-                # The privileged credential is used only to apply migrations; drop it from
-                # process configuration once PostgresStore has closed its owner connection.
-                s.migration_database_url = ""
-                os.environ.pop("GG_MIGRATION_DATABASE_URL", None)
+            store.assert_least_privilege_runtime()
         else:
             store = Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
