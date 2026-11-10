@@ -201,6 +201,7 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
             ids[org] = req_id
 
         pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
         with pg_store.transaction():
             pg_store.set_tenant("tenant-a")
             visible = {row["id"] for row in pg_store.q("SELECT id FROM requests")}
@@ -227,6 +228,7 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
                      "frequency", "{}", "{}", "pending"),
                 )
         pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
     finally:
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.execute(f'DROP OWNED BY "{role}"')
