@@ -125,7 +125,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2, 3, 4, 5, 6, 7]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -176,7 +176,7 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
             f'TO "{role}"'
         )
         pg_store.connection.execute(
-            f'GRANT SELECT ON requesters, consent_events TO "{role}"'
+            f'GRANT SELECT ON requesters, identity_bindings, consent_events TO "{role}"'
         )
         pg_store.connection.execute(
             f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
@@ -193,23 +193,25 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
             "2026-11-10T00:00:00Z",
         )
         ids = {}
-        for org in ("tenant-a", "tenant-b"):
-            rid = pg_store.add_requester(
-                f"Researcher {org}", "researcher", "registered", org, f"hash-{org}",
-            )
-            pg_store.add_identity_binding(
-                rid, "https://id.example.edu", f"subject-{org}", org,
-            )
-            req_id = pg_store.add_request(
-                rid, "2026-11-10T00:00:00Z",
-                {"purpose": "research", "disease": None, "is_commercial": False,
-                 "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
-            )
-            pg_store.save_decision(req_id, {
-                "outcome": "deny", "reasons": ["test"], "risk": {}, "transform": {},
-                "explanation": "test", "needs_human": False, "private": {}, "release": None,
-            })
-            ids[org] = req_id
+        with pg_store.transaction():
+            pg_store.set_admin_access()
+            for org in ("tenant-a", "tenant-b"):
+                rid = pg_store.add_requester(
+                    f"Researcher {org}", "researcher", "registered", org, f"hash-{org}",
+                )
+                pg_store.add_identity_binding(
+                    rid, "https://id.example.edu", f"subject-{org}", org,
+                )
+                req_id = pg_store.add_request(
+                    rid, "2026-11-10T00:00:00Z",
+                    {"purpose": "research", "disease": None, "is_commercial": False,
+                     "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
+                )
+                pg_store.save_decision(req_id, {
+                    "outcome": "deny", "reasons": ["test"], "risk": {}, "transform": {},
+                    "explanation": "test", "needs_human": False, "private": {}, "release": None,
+                })
+                ids[org] = req_id
 
         pg_store.connection.execute(f'SET ROLE "{role}"')
         pg_store.connection.commit()
@@ -219,10 +221,18 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
             assert visible == {ids["tenant-a"]}
             decisions = {row["request_id"] for row in pg_store.q("SELECT request_id FROM decisions")}
             assert decisions == {ids["tenant-a"]}
+            assert {row["organization_id"] for row in pg_store.q(
+                "SELECT organization_id FROM requesters"
+            )} == {"tenant-a"}
+            assert {row["subject"] for row in pg_store.q(
+                "SELECT subject FROM identity_bindings"
+            )} == {"subject-tenant-a"}
 
         with pg_store.transaction():
             # No organization context is default-deny for tenant-owned rows.
             assert pg_store.q("SELECT id FROM requests") == []
+            assert pg_store.q("SELECT id FROM requesters") == []
+            assert pg_store.q("SELECT subject FROM identity_bindings") == []
             assert pg_store.q("SELECT event_id FROM consent_events") == []
             assert pg_store.q(
                 "SELECT has_table_privilege(current_user,'requests','TRUNCATE') AS can_truncate"
@@ -231,6 +241,12 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
         with pg_store.transaction():
             pg_store.set_admin_access()
             assert {row["id"] for row in pg_store.q("SELECT id FROM requests")} == set(ids.values())
+            assert {row["id"] for row in pg_store.q("SELECT id FROM requesters")} == {
+                row["id"] for row in pg_store.q("SELECT id FROM requesters")
+            }
+            assert {row["subject"] for row in pg_store.q(
+                "SELECT subject FROM identity_bindings"
+            )} == {"subject-tenant-a", "subject-tenant-b"}
             assert pg_store.q("SELECT event_id FROM consent_events") == [
                 {"event_id": "00000000-0000-4000-8000-000000000002"},
             ]
