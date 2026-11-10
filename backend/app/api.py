@@ -165,7 +165,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 )
             except OIDCAuthenticationError:
                 raise ServiceError(401, "unauthorized", "invalid institutional bearer token") from None
-            r = S().authenticate_oidc(
+            r = scoped_identity_lookup(
+                identity.organization_id, S().authenticate_oidc,
                 identity.issuer, identity.subject, identity.organization_id,
             )
             if not r:
@@ -178,7 +179,14 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             return r
         if settings.oidc_required:
             raise ServiceError(401, "unauthorized", "institutional bearer token required")
-        r = S().authenticate(request.headers.get("x-api-key"))
+        if settings.demo_mode:
+            with S().store.transaction():
+                set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
+                if set_demo is not None:
+                    set_demo()
+                r = S().authenticate(request.headers.get("x-api-key"))
+        else:
+            r = S().authenticate(request.headers.get("x-api-key"))
         if not r:
             raise ServiceError(401, "unauthorized", "missing or unknown X-API-Key")
         if settings.tenant_isolation_required:
@@ -188,6 +196,19 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             r = {**r, "_allow_unscoped_demo": True}
         request.state.authenticated_requester = r
         return r
+
+    def scoped_identity_lookup(organization_id: str, fn, *args, **kwargs):
+        """Resolve OIDC bindings inside the same tenant scope enforced by PostgreSQL RLS."""
+        with S().store.transaction():
+            set_tenant = getattr(S().store, "set_tenant", None)
+            if set_tenant is not None:
+                set_tenant(organization_id)
+            elif settings.tenant_isolation_required and not settings.demo_mode:
+                raise ServiceError(
+                    503, "tenant_store_unsupported",
+                    "tenant-isolated identity lookup requires PostgreSQL RLS",
+                )
+            return fn(*args, **kwargs)
 
     def scoped_requester_call(identity: dict, fn, *args, **kwargs):
         with S().store.transaction():
@@ -232,7 +253,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 )
             except OIDCAuthenticationError:
                 raise ServiceError(401, "unauthorized", "invalid institutional bearer token") from None
-            principal = S().authenticate_oidc(
+            principal = scoped_identity_lookup(
+                identity.organization_id, S().authenticate_oidc,
                 identity.issuer, identity.subject, identity.organization_id,
             )
             if not principal or principal.get("role") not in {"reviewer", "steward", "admin"}:
