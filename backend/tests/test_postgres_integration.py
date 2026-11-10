@@ -206,12 +206,12 @@ def test_postgres_audit_log_is_append_only(pg_store):
 def test_postgres_provisioned_schema_does_not_require_database_create(pg_store):
     connection = pg_store.connection
     with pg_store.transaction():
-        connection.execute("SET ROLE genomeguard_owner")
+        connection.execute("SET ROLE genomeguard_runtime")
         can_create_database = connection.execute(
             "SELECT has_database_privilege(current_user,current_database(),'CREATE') AS allowed"
         ).fetchone()["allowed"]
-        if not can_create_database:
-            _ensure_runtime_schema_exists(connection)
+        assert can_create_database is False
+        _ensure_runtime_schema_exists(connection)
         assert connection.execute(
             "SELECT EXISTS (SELECT 1 FROM pg_namespace "
             "WHERE nspname='genomeguard_runtime') AS present"
