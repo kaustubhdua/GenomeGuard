@@ -6,14 +6,14 @@ AS $$
 BEGIN
   RAISE EXCEPTION 'audit_log is append-only' USING ERRCODE = '55000';
 END;
-$$;
+$gg_audit$;
 
 DROP TRIGGER IF EXISTS audit_log_immutable ON audit_log;
 CREATE TRIGGER audit_log_immutable
 BEFORE UPDATE OR DELETE ON audit_log
 FOR EACH ROW EXECUTE FUNCTION genomeguard.reject_audit_log_mutation();
 
-DO $$
+DO $gg_audit$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_runtime') THEN
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM genomeguard_runtime';
