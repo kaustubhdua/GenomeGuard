@@ -88,6 +88,12 @@ def validate_settings(s: Settings) -> None:
         return
 
     problems: list[str] = []
+    if not s.oidc_required:
+        problems.append("GG_OIDC_REQUIRED must be true for non-demo deployments")
+    if not s.oidc_admin_required:
+        problems.append("GG_OIDC_ADMIN_REQUIRED must be true for non-demo deployments")
+    if not s.tenant_isolation_required:
+        problems.append("GG_TENANT_ISOLATION_REQUIRED must be true for non-demo deployments")
     # A production-looking configuration must never silently fall back to local SQLite.
     # SQLite on an ephemeral hosting filesystem cannot satisfy the persistence contract.
     if not s.database_url.strip().startswith(("postgres://", "postgresql://")):
