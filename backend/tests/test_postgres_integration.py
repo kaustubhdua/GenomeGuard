@@ -216,9 +216,9 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
             pg_store.set_admin_access()
             assert {row["id"] for row in pg_store.q("SELECT id FROM requests")} == set(ids.values())
 
-        with pg_store.transaction():
-            pg_store.set_tenant("tenant-a")
-            with pytest.raises(Exception):
+        with pytest.raises(Exception):
+            with pg_store.transaction():
+                pg_store.set_tenant("tenant-a")
                 pg_store.x(
                     "INSERT INTO requests(requester_id,organization_id,ts,purpose,disease,"
                     "is_commercial,data_level,cohort_filter_json,variant_filter_json,status) "
