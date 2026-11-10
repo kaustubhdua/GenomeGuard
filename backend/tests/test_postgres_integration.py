@@ -354,6 +354,10 @@ def test_postgres_unscoped_demo_requester_requires_explicit_demo_context(pg_stor
         )
         assert pg_store.requester(requester_id)["name"] == "Synthetic Demo Researcher"
         connection.execute("RESET ROLE")
+    with pg_store.transaction():
+        connection.execute("SET ROLE genomeguard_runtime")
+        assert pg_store.requesters()
+        connection.execute("RESET ROLE")
     pg_store.x("DELETE FROM requesters WHERE name=?", ("Synthetic Demo Researcher",))
     connection.commit()
 
