@@ -612,10 +612,20 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                             "note": "aggregate answer after consent, risk and noise checks"}})
     @route("GET", "/requests", "List requests (own; all with admin key)", "requester|admin")
     async def list_requests(request):
-        if S().is_admin(request.headers.get("x-admin-key")):
+        if request.headers.get("authorization", "").startswith("Bearer "):
+            try:
+                identity = requester(request)
+            except ServiceError as exc:
+                if exc.code != "role_not_allowed":
+                    raise
+                admin(request)
+                rows = admin_call(S().requests_for, None)
+                return _j({"requests": rows})
+        elif S().is_admin(request.headers.get("x-admin-key")):
             rows = admin_call(S().requests_for, None)
             return _j({"requests": rows})
-        identity = requester(request)
+        else:
+            identity = requester(request)
         rows = scoped_requester_call(identity, S().requests_for, identity)
         return _j({"requests": [requester_view(x) for x in rows]})
 
@@ -623,7 +633,17 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def get_request(request):
         rid = request.path_params["id"]
         is_admin = S().is_admin(request.headers.get("x-admin-key"))
-        current = None if is_admin else requester(request)
+        current = None
+        if request.headers.get("authorization", "").startswith("Bearer "):
+            try:
+                current = requester(request)
+            except ServiceError as exc:
+                if exc.code != "role_not_allowed":
+                    raise
+                admin(request)
+                is_admin = True
+        elif not is_admin:
+            current = requester(request)
         d = (
             admin_call(S().store.decision, rid) if is_admin
             else scoped_requester_call(current, S().store.decision, rid)
