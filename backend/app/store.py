@@ -9,6 +9,7 @@ does, once at start-up, to build the in-memory Dataset.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import io
 import json
 import sqlite3
@@ -201,8 +202,10 @@ class Store:
                     "VALUES(?,?,?,?,?,?,?)",
                     (dn["id"], dn["cohort_id"], dn["population"], json.dumps(dn["consent"]),
                      dn["family_id"], "2026-01-01T00:00:00" if dn["withdrawn"] else None,
-                     hashlib.sha256(dn["source_sample_id"].encode("utf-8")).hexdigest()
-                     if dn.get("source_sample_id") else None),
+                     hmac.new(
+                         master, dataset_id.encode("utf-8") + b"\\0"
+                         + dn["source_sample_id"].encode("utf-8"), hashlib.sha256,
+                     ).hexdigest() if dn.get("source_sample_id") else None),
                 )
                 blob = crypto.encrypt(master, dataset_id, dn["id"],
                                       _blob(cohort.genotypes[dn["id"] - 1]))
@@ -300,10 +303,16 @@ class Store:
     def set_donor_consent(self, donor_id: int, consent: dict) -> None:
         self.x("UPDATE donors SET consent_json=? WHERE id=?", (json.dumps(consent), donor_id))
 
-    def donor_by_source_sample_id(self, source_sample_id: str) -> dict | None:
+    def donor_by_source_sample_id(
+        self, source_sample_id: str, master: bytes, dataset_id: str,
+    ) -> dict | None:
+        digest = hmac.new(
+            master, dataset_id.encode("utf-8") + b"\\0" + source_sample_id.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
         return self.one(
             "SELECT id, consent_json, withdrawn_at FROM donors WHERE source_sample_id_hash=?",
-            (hashlib.sha256(source_sample_id.encode("utf-8")).hexdigest(),),
+            (digest,),
         )
 
     def consent_event_exists(self, event_id: str) -> bool:
