@@ -97,6 +97,10 @@ class Store:
             if "organization_id" not in requester_columns:
                 self.db.execute("ALTER TABLE requesters ADD COLUMN organization_id TEXT")
             donor_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(donors)")}
+            if "source_sample_id" in donor_columns:
+                # Older local databases stored raw source IDs. Retire those values during
+                # upgrade; new imports store only a dataset-keyed HMAC.
+                self.db.execute("UPDATE donors SET source_sample_id=NULL")
             if "source_sample_id_hash" not in donor_columns:
                 self.db.execute("ALTER TABLE donors ADD COLUMN source_sample_id_hash TEXT")
             self.db.execute(
