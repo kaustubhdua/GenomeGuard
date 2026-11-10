@@ -454,6 +454,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(422, "invalid_request", "subject must contain 1 to 255 characters")
         if organization_id not in settings.oidc_allowed_organizations:
             raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
+        reviewer_scope = request.state.admin_principal.get("organization_id")
+        if reviewer_scope and organization_id != reviewer_scope:
+            raise ServiceError(
+                403, "cross_organization_binding_forbidden",
+                "an organization-scoped reviewer may only provision identities in their own organization",
+            )
         try:
             S().bind_oidc_identity(
                 requester_id, settings.oidc_issuer, subject, organization_id,
