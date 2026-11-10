@@ -23,7 +23,7 @@ The numbered migrations are applied once and recorded in `schema_migrations`. Th
 
 Migrations 003 and 005 add OIDC identity bindings, organization IDs and forced RLS on requests, decisions, epsilon-ledger and alerts. The API sets transaction-local organization scope only after verifying an OIDC token and resolving the exact active binding. Admin routes use a separate context after authenticating a reviewer/steward. A missing context sees no tenant rows. The synthetic demo compatibility scope is permitted only when demo mode is enabled.
 
-The database role used in staging, `genomeguard_runtime`, was directly checked: no superuser, no BYPASSRLS, and no CREATE privilege on either GenomeGuard schema. The live staging Render service has not yet been switched to this role; do not assume the test role is already the deployed role.
+The staging Render service is now configured with `genomeguard_runtime` as the runtime URL and `genomeguard_owner` as the separate migration URL. Direct inspection found the runtime role was not superuser and did not have BYPASSRLS, but it initially retained CREATE on the runtime schema and TRUNCATE on tables. Migration 007 revokes those privileges; the new startup assertion blocks launch if they remain. Verify the post-migration role flags and table privileges before treating the staging role as least-privilege.
 
 ## Migrating existing SQLite records
 
