@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.identity import OIDCAuthenticationError, verify_access_token
 
+
 class StaticJwkClient:
     def __init__(self, key):
         self.key = key
