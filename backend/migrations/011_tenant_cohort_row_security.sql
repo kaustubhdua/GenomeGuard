@@ -227,7 +227,7 @@ BEGIN
       );
       EXECUTE format(
         'GRANT SELECT ON TABLE genomeguard_runtime.genotypes, genomeguard_runtime.variants, '
-        || 'genomeguard_runtime.relationships, genomeguard_runtime.cohort_metadata FROM %I',
+        || 'genomeguard_runtime.relationships, genomeguard_runtime.cohort_metadata TO %I',
         runtime_role
       );
     END IF;
