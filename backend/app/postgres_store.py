@@ -546,16 +546,40 @@ class PostgresStore(Store):
 
     @contextmanager
     def transaction(self):
-        """Atomic unit of work; nested store calls use savepoints and do not commit early."""
+        """Atomic unit of work; nested store calls use savepoints and do not commit early.
+
+        A provider can close an idle SSL session after _ensure_connection() checks it but
+        before psycopg starts the transaction. Retry that pre-yield setup failure once on a
+        fresh connection. Never replay a transaction after yielding to application code:
+        the caller may already have performed writes whose commit outcome is unknown.
+        """
         with self.lock:
             self._ensure_connection()
+            outermost = self._transaction_depth == 0
             self._transaction_depth += 1
+            yielded = False
             try:
-                with self.connection.transaction():
-                    # Serialize mutation units across instances. This conservative lock prevents
-                    # concurrent requests from racing the privacy-budget read/charge sequence.
-                    self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
-                    yield
+                try:
+                    with self.connection.transaction():
+                        # Serialize mutation units across instances. This conservative lock prevents
+                        # concurrent requests from racing the privacy-budget read/charge sequence.
+                        self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
+                        yielded = True
+                        yield
+                except psycopg.OperationalError:
+                    # The failure happened before application code ran, so no caller writes
+                    # could have been partially applied. Retry only at the outermost boundary.
+                    if yielded or not outermost:
+                        raise
+                    self._transaction_depth -= 1
+                    try:
+                        self.connection.close()
+                        self._ensure_connection()
+                    finally:
+                        self._transaction_depth += 1
+                    with self.connection.transaction():
+                        self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
+                        yield
             finally:
                 self._transaction_depth -= 1
 
