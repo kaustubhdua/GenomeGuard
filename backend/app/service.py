@@ -1346,7 +1346,12 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                               seed=s.seed, n_planted=s.n_planted_rare, rare_maf=p.rare_maf)
             cohort_meta = {"source": "GenomeGuard synthetic generator", "genotypes_real": False,
                            "consent_simulated": True, "consent_records_matched": 0}
-        store.save_cohort(cohort, master, s.dataset_id, metadata=cohort_meta)
+        if store.path == "postgresql":
+            with store.transaction():
+                store.set_admin_access()
+                store.save_cohort(cohort, master, s.dataset_id, metadata=cohort_meta)
+        else:
+            store.save_cohort(cohort, master, s.dataset_id, metadata=cohort_meta)
     stored_meta = store.cohort_metadata()
     if not stored_meta:
         if not s.demo_mode:
