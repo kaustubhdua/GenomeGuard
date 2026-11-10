@@ -388,7 +388,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def demo_requesters(request):
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "demo mode is off")
-        reqs = {r["name"]: r for r in S().store.requesters()}
+        with S().store.transaction():
+            set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
+            if set_demo is not None:
+                set_demo()
+            reqs = {r["name"]: r for r in S().store.requesters()}
         payload = {"requesters": [
             {"id": reqs[n]["id"], "name": n, "role": ro, "tier": lv, "api_key": k,
              "frozen": reqs[n]["frozen_at"] is not None}
