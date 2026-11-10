@@ -40,13 +40,12 @@ These boundaries are intentional and should remain visible in the interface and 
 
 GenomeGuard does not require Supabase, a hosted authentication provider, a browser publishable key, or a third-party Edge Function. The browser calls the same-origin Python API. Local development runs entirely on the machine; hosted deployments use the configured GenomeGuard API and a PostgreSQL database.
 
-The current application authentication contract is first-party API-key authentication:
-- researchers use individually provisioned `X-API-Key` credentials;
-- stewards use the `X-Admin-Key` credential;
-- donor-facing demo workflows use a separate `X-Donor-Key`;
-- demo personas and demo credentials are available only when explicit demo mode is enabled.
+GenomeGuard supports two deliberately separate authentication modes:
 
-API keys are not institutional identity verification. Do not treat a named requester record as proof of affiliation, participant consent, or legal authorization. For institutional deployments, place the API behind an independently operated OIDC identity provider and enforce organization membership server-side before enabling controlled-data workflows.
+- **Local/demo or compatibility mode:** researchers use individually provisioned `X-API-Key` credentials; the steward compatibility path uses `X-Admin-Key`; donor-facing demo workflows use a separate `X-Donor-Key`. Demo personas and credentials are available only when explicit demo mode is enabled.
+- **Institutional mode:** set `GG_OIDC_REQUIRED=true` and `GG_TENANT_ISOLATION_REQUIRED=true`. The browser uses Authorization Code + PKCE S256; the API independently verifies the signed access-token JWT, issuer, audience, time claims, and allow-listed organization claim, then resolves an explicitly provisioned active issuer/subject/organization binding. Researcher, reviewer, steward, and global-administrator operations remain separated.
+
+API keys are not institutional identity verification. A named requester record is not proof of affiliation, participant consent, or legal authorization. Institutional OIDC configuration and organization membership must be supplied and operated by the institution before controlled-data workflows are enabled.
 
 The old Supabase migrations and Edge Function implementation are retained as historical migration artifacts only; they are not part of the runtime, build, or deployment path. Do not apply them as part of a new installation.
 
