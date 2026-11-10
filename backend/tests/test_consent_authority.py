@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import hmac
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -45,7 +46,10 @@ def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
     )).decode()
     svc.store.x(
         "UPDATE donors SET source_sample_id_hash=? WHERE id=1",
-        (hashlib.sha256(b"SOURCE-SAMPLE-001").hexdigest(),),
+        (hmac.new(
+            svc.master, svc.dataset_id.encode() + b"\\0" + b"SOURCE-SAMPLE-001",
+            hashlib.sha256,
+        ).hexdigest(),),
     )
     event = signed_event(private, svc.dataset_id)
 
