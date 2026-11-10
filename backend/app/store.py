@@ -176,6 +176,11 @@ class Store:
         v = cohort.variants
         planted = set(cohort.planted)
         with self.lock:
+            if self.one("SELECT event_id FROM consent_events LIMIT 1"):
+                raise RuntimeError(
+                    "cohort replacement is blocked while participant consent events exist; "
+                    "use a reviewed dataset-version migration"
+                )
             d = self.db
             for t in ("genotypes", "donor_access", "consent_events", "donors", "variants", "relationships"):
                 d.execute(f"DELETE FROM {t}")
