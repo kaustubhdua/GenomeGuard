@@ -22,8 +22,9 @@ REAL_META = {"source": "1000 Genomes (IGSR)", "genotypes_real": True, "consent_s
 
 def _cohort_file(d: str, meta: dict) -> str:
     # Membership inference needs 100 members + a 200-person reference panel +
-    # 40 non-members. Keep enough donors for that design without a production-size matrix.
-    c = generate(n_donors=360, n_variants=360, n_families=72, seed=5)
+    # 40 non-members. These tests validate provenance/report flow, not statistical power;
+    # full-scale behavior is exercised by the dedicated evaluation jobs.
+    c = generate(n_donors=340, n_variants=80, n_families=68, seed=5)
     out = Path(d) / "c.npz"
     real.save_cohort(c, meta, out)
     return str(out)
