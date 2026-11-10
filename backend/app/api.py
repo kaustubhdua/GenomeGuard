@@ -369,6 +369,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "audience": settings.oidc_audience if configured else None,
             "client_id": settings.oidc_client_id if configured else None,
             "redirect_uri": settings.oidc_redirect_uri if configured else None,
+            "jwks_url": settings.oidc_jwks_url if configured else None,
             "scopes": settings.oidc_scopes if configured else None,
             "organization_claim": settings.oidc_organization_claim if configured else None,
         })
