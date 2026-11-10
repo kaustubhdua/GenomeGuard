@@ -142,7 +142,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -170,19 +170,27 @@ def test_postgres_audit_log_is_append_only(pg_store):
 
 def test_postgres_migration_bootstrap_handles_runtime_owned_legacy_schema(pg_store):
     connection = pg_store.connection
-    connection.execute(
-        "CREATE ROLE genomeguard_owner NOLOGIN NOSUPERUSER NOBYPASSRLS "
-        "NOCREATEDB NOCREATEROLE"
-    )
-    connection.execute(
-        "GRANT genomeguard_runtime TO genomeguard_owner WITH INHERIT FALSE, SET TRUE"
-    )
-    connection.execute(
-        "ALTER SCHEMA genomeguard_runtime OWNER TO genomeguard_runtime"
-    )
-    connection.execute(
-        "REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_owner"
-    )
+    owner_exists = connection.execute(
+        "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='genomeguard_owner') AS present"
+    ).fetchone()["present"]
+    owner_was_runtime_member = connection.execute(
+        "SELECT pg_has_role('genomeguard_owner','genomeguard_runtime','SET') AS present"
+    ).fetchone()["present"]
+    original_schema_owner = connection.execute(
+        "SELECT nspowner::regrole::text AS owner FROM pg_namespace "
+        "WHERE nspname='genomeguard_runtime'"
+    ).fetchone()["owner"]
+    if not owner_exists:
+        connection.execute(
+            "CREATE ROLE genomeguard_owner NOLOGIN NOSUPERUSER NOBYPASSRLS "
+            "NOCREATEDB NOCREATEROLE"
+        )
+    if not owner_was_runtime_member:
+        connection.execute(
+            "GRANT genomeguard_runtime TO genomeguard_owner WITH INHERIT FALSE, SET TRUE"
+        )
+    connection.execute("ALTER SCHEMA genomeguard_runtime OWNER TO genomeguard_runtime")
+    connection.execute("REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_owner")
     connection.commit()
     try:
         connection.execute("SET ROLE genomeguard_owner")
@@ -194,10 +202,14 @@ def test_postgres_migration_bootstrap_handles_runtime_owned_legacy_schema(pg_sto
         ).fetchone()["can_create"] is True
     finally:
         connection.execute("RESET ROLE")
-        connection.execute("ALTER SCHEMA genomeguard_runtime OWNER TO postgres")
+        connection.execute(
+            f"ALTER SCHEMA genomeguard_runtime OWNER TO {original_schema_owner}"
+        )
         connection.execute("REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_owner")
-        connection.execute("REVOKE genomeguard_runtime FROM genomeguard_owner")
-        connection.execute("DROP ROLE genomeguard_owner")
+        if not owner_was_runtime_member:
+            connection.execute("REVOKE genomeguard_runtime FROM genomeguard_owner")
+        if not owner_exists:
+            connection.execute("DROP ROLE genomeguard_owner")
         connection.commit()
 
 
@@ -288,6 +300,171 @@ def test_postgres_donor_consent_updates_require_admin_scope(pg_store):
 
 
 
+
+def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_tenant_links(pg_store):
+    from uuid import uuid4
+
+    role = "gg_cohort_rls_" + uuid4().hex[:12]
+    connection = pg_store.connection
+    connection.execute(f'CREATE ROLE "{role}" NOLOGIN')
+    connection.execute(
+        f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+    )
+    connection.execute(
+        f'GRANT SELECT ON donors, genotypes, variants, relationships, cohort_metadata, donor_access TO "{role}"'
+    )
+    connection.execute(
+        f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
+    )
+    connection.commit()
+
+    try:
+        with pg_store.transaction():
+            pg_store.x(
+                "INSERT INTO donors(id,cohort_id,population,consent_json,organization_id) "
+                "VALUES(?,?,?,?,?)",
+                (990001, "tenant-a-cohort", "TST", "{}", "tenant-a"),
+            )
+            pg_store.x(
+                "INSERT INTO donors(id,cohort_id,population,consent_json,organization_id) "
+                "VALUES(?,?,?,?,?)",
+                (990002, "tenant-b-cohort", "TST", "{}", "tenant-b"),
+            )
+            pg_store.x(
+                "INSERT INTO donors(id,cohort_id,population,consent_json,organization_id) "
+                "VALUES(?,?,?,?,?)",
+                (990003, "public-synthetic", "TST", "{}", None),
+            )
+            pg_store.x(
+                "INSERT INTO genotypes(donor_id,genotype_blob,organization_id) VALUES(?,?,?)",
+                (990001, b"tenant-a-genotype", "tenant-a"),
+            )
+            pg_store.x(
+                "INSERT INTO genotypes(donor_id,genotype_blob,organization_id) VALUES(?,?,?)",
+                (990002, b"tenant-b-genotype", "tenant-b"),
+            )
+            pg_store.x(
+                "INSERT INTO genotypes(donor_id,genotype_blob,organization_id) VALUES(?,?,?)",
+                (990003, b"public-genotype", None),
+            )
+            pg_store.x(
+                "INSERT INTO variants(id,chrom,pos,ref,alt,organization_id) VALUES(?,?,?,?,?,?)",
+                (880001, "1", 100, "A", "T", "tenant-a"),
+            )
+            pg_store.x(
+                "INSERT INTO variants(id,chrom,pos,ref,alt,organization_id) VALUES(?,?,?,?,?,?)",
+                (880002, "1", 200, "C", "G", "tenant-b"),
+            )
+            pg_store.x(
+                "INSERT INTO variants(id,chrom,pos,ref,alt,organization_id) VALUES(?,?,?,?,?,?)",
+                (880003, "1", 300, "G", "A", None),
+            )
+            pg_store.x(
+                "INSERT INTO relationships(donor_a,donor_b,relation,organization_id) "
+                "VALUES(?,?,?,?)",
+                (990001, 990001, "self", "tenant-a"),
+            )
+            pg_store.x(
+                "INSERT INTO relationships(donor_a,donor_b,relation,organization_id) "
+                "VALUES(?,?,?,?)",
+                (990002, 990002, "self", "tenant-b"),
+            )
+            pg_store.x(
+                "INSERT INTO cohort_metadata(id,dataset_id,metadata_json,organization_id) "
+                "VALUES(?,?,?,?)",
+                (990001, "tenant-a-cohort", "{}", "tenant-a"),
+            )
+            pg_store.x(
+                "INSERT INTO cohort_metadata(id,dataset_id,metadata_json,organization_id) "
+                "VALUES(?,?,?,?)",
+                (990002, "tenant-b-cohort", "{}", "tenant-b"),
+            )
+            pg_store.x(
+                "INSERT INTO cohort_metadata(id,dataset_id,metadata_json,organization_id) "
+                "VALUES(?,?,?,?)",
+                (990003, "public-synthetic", "{}", None),
+            )
+            pg_store.x(
+                "INSERT INTO donor_access(donor_id,purpose,organization_id) VALUES(?,?,?)",
+                (990001, "tenant-a-access", "tenant-a"),
+            )
+            pg_store.x(
+                "INSERT INTO donor_access(donor_id,purpose,organization_id) VALUES(?,?,?)",
+                (990002, "tenant-b-access", "tenant-b"),
+            )
+
+        connection.execute(f'SET ROLE "{role}"')
+        connection.commit()
+        with pg_store.transaction():
+            pg_store.set_tenant("tenant-a")
+            assert {r["id"] for r in pg_store.q("SELECT id FROM donors")} == {990001, 990003}
+            assert {r["donor_id"] for r in pg_store.q("SELECT donor_id FROM genotypes")} == {990001, 990003}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM variants")} == {880001, 880003}
+            assert {r["donor_a"] for r in pg_store.q("SELECT donor_a FROM relationships")} == {990001}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {990001, 990003}
+            assert {r["purpose"] for r in pg_store.q("SELECT purpose FROM donor_access")} == {"tenant-a-access"}
+
+        with pg_store.transaction():
+            pg_store.set_tenant("tenant-b")
+            assert {r["id"] for r in pg_store.q("SELECT id FROM donors")} == {990002, 990003}
+            assert {r["donor_id"] for r in pg_store.q("SELECT donor_id FROM genotypes")} == {990002, 990003}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM variants")} == {880002, 880003}
+            assert {r["donor_a"] for r in pg_store.q("SELECT donor_a FROM relationships")} == {990002}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {990002, 990003}
+            assert {r["purpose"] for r in pg_store.q("SELECT purpose FROM donor_access")} == {"tenant-b-access"}
+
+        with pg_store.transaction():
+            assert {r["id"] for r in pg_store.q("SELECT id FROM donors")} == {990003}
+            assert {r["donor_id"] for r in pg_store.q("SELECT donor_id FROM genotypes")} == {990003}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM variants")} == {880003}
+            assert pg_store.q("SELECT id FROM relationships") == []
+            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {990003}
+            assert pg_store.q("SELECT purpose FROM donor_access") == []
+
+        with pytest.raises(psycopg.Error):
+            with pg_store.transaction():
+                pg_store.set_tenant("tenant-a")
+                pg_store.x(
+                    "INSERT INTO relationships(donor_a,donor_b,relation,organization_id) "
+                    "VALUES(?,?,?,?)",
+                    (990001, 990002, "cross-tenant", "tenant-a"),
+                )
+
+        connection.execute("RESET ROLE")
+        connection.commit()
+
+        # The application role's default organization column binds donor-access events
+        # to the active tenant, and the composite FK rejects another tenant's donor.
+        with pg_store.transaction():
+            connection.execute("SET ROLE genomeguard_runtime")
+            pg_store.set_tenant("tenant-a")
+            row = pg_store.connection.execute(
+                "INSERT INTO donor_access(donor_id,purpose) VALUES(990001,'runtime-access') "
+                "RETURNING organization_id"
+            ).fetchone()
+            assert row["organization_id"] == "tenant-a"
+        with pytest.raises(psycopg.Error):
+            with pg_store.transaction():
+                connection.execute("SET ROLE genomeguard_runtime")
+                pg_store.set_tenant("tenant-a")
+                connection.execute(
+                    "INSERT INTO donor_access(donor_id,purpose) VALUES(990002,'cross-tenant')"
+                )
+    finally:
+        connection.execute("RESET ROLE")
+        connection.commit()
+        pg_store.x("DELETE FROM donor_access WHERE donor_id BETWEEN 990001 AND 990003")
+        pg_store.x("DELETE FROM relationships WHERE donor_a BETWEEN 990001 AND 990003")
+        pg_store.x("DELETE FROM genotypes WHERE donor_id BETWEEN 990001 AND 990003")
+        pg_store.x("DELETE FROM cohort_metadata WHERE id BETWEEN 990001 AND 990003")
+        pg_store.x("DELETE FROM variants WHERE id BETWEEN 880001 AND 880003")
+        pg_store.x("DELETE FROM donors WHERE id BETWEEN 990001 AND 990003")
+        connection.execute(f'DROP OWNED BY "{role}"')
+        connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+        connection.commit()
+
+
+
 def test_postgres_empty_population_reference_lookup_is_truthful(pg_store):
     result = pg_store.lookup_population_frequencies("1", 12345, "A", "T", "GRCh38")
     assert result == {"status": "empty", "matches": [], "truncated": False}
@@ -305,7 +482,7 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
         versions = [row["version"] for row in reopened.q(
             "SELECT version FROM schema_migrations ORDER BY version"
         )]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     finally:
         reopened.close()
 
