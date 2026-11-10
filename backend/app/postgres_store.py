@@ -562,7 +562,8 @@ class PostgresStore(Store):
         if unsafe:
             raise RuntimeError(
                 "PostgreSQL runtime principal is over-privileged; use genomeguard_runtime "
-                "with no BYPASSRLS, schema CREATE, or table TRUNCATE privileges"
+                "with no BYPASSRLS, schema CREATE, table TRUNCATE, audit mutation, "
+                "or migration-ledger write privileges"
             )
 
     def set_tenant(self, organization_id: str) -> None:

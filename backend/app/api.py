@@ -290,7 +290,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             global_only = (
                 path == "/audit" or path.startswith("/audit/")
                 or path.startswith("/reports/compliance")
-                or path in {"/admin/consent-events", "/admin/dataset-qc", "/admin/requesters"}
+                or path in {
+                    "/admin/consent-events", "/admin/dataset-qc", "/admin/requesters",
+                    "/admin/untamper",
+                }
+                or path.startswith("/admin/tamper/")
             )
             if global_only and not is_global_admin:
                 raise ServiceError(
@@ -301,6 +305,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 path.endswith("/release") or path.endswith("/copilot")
                 or path.endswith("/exposure") or path == "/admin/vcf-qc"
                 or path.startswith("/admin/oidc-bindings")
+                or (path.startswith("/requesters/") and
+                    (path.endswith("/freeze") or path.endswith("/unfreeze")))
             ):
                 raise ServiceError(
                     403, "steward_role_required",
