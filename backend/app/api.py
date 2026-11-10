@@ -227,10 +227,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if organization_id:
             set_tenant = getattr(S().store, "set_tenant", None)
             if set_tenant is None:
-                raise ServiceError(
-                    503, "tenant_store_unsupported",
-                    "organization-scoped reviewer access requires PostgreSQL RLS",
-                )
+                if settings.tenant_isolation_required and not settings.demo_mode:
+                    raise ServiceError(
+                        503, "tenant_store_unsupported",
+                        "organization-scoped reviewer access requires PostgreSQL RLS",
+                    )
+                # Local/demo SQLite has no database RLS. It is never accepted in non-demo mode.
+                return
             set_tenant(organization_id)
             return
         set_admin = getattr(S().store, "set_admin_access", None)
