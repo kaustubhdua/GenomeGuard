@@ -323,6 +323,23 @@ def test_postgres_runtime_role_cannot_mutate_audit_or_migration_ledgers(pg_store
 
 
 
+
+def test_postgres_unscoped_demo_requester_requires_explicit_demo_context(pg_store):
+    connection = pg_store.connection
+    with pg_store.transaction():
+        connection.execute("SET ROLE genomeguard_runtime")
+        pg_store.set_allow_unscoped_demo()
+        requester_id = pg_store.add_requester(
+            "Synthetic Demo Researcher", "researcher", "standard",
+            "GenomeGuard demo", "demo-bootstrap-key", organization_id=None,
+        )
+        assert pg_store.requester(requester_id)["name"] == "Synthetic Demo Researcher"
+        connection.execute("RESET ROLE")
+    pg_store.x("DELETE FROM requesters WHERE name=?", ("Synthetic Demo Researcher",))
+    connection.commit()
+
+
+
 def test_postgres_donor_consent_updates_require_admin_scope(pg_store):
     connection = pg_store.connection
     donor_id = 999999
