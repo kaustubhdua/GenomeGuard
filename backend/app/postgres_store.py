@@ -212,9 +212,10 @@ class PostgresStore(Store):
                         line for line in migration.read_text(encoding="utf-8").splitlines()
                         if not line.lstrip().startswith("--")
                     )
-                    for statement in sql.split(";"):
-                        if statement.strip():
-                            conn.execute(statement)
+                    if sql.strip():
+                        # Use PostgreSQL's simple-query protocol so dollar-quoted PL/pgSQL
+                        # function bodies remain intact; splitting on semicolons is unsafe.
+                        conn.execute(sql, prepare=False)
                     conn.execute(
                         "INSERT INTO schema_migrations(version) VALUES (%s)", (version,)
                     )
