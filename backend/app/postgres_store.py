@@ -145,6 +145,12 @@ def _ensure_migration_schema_access(connection: psycopg.Connection) -> None:
         )
 
 
+class _StandaloneCommitContext:
+    """Commit adapter for the one-off owner-only synthetic cohort seed connection."""
+    _transaction_depth = 0
+
+
+
 class _ConnectionCompat:
     """Minimal connection facade for the existing Store methods; SQL remains parameterized."""
     def __init__(self, connection: psycopg.Connection, store) -> None:
@@ -181,6 +187,7 @@ class PostgresStore(Store):
             raise ValueError("GG_MIGRATION_DATABASE_URL must be a distinct PostgreSQL owner URL")
         self.path = "postgresql"
         self.database_url = database_url
+        self.migration_database_url = migration_database_url
         self.connect_timeout = connect_timeout
         self.lock = threading.RLock()
         self._transaction_depth = 0
@@ -239,6 +246,29 @@ class PostgresStore(Store):
             if self.migration_connection is not None and self.migration_connection is not self.connection:
                 self.migration_connection.close()
                 self.migration_connection = None
+
+
+    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None, *, _db=None) -> None:
+        """Seed/replace a demo cohort through the separate owner connection, never web DML."""
+        if _db is not None or not self.migration_database_url:
+            return super().save_cohort(cohort, master, dataset_id, metadata, _db=_db)
+        with self.lock:
+            owner = psycopg.connect(
+                self.migration_database_url, connect_timeout=self.connect_timeout,
+                row_factory=dict_row, application_name="GenomeGuard-demo-seed",
+            )
+            try:
+                role = owner.execute("SELECT current_user AS role").fetchone()["role"]
+                if role != "genomeguard_owner":
+                    raise RuntimeError(
+                        "GG_MIGRATION_DATABASE_URL must authenticate as genomeguard_owner "
+                        "for the one-time synthetic cohort seed"
+                    )
+                owner.execute("SET search_path TO genomeguard_runtime, public")
+                owner_db = _ConnectionCompat(owner, _StandaloneCommitContext())
+                super().save_cohort(cohort, master, dataset_id, metadata, _db=owner_db)
+            finally:
+                owner.close()
 
     def _ensure_connection(self) -> None:
         """Reconnect after provider restarts without retrying an interrupted transaction.
