@@ -473,10 +473,23 @@ class PostgresStore(Store):
         row = self.connection.execute(
             "SELECT current_user AS role, r.rolsuper, r.rolbypassrls, r.rolcreatedb, "
             "r.rolcreaterole, "
+            "has_database_privilege(current_user,current_database(),'CREATE') AS database_create, "
             "has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS runtime_create, "
             "has_schema_privilege(current_user,'genomeguard','CREATE') AS reference_create, "
+            "COALESCE((SELECT pg_has_role(current_user, oid, 'MEMBER') FROM pg_roles "
+            "WHERE rolname='genomeguard_owner'), false) AS owner_member, "
             "has_table_privilege(current_user,'genomeguard_runtime.requests','TRUNCATE') "
             "AS requests_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.decisions','TRUNCATE') "
+            "AS decisions_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','TRUNCATE') "
+            "AS donors_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','TRUNCATE') "
+            "AS genotypes_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.epsilon_ledger','TRUNCATE') "
+            "AS ledger_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','TRUNCATE') "
+            "AS alerts_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') "
             "AS consent_truncate "
             "FROM pg_roles r WHERE r.rolname=current_user"
@@ -485,8 +498,11 @@ class PostgresStore(Store):
             raise RuntimeError("could not inspect the PostgreSQL runtime principal")
         unsafe = (
             row["role"] == "genomeguard_owner" or row["rolsuper"] or row["rolbypassrls"]
-            or row["rolcreatedb"] or row["rolcreaterole"] or row["runtime_create"]
-            or row["reference_create"] or row["requests_truncate"] or row["consent_truncate"]
+            or row["rolcreatedb"] or row["rolcreaterole"] or row["database_create"]
+            or row["runtime_create"] or row["reference_create"] or row["owner_member"]
+            or row["requests_truncate"] or row["decisions_truncate"] or row["donors_truncate"]
+            or row["genotypes_truncate"] or row["ledger_truncate"] or row["alerts_truncate"]
+            or row["consent_truncate"]
         )
         if unsafe:
             raise RuntimeError(
