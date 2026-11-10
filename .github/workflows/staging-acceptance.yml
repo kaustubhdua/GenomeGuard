@@ -1,5 +1,7 @@
 name: staging-acceptance
 on:
+  push:
+    branches: [feat/institutional-production-controls]
   pull_request:
     branches: [main]
     paths:
@@ -24,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || '' }}
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
