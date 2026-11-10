@@ -11,7 +11,14 @@ CREATE POLICY consent_events_admin_only ON consent_events
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_runtime') THEN
-    EXECUTE 'ALTER ROLE genomeguard_runtime NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE';
+    IF EXISTS (
+      SELECT 1 FROM pg_roles
+      WHERE rolname = 'genomeguard_runtime'
+        AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole)
+    ) THEN
+      RAISE EXCEPTION
+        'genomeguard_runtime must be provisioned as NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE before migrations';
+    END IF;
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_runtime';
