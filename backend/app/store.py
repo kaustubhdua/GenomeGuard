@@ -262,6 +262,18 @@ class Store:
             current_org = existing.get("organization_id")
             if current_org and current_org != organization_id:
                 raise ValueError("requester is already bound to a different organization")
+            binding = self.one(
+                "SELECT requester_id, active FROM identity_bindings "
+                "WHERE issuer=? AND subject=? AND organization_id=?",
+                (issuer, subject, organization_id),
+            )
+            if binding:
+                if binding["requester_id"] == requester_id and binding["active"]:
+                    return
+                raise ValueError(
+                    "this institutional subject is already bound; revoke the existing binding "
+                    "before attempting a new assignment"
+                )
             self.x(
                 "INSERT INTO identity_bindings(issuer,subject,organization_id,requester_id,active,created_at) "
                 "VALUES(?,?,?,?,TRUE,?)",
