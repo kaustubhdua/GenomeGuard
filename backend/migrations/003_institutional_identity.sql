@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS identity_bindings (
   issuer TEXT NOT NULL,
   subject TEXT NOT NULL,
   organization_id TEXT NOT NULL,
-  requester_id BIGINT NOT NULL REFERENCES requesters(id) ON DELETE CASCADE,
+  requester_id INTEGER NOT NULL REFERENCES requesters(id) ON DELETE CASCADE,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TEXT NOT NULL,
   revoked_at TEXT,
