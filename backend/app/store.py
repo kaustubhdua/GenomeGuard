@@ -8,8 +8,8 @@ does, once at start-up, to build the in-memory Dataset.
 
 from __future__ import annotations
 
-import io
 import hashlib
+import io
 import json
 import sqlite3
 import threading
