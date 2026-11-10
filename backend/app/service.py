@@ -1459,15 +1459,17 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         "agents_label": "Agents: live LLM" if llm.available else "Agents: built-in templates",
         "encryption": _encryption_provenance(kind),
     }
-    if not store.requesters() and s.demo_mode:
+    if s.demo_mode:
         if store.path == "postgresql":
-            # Bootstrap personas are intentionally unscoped demo identities. Make that
-            # exception explicit in one transaction rather than weakening tenant RLS.
+            # The unscoped demo rows are invisible until the explicit demo context is
+            # active. Check for existing personas inside that same transaction so
+            # restarts are idempotent and never re-insert duplicate API-key hashes.
             with store.transaction():
                 store.set_allow_unscoped_demo()
-                for name, role, level, inst, key in DEMO_REQUESTERS:
-                    svc.create_requester(name, role, level, inst, key)
-        else:
+                if not store.requesters():
+                    for name, role, level, inst, key in DEMO_REQUESTERS:
+                        svc.create_requester(name, role, level, inst, key)
+        elif not store.requesters():
             for name, role, level, inst, key in DEMO_REQUESTERS:
                 svc.create_requester(name, role, level, inst, key)
     return svc
