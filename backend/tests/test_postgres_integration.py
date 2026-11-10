@@ -8,7 +8,11 @@ import psycopg
 import pytest
 
 from app.core.audit_chain import AuditChain
-from app.postgres_store import PostgresStore, _ensure_migration_schema_access, _ensure_runtime_schema_exists
+from app.postgres_store import (
+    PostgresStore,
+    _ensure_migration_schema_access,
+    _ensure_runtime_schema_exists,
+)
 from app.store import AuditStore
 
 
