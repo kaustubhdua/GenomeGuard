@@ -69,7 +69,6 @@ BEGIN
     END IF;
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
-    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_runtime';
     -- genomeguard_runtime is the actual GG_DATABASE_URL principal. Ownership moves to
@@ -80,6 +79,7 @@ BEGIN
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard TO genomeguard_runtime';
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
+    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
       IF EXISTS (
         SELECT 1 FROM pg_roles
