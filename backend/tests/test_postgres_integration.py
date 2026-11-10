@@ -125,7 +125,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2, 3, 4, 5, 6]
+    assert versions == [1, 2, 3, 4, 5, 6, 7]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -156,7 +156,7 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
         versions = [row["version"] for row in reopened.q(
             "SELECT version FROM schema_migrations ORDER BY version"
         )]
-        assert versions == [1, 2, 3, 4, 5, 6]
+        assert versions == [1, 2, 3, 4, 5, 6, 7]
     finally:
         reopened.close()
 
@@ -176,12 +176,22 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
             f'TO "{role}"'
         )
         pg_store.connection.execute(
-            f'GRANT SELECT ON requesters TO "{role}"'
+            f'GRANT SELECT ON requesters, consent_events TO "{role}"'
         )
         pg_store.connection.execute(
             f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
         )
 
+        pg_store.x(
+            "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (998, "test", "TEST", "{}", 998, None),
+        )
+        pg_store.record_consent_event(
+            "00000000-0000-4000-8000-000000000002", 998, "test-dataset", "withdrawn",
+            b"encrypted-consent-payload", "https://consent.example.edu", "b" * 64,
+            "2026-11-10T00:00:00Z",
+        )
         ids = {}
         for org in ("tenant-a", "tenant-b"):
             rid = pg_store.add_requester(
@@ -213,10 +223,17 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
         with pg_store.transaction():
             # No organization context is default-deny for tenant-owned rows.
             assert pg_store.q("SELECT id FROM requests") == []
+            assert pg_store.q("SELECT event_id FROM consent_events") == []
+            assert pg_store.q(
+                "SELECT has_table_privilege(current_user,'requests','TRUNCATE') AS can_truncate"
+            )[0]["can_truncate"] is False
 
         with pg_store.transaction():
             pg_store.set_admin_access()
             assert {row["id"] for row in pg_store.q("SELECT id FROM requests")} == set(ids.values())
+            assert pg_store.q("SELECT event_id FROM consent_events") == [
+                {"event_id": "00000000-0000-4000-8000-000000000002"},
+            ]
 
         with pytest.raises(psycopg.Error):
             with pg_store.transaction():
