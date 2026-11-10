@@ -285,3 +285,116 @@ def test_schema_migrations_execute_only_through_owner_connection():
                for sql, _args, _kwargs in owner.statements)
     assert all(kwargs.get("prepare") is False for sql, _args, kwargs in owner.statements
                if "CREATE OR REPLACE FUNCTION" in sql)
+
+
+def test_transaction_reconnects_if_provider_closes_session_before_transaction_starts(monkeypatch):
+    import threading
+    from contextlib import nullcontext
+
+    import psycopg
+
+    from app.postgres_store import PostgresStore, _ConnectionCompat
+
+    class StaleTransaction:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __enter__(self):
+            self.connection.broken = True
+            raise psycopg.OperationalError(
+                "consuming input failed: SSL connection has been closed unexpectedly"
+            )
+
+        def __exit__(self, *args):
+            return False
+
+    class FakeConnection:
+        def __init__(self, *, stale=False):
+            self.closed = 0
+            self.broken = False
+            self.stale = stale
+            self.statements = []
+
+        def transaction(self):
+            return StaleTransaction(self) if self.stale else nullcontext()
+
+        def execute(self, statement, args=()):
+            self.statements.append((statement, args))
+
+        def close(self):
+            self.closed = 1
+
+    old = FakeConnection(stale=True)
+    replacement = FakeConnection()
+    calls = []
+    monkeypatch.setattr(
+        "app.postgres_store.psycopg.connect",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or replacement,
+    )
+
+    store = object.__new__(PostgresStore)
+    store.database_url = "postgresql://example.invalid/db"
+    store.connect_timeout = 7
+    store._transaction_depth = 0
+    store.lock = threading.RLock()
+    store.connection = old
+    store.db = _ConnectionCompat(old, store)
+
+    with store.transaction():
+        assert store._transaction_depth == 1
+        store.connection.execute("SELECT 42")
+
+    assert old.closed == 1
+    assert len(calls) == 1
+    assert store.connection is replacement
+    assert store.db.connection is replacement
+    assert replacement.statements == [
+        ("SET search_path TO genomeguard_runtime, public", ()),
+        ("SELECT pg_advisory_xact_lock(71020261026)", ()),
+        ("SELECT 42", ()),
+    ]
+    assert store._transaction_depth == 0
+
+
+def test_transaction_never_retries_operational_error_after_application_code_started(monkeypatch):
+    import threading
+    from contextlib import nullcontext
+
+    import psycopg
+    import pytest
+
+    from app.postgres_store import PostgresStore, _ConnectionCompat
+
+    class FakeConnection:
+        closed = 0
+        broken = False
+
+        def transaction(self):
+            return nullcontext()
+
+        def execute(self, statement, args=()):
+            return None
+
+        def close(self):
+            self.closed = 1
+
+    connection = FakeConnection()
+    monkeypatch.setattr(
+        "app.postgres_store.psycopg.connect",
+        lambda *args, **kwargs: pytest.fail("application transaction must never be replayed"),
+    )
+
+    store = object.__new__(PostgresStore)
+    store.database_url = "postgresql://example.invalid/db"
+    store.connect_timeout = 7
+    store._transaction_depth = 0
+    store.lock = threading.RLock()
+    store.connection = connection
+    store.db = _ConnectionCompat(connection, store)
+
+    with pytest.raises(psycopg.OperationalError, match="commit outcome is unknown"):
+        with store.transaction():
+            raise psycopg.OperationalError("commit outcome is unknown")
+
+    assert connection.closed == 0
+    assert store._transaction_depth == 0
