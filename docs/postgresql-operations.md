@@ -23,7 +23,7 @@ The numbered migrations are applied once and recorded in `schema_migrations`. Th
 
 Migrations 003 and 005 add OIDC identity bindings, organization IDs and forced RLS on requests, decisions, epsilon-ledger and alerts. The API sets transaction-local organization scope only after verifying an OIDC token and resolving the exact active binding. Admin routes use a separate context after authenticating a reviewer/steward. A missing context sees no tenant rows. The synthetic demo compatibility scope is permitted only when demo mode is enabled.
 
-The staging Render service is now configured with `genomeguard_runtime` as the runtime URL and `genomeguard_owner` as the separate migration URL. Direct inspection found the runtime role was not superuser and did not have BYPASSRLS, but it initially retained CREATE on the runtime schema and TRUNCATE on tables. Migration 007 revokes those privileges; the new startup assertion blocks launch if they remain. Verify the post-migration role flags and table privileges before treating the staging role as least-privilege.
+The Render staging service has **not yet been switched** to the new credentials. The intended provider-managed principals are `genomeguard_app_runtime` for application traffic and `genomeguard_owner` for migrations. Migration 007 transfers schema and application-object ownership to the migration principal, verifies the application role is not privileged or a member of the owner role, grants only required DML/sequence access, and revokes schema CREATE and TRUNCATE. Migration 009 removes audit-log mutation privileges. The application role must pass `PostgresStore.assert_least_privilege_runtime` before deployment is accepted.
 
 ## Migrating existing SQLite records
 
