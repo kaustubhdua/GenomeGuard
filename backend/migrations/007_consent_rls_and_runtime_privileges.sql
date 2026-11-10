@@ -100,6 +100,18 @@ BEGIN
            || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
            || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
+             || 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO genomeguard_app_runtime';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
+             || 'GRANT USAGE, SELECT ON SEQUENCES TO genomeguard_app_runtime';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
+             || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_app_runtime';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
+             || 'GRANT SELECT ON TABLES TO genomeguard_app_runtime';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
+             || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_app_runtime';
+      END IF;
     END IF;
   END IF;
 END;
