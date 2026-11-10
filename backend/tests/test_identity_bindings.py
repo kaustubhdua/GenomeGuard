@@ -83,6 +83,10 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         {"purpose": "disease_research", "disease": None, "is_commercial": False,
          "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
     )
+    # Record the RLS context calls just as the PostgreSQL store would receive them.
+    rls_scopes = []
+    svc.store.set_tenant = lambda organization_id: rls_scopes.append(("tenant", organization_id))
+    svc.store.set_admin_access = lambda: rls_scopes.append(("global_admin", None))
     client = TestClient(create_app(svc))
 
     researcher_headers = {"Authorization": "Bearer researcher-sub"}
@@ -93,6 +97,8 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     assert client.get(f"/requests/{request_id}", headers=reviewer_headers).status_code == 200
     assert client.get("/admin/anomalies", headers=researcher_headers).status_code == 403
     assert client.get("/admin/anomalies", headers=reviewer_headers).status_code == 200
+    assert ("tenant", "org-a") in rls_scopes
+    assert ("global_admin", None) not in rls_scopes
     assert client.get("/me", headers=reviewer_headers).status_code == 403
     # An organization-bound reviewer must not inspect the global audit ledger.
     assert client.get("/audit", headers=reviewer_headers).status_code == 403
