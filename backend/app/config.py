@@ -106,8 +106,9 @@ def validate_settings(s: Settings) -> None:
             problems.append("GG_OIDC_AUDIENCE must identify the registered API audience")
         if not s.oidc_client_id.strip():
             problems.append("GG_OIDC_CLIENT_ID must identify the registered public OIDC client")
-        if not s.oidc_redirect_uri.startswith("https://"):
-            problems.append("GG_OIDC_REDIRECT_URI must be the exact registered HTTPS callback URL")
+        redirect = urlsplit(s.oidc_redirect_uri)
+        if redirect.scheme != "https" or not redirect.netloc or redirect.fragment:
+            problems.append("GG_OIDC_REDIRECT_URI must be the exact registered HTTPS callback URL without a fragment")
         if not s.oidc_jwks_url.startswith("https://"):
             problems.append("GG_OIDC_JWKS_URL must be an HTTPS JWKS endpoint")
         if not s.oidc_organization_claim.strip() or not s.oidc_allowed_organizations:
