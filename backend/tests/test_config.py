@@ -21,7 +21,17 @@ def secure_settings(**overrides):
 
 
 def test_non_demo_settings_accept_postgresql_and_secure_keys():
-    validate_settings(secure_settings())
+    validate_settings(secure_settings(
+        oidc_required=True,
+        oidc_admin_required=True,
+        tenant_isolation_required=True,
+        oidc_issuer="https://id.example.edu",
+        oidc_audience="genomeguard-api",
+        oidc_client_id="genomeguard-browser",
+        oidc_redirect_uri="https://genomeguard.example.edu/",
+        oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
+        oidc_allowed_organizations=("research-org-1",),
+    ))
 
 
 @pytest.mark.parametrize(
@@ -58,6 +68,7 @@ def test_tenant_isolation_requires_fully_configured_oidc():
     validate_settings(secure_settings(
         tenant_isolation_required=True,
         oidc_required=True,
+        oidc_admin_required=True,
         oidc_issuer="https://id.example.edu",
         oidc_audience="genomeguard-api",
         oidc_client_id="genomeguard-browser",
