@@ -34,7 +34,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
 | Hosting and persistence | The first-party Python/Starlette API serves the frontend and all application routes; SQLite supports local development and PostgreSQL supports durable deployments | No managed backend or hosted authentication service is required. Production still requires operator-managed PostgreSQL, persistent storage, backups, and identity governance. |
 
-These boundaries are intentional and should remain visible in the interface and any exported results. See the [current implementation and release status](docs/current-status-2026-11-10.md) for the latest verified CI evidence and production blockers.
+These boundaries are intentional and should remain visible in the interface and any exported results. See the [current implementation and release status](docs/current-status-2026-11-10.md) and the [detailed release-readiness report](docs/release-readiness-2026-11-10.md) for the latest verified CI evidence and production blockers.
 
 ## Backend and identity
 
@@ -108,6 +108,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Real cohort ingestion and consent requirements](docs/real-cohort-consent.md)
 - [Hosted deployment and operational limitations](docs/production-deployment.md)
 - [PostgreSQL operations, backups, and recovery](docs/postgresql-operations.md)
+- [Release readiness and database validation evidence](docs/release-readiness-2026-11-10.md)
 - [Evidence-based completion audit (26 October 2026)](docs/completion-audit-2026-10-26.md)
 - [Production assurance implementation status](docs/production-assurance-implementation-2026-10-26.md)
 - [OWASP ASVS verification register](docs/asvs-verification.md)
