@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import sqlite3
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from tests.helpers import make_service
 
 from app.core.audit_chain import canonical_json
 from app.service import ServiceError
+from app.store import Store
 
 
 def signed_event(private, dataset_id, event_type="withdrawn"):
@@ -113,3 +115,23 @@ def test_signed_consent_rejects_wrong_dataset_and_untrusted_issuer():
         svc.apply_signed_consent_event(
             event, public_key_b64=public, trusted_issuer="https://consent.example.edu",
         )
+
+
+def test_sqlite_upgrade_scrubs_legacy_raw_source_sample_ids(tmp_path):
+    path = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "CREATE TABLE donors(id INTEGER PRIMARY KEY, cohort_id TEXT, population TEXT, "
+        "consent_json TEXT, family_id INTEGER, withdrawn_at TEXT, source_sample_id TEXT)"
+    )
+    connection.execute(
+        "INSERT INTO donors VALUES(1,'cohort','POP','{}',1,NULL,'RAW-SAMPLE-IDENTIFIER')"
+    )
+    connection.commit()
+    connection.close()
+
+    store = Store(str(path))
+    row = store.one("SELECT source_sample_id, source_sample_id_hash FROM donors WHERE id=1")
+    assert row["source_sample_id"] is None
+    assert row["source_sample_id_hash"] is None
+    store.db.close()
