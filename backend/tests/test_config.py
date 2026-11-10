@@ -50,3 +50,28 @@ def test_non_demo_settings_reject_unsafe_values(overrides, message):
 def test_synthetic_demo_mode_keeps_no_key_guided_demo_available():
     validate_settings(Settings(demo_mode=True, admin_api_key="demo-admin-key",
                                master_key="", allow_tamper_demo=True))
+
+
+def test_tenant_isolation_requires_fully_configured_oidc():
+    with pytest.raises(ValueError, match="GG_TENANT_ISOLATION_REQUIRED"):
+        validate_settings(secure_settings(tenant_isolation_required=True))
+    validate_settings(secure_settings(
+        tenant_isolation_required=True,
+        oidc_required=True,
+        oidc_issuer="https://id.example.edu",
+        oidc_audience="genomeguard-api",
+        oidc_client_id="genomeguard-browser",
+        oidc_redirect_uri="https://genomeguard.example.edu/",
+        oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
+        oidc_allowed_organizations=("research-org-1",),
+    ))
+
+
+def test_signed_consent_authority_requires_https_issuer_and_ed25519_key():
+    with pytest.raises(ValueError, match="GG_CONSENT_AUTHORITY_PUBLIC_KEY"):
+        validate_settings(secure_settings(consent_authority_required=True))
+    validate_settings(secure_settings(
+        consent_authority_required=True,
+        consent_authority_issuer="https://consent.example.edu",
+        consent_authority_public_key=base64.b64encode(b"p" * 32).decode(),
+    ))
