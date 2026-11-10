@@ -2,7 +2,7 @@
 CREATE OR REPLACE FUNCTION genomeguard.reject_audit_log_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $$
+AS $gg_audit$
 BEGIN
   RAISE EXCEPTION 'audit_log is append-only' USING ERRCODE = '55000';
 END;
