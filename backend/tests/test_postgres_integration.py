@@ -335,3 +335,13 @@ def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.execute(f'DROP OWNED BY "{role}"')
         pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+
+
+
+def test_postgres_rejects_distinct_urls_for_the_same_runtime_and_migration_role():
+    url = os.environ["GG_TEST_DATABASE_URL"]
+    with pytest.raises(ValueError, match="different PostgreSQL roles"):
+        PostgresStore(
+            url,
+            migration_database_url=url + "?application_name=misleading-distinct-url",
+        )
