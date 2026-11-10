@@ -56,7 +56,7 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         oidc_issuer="https://id.example.edu",
         oidc_audience="genomeguard-api",
         oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
-        oidc_allowed_organizations=("org-a",),
+        oidc_allowed_organizations=("org-a", "org-b"),
         oidc_required=True,
         oidc_admin_required=True,
     )
@@ -94,5 +94,29 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     assert client.get("/admin/anomalies", headers=researcher_headers).status_code == 403
     assert client.get("/admin/anomalies", headers=reviewer_headers).status_code == 200
     assert client.get("/me", headers=reviewer_headers).status_code == 403
+    # An organization-bound reviewer must not inspect the global audit ledger.
+    assert client.get("/audit", headers=reviewer_headers).status_code == 403
+
+    steward_id = svc.store.add_requester(
+        "Steward", "steward", "controlled", "Example University", hash_key("unused-steward-key"),
+    )
+    svc.store.add_identity_binding(
+        steward_id, "https://id.example.edu", "steward-sub", "org-a",
+    )
+    steward_headers = {"Authorization": "Bearer steward-sub"}
+    # Even a steward cannot create or revoke bindings in a different allowed tenant.
+    cross_org = client.post(
+        "/admin/oidc-bindings",
+        headers=steward_headers,
+        json={"requester_id": requester["id"], "subject": "other-sub", "organization_id": "org-b"},
+    )
+    assert cross_org.status_code == 403
+    assert cross_org.json()["error"] == "cross_organization_binding_forbidden"
+    assert client.post(
+        "/admin/oidc-bindings/revoke",
+        headers=steward_headers,
+        json={"subject": "researcher-sub", "organization_id": "org-b"},
+    ).status_code == 403
+
     svc.store.revoke_identity_binding("https://id.example.edu", "reviewer-sub", "org-a")
     assert client.get("/admin/anomalies", headers=reviewer_headers).status_code == 403
