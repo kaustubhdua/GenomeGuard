@@ -114,6 +114,7 @@ function drawWho() {
   const note = $("who-note");
   // Account-free guest mode: only synthetic demo personas are selectable.
   if (state.demo) {
+    $("auth-controls").replaceChildren();
     label.hidden = false;
     selector.hidden = false;
     if (!state.demo.admin_key && isSteward()) setWho(state.demo.requesters?.[0]?.api_key || "");
