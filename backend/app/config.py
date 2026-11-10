@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from app.core.params import BANDS, CREDENTIAL_LEVELS, DATA_LEVELS, OUTCOMES, Params  # noqa: F401
 from app.core.params import DEFAULT as params  # noqa: F401
