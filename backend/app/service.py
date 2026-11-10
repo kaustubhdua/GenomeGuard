@@ -897,8 +897,12 @@ class GenomeGuardService:
         self.ds.donors[donor_id - 1] = replace(donor, consent=consent, withdrawn=withdrawn)
         self.store.set_donor_consent(donor_id, consent)
         self.store.set_donor_withdrawn(donor_id, payload["effective_at"] if withdrawn else None)
+        consent_blob = crypto.encrypt(
+            self.master, self.dataset_id, donor_id,
+            json.dumps(consent, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8"),
+        )
         self.store.record_consent_event(
-            payload["event_id"], donor_id, self.dataset_id, event_type, consent,
+            payload["event_id"], donor_id, self.dataset_id, event_type, consent_blob,
             trusted_issuer, source_digest, payload["effective_at"],
         )
         self.audit.append(
