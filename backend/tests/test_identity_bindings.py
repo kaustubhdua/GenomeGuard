@@ -65,17 +65,21 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     svc.store.add_identity_binding(
         reviewer_id, "https://id.example.edu", "reviewer-sub", "org-a",
     )
+    request_id = svc.store.add_request(
+        requester["id"], "2026-11-10T00:00:00Z",
+        {"purpose": "disease_research", "disease": None, "is_commercial": False,
+         "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
+    )
     client = TestClient(create_app(svc))
 
-    assert client.get("/me", headers={"Authorization": "Bearer researcher-sub"}).status_code == 200
-    assert client.get("/admin/anomalies", headers={
-        "Authorization": "Bearer researcher-sub",
-    }).status_code == 403
-    assert client.get("/admin/anomalies", headers={
-        "Authorization": "Bearer reviewer-sub",
-    }).status_code == 200
-    assert client.get("/me", headers={"Authorization": "Bearer reviewer-sub"}).status_code == 403
+    researcher_headers = {"Authorization": "Bearer researcher-sub"}
+    reviewer_headers = {"Authorization": "Bearer reviewer-sub"}
+    assert client.get("/me", headers=researcher_headers).status_code == 200
+    assert len(client.get("/requests", headers=researcher_headers).json()["requests"]) == 1
+    assert len(client.get("/requests", headers=reviewer_headers).json()["requests"]) == 1
+    assert client.get(f"/requests/{request_id}", headers=reviewer_headers).status_code == 200
+    assert client.get("/admin/anomalies", headers=researcher_headers).status_code == 403
+    assert client.get("/admin/anomalies", headers=reviewer_headers).status_code == 200
+    assert client.get("/me", headers=reviewer_headers).status_code == 403
     svc.store.revoke_identity_binding("https://id.example.edu", "reviewer-sub", "org-a")
-    assert client.get("/admin/anomalies", headers={
-        "Authorization": "Bearer reviewer-sub",
-    }).status_code == 403
+    assert client.get("/admin/anomalies", headers=reviewer_headers).status_code == 403
