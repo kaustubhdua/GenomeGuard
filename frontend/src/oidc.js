@@ -23,7 +23,7 @@ function randomVerifier() {
   return encode64url(crypto.getRandomValues(new Uint8Array(48)));
 }
 
-async function discover(issuer) {
+async function discover(issuer, expectedJwksUrl) {
   if (!issuer.startsWith("https://")) throw new Error("Institutional issuer must use HTTPS.");
   const response = await fetch(issuer.replace(/\/$/, "") + "/.well-known/openid-configuration", {
     headers: { Accept: "application/json" }, credentials: "omit", cache: "no-store",
@@ -35,6 +35,9 @@ async function discover(issuer) {
     if (typeof metadata[name] !== "string" || !metadata[name].startsWith("https://")) {
       throw new Error("The OIDC provider has an invalid " + name + ".");
     }
+  }
+  if (metadata.jwks_uri !== expectedJwksUrl) {
+    throw new Error("OIDC discovery JWKS URI does not match the trusted API configuration.");
   }
   if (!Array.isArray(metadata.response_types_supported)
       || !metadata.response_types_supported.includes("code")) {
@@ -115,7 +118,7 @@ export async function beginOidcLogin(config) {
   if (!config?.enabled || !config.client_id || !config.redirect_uri || !config.audience) {
     throw new Error("Institutional sign-in is not configured for this deployment.");
   }
-  const metadata = await discover(config.issuer);
+  const metadata = await discover(config.issuer, config.jwks_url);
   const verifier = randomVerifier();
   const challenge = encode64url(new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
@@ -157,7 +160,7 @@ export async function completeOidcCallback(config) {
     throw new Error("The sign-in state did not match this browser session.");
   }
 
-  const metadata = await discover(config.issuer);
+  const metadata = await discover(config.issuer, config.jwks_url);
   const responseIssuer = url.searchParams.get("iss");
   if ((responseIssuer && responseIssuer !== config.issuer)
       || (metadata.authorization_response_iss_parameter_supported && !responseIssuer)) {
