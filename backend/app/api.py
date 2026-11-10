@@ -378,8 +378,14 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "destructive_tamper_demo_disabled": not settings.allow_tamper_demo,
             "postgres_storage_configured": getattr(svc.store, "backend", "sqlite") == "postgresql",
             "durable_storage_verified": False,
+            "backup_retention_and_restore_verified": False,
+            "monitoring_and_alerting_verified": False,
             "external_audit_anchor_verified": False,
             "institutional_identity_provider_verified": False,
+            # The normalized public-reference importer is not a private,
+            # organization-isolated ingestion and processing lifecycle.
+            "private_cohort_ingestion_verified": False,
+            "tenant_processing_isolation_verified": False,
             "participant_consent_authority_configured": bool(
                 settings.consent_authority_required
                 and settings.consent_authority_issuer.startswith("https://")
