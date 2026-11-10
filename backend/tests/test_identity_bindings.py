@@ -132,6 +132,8 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         global_admin_id, "https://id.example.edu", "global-admin-sub", "org-a",
     )
     global_admin_headers = {"Authorization": "Bearer global-admin-sub"}
+    # Even an OIDC principal provisioned with the organization-level admin role
+    # cannot provision another organization or obtain the global audit ledger.
     provisioned = client.post(
         "/admin/requesters",
         headers=global_admin_headers,
@@ -140,19 +142,15 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
             "credential_level": "registered", "role": "researcher", "organization_id": "org-b",
         },
     )
-    assert provisioned.status_code == 201
-    provisioned_id = provisioned.json()["id"]
-    assert provisioned.json()["identity_binding_required"] is True
-    bound = client.post(
+    assert provisioned.status_code == 403
+    assert client.post(
         "/admin/oidc-bindings",
         headers=global_admin_headers,
-        json={"requester_id": provisioned_id, "subject": "tenant-b-sub", "organization_id": "org-b"},
-    )
-    assert bound.status_code == 201
-    assert svc.store.requester_by_oidc(
-        "https://id.example.edu", "tenant-b-sub", "org-b",
-    )["id"] == provisioned_id
-    assert client.get("/audit", headers=global_admin_headers).status_code == 200
+        json={"requester_id": requester["id"], "subject": "tenant-b-sub", "organization_id": "org-b"},
+    ).status_code == 403
+    assert client.get("/anomalies", headers=global_admin_headers).status_code == 200
+    assert client.get("/audit", headers=global_admin_headers).status_code == 403
+    assert ("global_admin", None) not in rls_scopes
 
     svc.store.revoke_identity_binding("https://id.example.edu", "reviewer-sub", "org-a")
     assert client.get("/anomalies", headers=reviewer_headers).status_code == 403
