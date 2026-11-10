@@ -84,6 +84,37 @@ def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
     )["withdrawn"] is False
 
 
+
+def test_failed_consent_ledger_write_does_not_mutate_in_memory_cohort(monkeypatch):
+    svc = make_service()
+    private = Ed25519PrivateKey.generate()
+    public = base64.b64encode(private.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw,
+    )).decode()
+    svc.store.x(
+        "UPDATE donors SET source_sample_id_hash=? WHERE id=1",
+        (hmac.new(
+            svc.master, svc.dataset_id.encode() + b"\\0" + b"SOURCE-SAMPLE-001",
+            hashlib.sha256,
+        ).hexdigest(),),
+    )
+    event = signed_event(private, svc.dataset_id)
+
+    def fail_record(*args, **kwargs):
+        raise RuntimeError("simulated ledger write failure")
+
+    monkeypatch.setattr(svc.store, "record_consent_event", fail_record)
+    with pytest.raises(RuntimeError, match="ledger write failure"):
+        with svc.store.transaction():
+            svc.apply_signed_consent_event(
+                event, public_key_b64=public, trusted_issuer="https://consent.example.edu",
+            )
+
+    assert svc.ds.donors[0].withdrawn is False
+    assert svc.store.one("SELECT withdrawn_at FROM donors WHERE id=1")["withdrawn_at"] is None
+    assert svc.store.one("SELECT consent_events.event_id FROM consent_events") is None
+
+
 def test_signed_consent_rejects_tampering_and_unknown_source_sample():
     svc = make_service()
     private = Ed25519PrivateKey.generate()
