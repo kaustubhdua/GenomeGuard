@@ -233,3 +233,30 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.execute(f'DROP OWNED BY "{role}"')
         pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+
+
+
+def test_postgres_consent_event_ledger_rejects_update_and_delete(pg_store):
+    pg_store.x(
+        "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at) "
+        "VALUES(?,?,?,?,?,?)",
+        (999, "test", "TEST", "{}", 999, None),
+    )
+    pg_store.record_consent_event(
+        "00000000-0000-4000-8000-000000000001", 999, "test-dataset", "withdrawn",
+        b"encrypted-consent-payload", "https://consent.example.edu", "a" * 64,
+        "2026-11-10T00:00:00Z",
+    )
+    with pytest.raises(Exception, match="append-only"):
+        with pg_store.transaction():
+            pg_store.x(
+                "UPDATE consent_events SET event_type='consent_updated' "
+                "WHERE event_id=?",
+                ("00000000-0000-4000-8000-000000000001",),
+            )
+    with pytest.raises(Exception, match="append-only"):
+        with pg_store.transaction():
+            pg_store.x(
+                "DELETE FROM consent_events WHERE event_id=?",
+                ("00000000-0000-4000-8000-000000000001",),
+            )
