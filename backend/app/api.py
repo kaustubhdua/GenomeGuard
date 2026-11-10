@@ -250,8 +250,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
             async def handler(request: Request):
                 try:
-                    if who == "requester":
-                        requester(request)  # authenticate before entering the handler
+                    # Each route authenticates inside its own handler so protocol-specific
+                    # error envelopes (for example GA4GH Beacon) remain intact.
                     return await fn(request)
                 except ServiceError as e:
                     return _j(e.to_json(), e.status)
