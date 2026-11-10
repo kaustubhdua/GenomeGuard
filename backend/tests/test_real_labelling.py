@@ -21,9 +21,9 @@ REAL_META = {"source": "1000 Genomes (IGSR)", "genotypes_real": True, "consent_s
 
 
 def _cohort_file(d: str, meta: dict) -> str:
-    # Provenance/evaluation-label tests need a valid cohort, not a production-size
-    # matrix. Keep this fixture small so repeated save/load/bootstrap cycles stay fast.
-    c = generate(n_donors=300, n_variants=300, n_families=60, seed=5)
+    # Membership inference needs 100 members + a 200-person reference panel +
+    # 40 non-members. Keep enough donors for that design without a production-size matrix.
+    c = generate(n_donors=360, n_variants=360, n_families=72, seed=5)
     out = Path(d) / "c.npz"
     real.save_cohort(c, meta, out)
     return str(out)
