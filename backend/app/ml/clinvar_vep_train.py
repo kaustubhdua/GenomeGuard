@@ -109,10 +109,22 @@ def eligible_rows(path: Path, cap: int, seed: int) -> tuple[list[dict], Counter]
     for y in (0, 1):
         rng.shuffle(by_class[y])
         selected.extend(by_class[y][:per_class])
-    # Deduplicate exact genomic alleles before annotation.
+    # Collapse duplicate submissions by exact allele. If ClinVar contains
+    # conflicting binary labels for the same allele, exclude that allele rather
+    # than allowing row order to silently choose its training label.
     unique = {}
+    conflicted = set()
     for row in selected:
-        unique[(row["chrom"], row["pos"], row["ref"], row["alt"])] = row
+        key = (row["chrom"], row["pos"], row["ref"], row["alt"])
+        if key in conflicted:
+            continue
+        previous = unique.get(key)
+        if previous and previous["label"] != row["label"]:
+            unique.pop(key, None)
+            conflicted.add(key)
+            counts["conflicting_allele_labels"] += 1
+        else:
+            unique[key] = row
     rows = list(unique.values())
     counts["selected_balanced"] = len(rows)
     counts["selected_benign"] = sum(x["label"] == 0 for x in rows)
@@ -248,7 +260,10 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/clinvar-vep"))
     parser.add_argument("--max-variants", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--vep-version", default="unspecified", help="Ensembl VEP/cache release used for annotations")
     parser.add_argument("--vep-jsonl", type=Path, default=None, help="local Ensembl VEP --json output; no REST endpoint is called")
+    parser.add_argument("--prepare-only", action="store_true",
+                        help="download/filter ClinVar and write the VEP input VCF, without training")
     args = parser.parse_args()
     if args.max_variants < 1000 or args.max_variants > 20000:
         parser.error("--max-variants must be between 1000 and 20000")
@@ -261,6 +276,17 @@ def main() -> int:
     selected, counts = eligible_rows(clinvar, args.max_variants, args.seed)
     input_vcf = args.data_dir / "clinvar_selected_for_vep.vcf"
     write_vep_vcf(selected, input_vcf)
+    if args.prepare_only:
+        print(json.dumps({
+            "status": "prepared",
+            "clinvar_sha256": digest(clinvar),
+            "input_vcf": str(input_vcf),
+            "input_vcf_sha256": digest(input_vcf),
+            "selected_variants": len(selected),
+            "selection_counts": dict(counts),
+            "assembly": "GRCh38",
+        }, indent=2))
+        return 0
     vep_jsonl = args.vep_jsonl or (args.data_dir / VEP_OFFLINE_FILE)
     cache = args.data_dir / "ensembl_vep_annotations.jsonl"
     records = annotate(selected, vep_jsonl, cache)
@@ -315,6 +341,7 @@ def main() -> int:
     metrics = {"models": all_metrics}
     metadata = {
         "model": "clinvar_vep_research", "version": "0.2.0",
+        "ensembl_vep_version": args.vep_version,
         "sources": [
             {"name": "NCBI ClinVar variant_summary", "url": CLINVAR_URL, "sha256": digest(clinvar)},
             {"name": "Ensembl VEP offline CLI/cache", "annotation_file": str(vep_jsonl), "annotation_file_sha256": digest(vep_jsonl), "annotation_cache_sha256": digest(cache)},

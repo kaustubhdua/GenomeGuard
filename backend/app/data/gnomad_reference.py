@@ -96,9 +96,9 @@ def iter_frequency_rows(path: Path) -> Iterator[tuple]:
 
 
 def import_to_database(args) -> dict:
-    database_url = os.environ.get("DATABASE_URL")
+    database_url = os.environ.get("GG_IMPORT_DATABASE_URL") or os.environ.get("GG_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not database_url:
-        raise ReferenceImportError("DATABASE_URL must be configured in the trusted server environment")
+        raise ReferenceImportError("GG_IMPORT_DATABASE_URL or GG_DATABASE_URL must be set in the trusted server environment")
     if not args.input.is_file() or args.input.stat().st_size == 0:
         raise ReferenceImportError("input TSV is missing or empty")
     digest = sha256_file(args.input)
@@ -107,8 +107,6 @@ def import_to_database(args) -> dict:
     inserted = 0
     batch: list[tuple] = []
     with psycopg.connect(database_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SET ROLE genomeguard_reference_importer")
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute(
@@ -164,9 +162,9 @@ def export_to_excel(args) -> dict:
         raise ReferenceImportError(
             "Excel export requires the optional dependency: pip install .[reference]"
         ) from exc
-    database_url = os.environ.get("DATABASE_URL")
+    database_url = os.environ.get("GG_IMPORT_DATABASE_URL") or os.environ.get("GG_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not database_url:
-        raise ReferenceImportError("DATABASE_URL must be configured in the trusted server environment")
+        raise ReferenceImportError("GG_IMPORT_DATABASE_URL or GG_DATABASE_URL must be set in the trusted server environment")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     headers = (
         "chromosome", "position", "reference_allele", "alternate_allele",

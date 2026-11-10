@@ -253,10 +253,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "demo mode is off")
         reqs = {r["name"]: r for r in S().store.requesters()}
-        return _j({"admin_key": settings.admin_api_key, "requesters": [
+        payload = {"requesters": [
             {"id": reqs[n]["id"], "name": n, "role": ro, "tier": lv, "api_key": k,
              "frozen": reqs[n]["frozen_at"] is not None}
-            for n, ro, lv, _i, k in DEMO_REQUESTERS if n in reqs]})
+            for n, ro, lv, _i, k in DEMO_REQUESTERS if n in reqs]}
+        # This is a public endpoint. Never return the hosted administrator credential.
+        # Local interactive demos may explicitly opt in to the local-only workflow.
+        if settings.expose_demo_admin_key:
+            payload["admin_key"] = settings.admin_api_key
+        return _j(payload)
 
     @route("POST", "/admin/requesters", "Provision a requester API key (returned once)", "admin")
     async def provision_requester(request):
@@ -682,8 +687,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def audit_verify(request):
         q = request.query_params
         anchor = None
-        if q.get("anchor_length") and q.get("anchor_hash"):
-            anchor = {"length": int(q["anchor_length"]), "head_hash": q["anchor_hash"]}
+        has_length = q.get("anchor_length") is not None
+        has_hash = q.get("anchor_hash") is not None
+        if has_length != has_hash:
+            raise ServiceError(400, "invalid_anchor", "anchor_length and anchor_hash must be supplied together")
+        if has_length:
+            raw_length = q["anchor_length"]
+            raw_hash = q["anchor_hash"]
+            if not raw_length.isdecimal() or not re.fullmatch(r"[0-9a-f]{64}", raw_hash):
+                raise ServiceError(400, "invalid_anchor", "anchor_length must be a non-negative integer and anchor_hash must be 64 lowercase hexadecimal characters")
+            anchor = {"length": int(raw_length), "head_hash": raw_hash}
         return _j(S().audit.verify(anchor))
 
     @route("GET", "/audit/head", "Current head hash: copy it somewhere outside the system",
@@ -691,13 +704,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def audit_head(request):
         return _j(S().audit.head())
 
-    @route("GET", "/audit/checkpoint", "Verifiable cryptographic checkpoint of audit head",
+    @route("GET", "/audit/checkpoint", "Export unsigned audit integrity checkpoint; signer is an attribution label only",
            "public")
     async def audit_checkpoint(request):
         signer = request.query_params.get("signer", "system")
+        if not signer.strip() or len(signer) > 128:
+            raise ServiceError(400, "invalid_signer_label", "signer label must contain 1–128 characters")
         return _j(S().audit.checkpoint(signed_by=signer))
 
-    @route("POST", "/audit/verify-checkpoint", "Verify a checkpoint against internal digest and chain",
+    @route("POST", "/audit/verify-checkpoint", "Verify checkpoint structure, unkeyed digest, and anchored audit prefix",
            "public")
     async def audit_verify_checkpoint(request):
         body = await _body(request)
@@ -888,9 +903,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(400, "invalid_assembly", "Choose GRCh37 or GRCh38.")
         svc = S()
         coverage_method = getattr(svc.store, "verified_public_chromosome_coverage", None)
-        if coverage_method is None:
-            raise CatalogueUnavailableError("The store has no verified chromosome-coverage query.")
-        coverage = await run_in_threadpool(coverage_method, assembly)
+        coverage_available = coverage_method is not None
+        coverage = []
+        if coverage_method is not None:
+            try:
+                coverage = await run_in_threadpool(coverage_method, assembly)
+            except CatalogueUnavailableError:
+                # Static reference lengths remain useful, but never imply that missing
+                # coverage data means zero observed variants when the query failed.
+                coverage_available = False
         positions_by_chromosome = {row["chromosome"]: row for row in coverage}
         # Standard human chromosome sizes for GRCh38 / GRCh37 (bp).
         GRCH38 = [
@@ -925,7 +946,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         rows = []
         for chrom, kind, length_bp in ref:
             coordinates = positions_by_chromosome.get(chrom)
-            loaded = coordinates is not None
+            loaded = coverage_available and coordinates is not None
             rows.append({
                 "chromosome": chrom, "kind": kind, "length_bp": length_bp,
                 "data_coverage": {
@@ -933,13 +954,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                     "first_position": coordinates["first_position"] if loaded else None,
                     "last_position": coordinates["last_position"] if loaded else None,
                     "variant_data_loaded": loaded,
+                    "coverage_status": "available" if coverage_available else "unavailable",
                 },
             })
         return _j({
             "reference_assembly": assembly, "chromosome_count": len(rows), "chromosomes": rows,
+            "coverage_available": coverage_available,
             "provenance_note": (
                 "Reference lengths are from the Genome Reference Consortium. Coverage comes only from normalized rows "
                 "belonging to approved, reconciled public manifests with the exact requested assembly."
+                if coverage_available else
+                "Reference lengths are from the Genome Reference Consortium. The coverage query is unavailable, "
+                "so no dataset coverage is asserted."
             ),
         })
     @route("GET", "/openapi.json", "Machine-readable endpoint list", "public")

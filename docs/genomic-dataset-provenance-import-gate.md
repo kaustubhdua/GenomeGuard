@@ -17,18 +17,18 @@ Do not import controlled-access or private participant data into the public rese
 - Reference assembly: GRCh37; Phase 3 represents 2,504 samples, but the actual imported sample count must be measured from this exact artifact.
 - Citation: The 1000 Genomes Project Consortium, *A global reference for human genetic variation*, Nature 526, 68–74 (2015), DOI: 10.1038/nature15393.
 - Reuse review: read the IGSR collection page, its specific reuse statement and [IGSR's data-use disclaimer](https://www.internationalgenome.org/IGSR_disclaimer/) before import. The CLI's review flag is an operator attestation, not independent ethics/legal approval.
-- Scope: this is chromosome 22 only, not whole-genome coverage. No normalized Supabase import is currently verified.
+- Scope: this is chromosome 22 only, not whole-genome coverage. No normalized PostgreSQL import is currently verified.
 
 ## Manifest schema
 
-Migration `20261029120000_genomeguard_variant_dataset_manifest.sql` adds the private `genomeguard.variant_dataset_manifest` ledger. A row records:
+Native migration `backend/migrations/002_normalized_public_references.sql` adds the `genomeguard.variant_dataset_manifest` ledger and normalized data tables. A row records:
 - stable dataset key, exact source URL and source release;
 - reference assembly;
 - SHA-256 of the exact source artifact;
 - a human-reviewed data-use status and accurately described consent basis;
 - import status and measured sample, variant, and genotype-call counts.
 
-The ledger is not a substitute for verifying a source or consent. It intentionally has no browser grants and RLS is enabled. Server-side access must be provided through a narrowly scoped, reviewed function; do not grant broad direct access to the table.
+The ledger is not a substitute for verifying a source or consent. These native PostgreSQL tables have no browser grants, and this migration does not enable row-level security (RLS). Access is controlled by PostgreSQL schema/table privileges: keep ownership with a migration role, grant the application role only the minimum required read permissions, and never grant untrusted clients direct database access. Any future direct multi-tenant database access requires separately reviewed RLS policies and negative isolation tests.
 
 A dataset cannot be marked `loaded` unless non-zero variant, sample, and genotype-call counts and an import timestamp are recorded, and the data-use status is approved. The schema does not itself validate biological correctness.
 
@@ -47,7 +47,7 @@ A dataset cannot be marked `loaded` unless non-zero variant, sample, and genotyp
 
 ## Current known state
 
-At the live check on 2026-10-29, the normalized manifest, sample, variant and genotype-call tables all had zero rows. The application API migration and release gate remained false, and the legacy Render dependency flag remained true. The schema exists in the live project, but no normalized dataset has been imported or verified.
+At the live check on 2026-10-29, the normalized manifest, sample, variant and genotype-call tables all had zero rows. The application API migration and release gate remained false, and the legacy Render dependency flag remained true. The schema is provisioned by the standalone PostgreSQL migration, but no normalized dataset has been imported or verified.
 
 ## Acceptance rule
 

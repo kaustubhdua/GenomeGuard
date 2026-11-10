@@ -117,3 +117,44 @@ def test_postgres_mutation_lock_prevents_concurrent_budget_lost_updates(pg_store
     finally:
         for store in stores[1:]:
             store.close()
+
+
+def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
+    versions = [row["version"] for row in pg_store.q(
+        "SELECT version FROM schema_migrations ORDER BY version"
+    )]
+    assert versions == [1, 2]
+    tables = {
+        row["table_name"] for row in pg_store.q(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='genomeguard' AND table_type='BASE TABLE'"
+        )
+    }
+    assert {
+        "variant_dataset_manifest", "dataset_samples", "dataset_variants",
+        "dataset_genotype_calls", "population_reference_manifest",
+        "population_variant_frequency",
+    } <= tables
+
+
+def test_postgres_empty_population_reference_lookup_is_truthful(pg_store):
+    result = pg_store.lookup_population_frequencies("1", 12345, "A", "T", "GRCh38")
+    assert result == {"status": "empty", "matches": [], "truncated": False}
+
+
+def test_postgres_empty_public_chromosome_coverage_is_available(pg_store):
+    assert pg_store.verified_public_chromosome_coverage("GRCh38") == []
+    assert pg_store.verified_public_datasets() == []
+
+
+def test_postgres_native_migrations_are_idempotent(pg_store):
+    url = os.environ["GG_TEST_DATABASE_URL"]
+    reopened = PostgresStore(url)
+    try:
+        versions = [row["version"] for row in reopened.q(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        )]
+        assert versions == [1, 2]
+    finally:
+        reopened.close()
+

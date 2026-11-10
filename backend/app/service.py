@@ -109,7 +109,7 @@ class GenomeGuardService:
         return self.store.requester_by_key(hash_key(key)) if key else None
 
     def is_admin(self, key: str | None) -> bool:
-        return bool(key) and hash_key(key) == self.admin_hash
+        return bool(key) and hmac.compare_digest(hash_key(key), self.admin_hash)
 
     @transactional
     def create_requester(self, name: str, role: str, level: str, institution: str, key: str) -> int:
@@ -1091,6 +1091,24 @@ DEMO_REQUESTERS = [
 ]
 
 
+def _encryption_provenance(genotype_kind: str) -> str:
+    """Describe the data-at-rest boundary without attributing real data to synthetic images."""
+    if genotype_kind == "real_vcf":
+        return (
+            "AES-256-GCM protects selected application records; the public cohort artifact is "
+            "plaintext in this image. Private or controlled-access data are not supported."
+        )
+    if genotype_kind == "synthetic":
+        return (
+            "AES-256-GCM protects selected application records. This synthetic-only cohort "
+            "contains no real participant genotypes; do not use the demo as a private-data deployment."
+        )
+    return (
+        "AES-256-GCM protects selected application records; cohort artifact encryption and "
+        "source provenance are not established. Do not use for private or controlled-access data."
+    )
+
+
 def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
               llm: LLM | None = None, **kwargs) -> GenomeGuardService:
     """Open or seed a cohort, preserving its provenance and failing closed for real-data mode."""
@@ -1281,8 +1299,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         "relatives": "kinship_model", "relatives_label": "Relative exposure is a model",
         "agents": "llm" if llm.available else "templates",
         "agents_label": "Agents: live LLM" if llm.available else "Agents: built-in templates",
-        "encryption": ("AES-256-GCM protects selected application records; public cohort artifact is plaintext in the image. "
-                      "Private or controlled-access data are not supported by this deployment."),
+        "encryption": _encryption_provenance(kind),
     }
     if not store.requesters() and s.demo_mode:
         for name, role, level, inst, key in DEMO_REQUESTERS:

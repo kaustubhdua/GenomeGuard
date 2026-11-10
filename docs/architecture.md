@@ -30,39 +30,43 @@ flowchart LR
 ## The decision is deterministic; agents advise
 
 `app/service.py` (`GenomeGuardService`) runs the pipeline and **makes every decision**. The agents
-(`app/agents/`) turn the numbers into plain language and give advisory opinions (the privacy agent
-can note whether it agrees with the ladder; the access agent summarises requester history). They:
+(`app/agents/`) turn the numbers into plain language and give advisory opinions. They:
 
 - receive only what `agents/sanitizer.py` lets through: counts, bands, reason codes, epsilon
-  values, outcomes. Not genotypes, donor ids, family ids, cohort membership or free text. A test
-  plants a canary string in all of those and asserts it never appears in a prompt.
-- never hold authority. An LLM-only gate could be talked into releasing data by a crafted request;
-  a deterministic gate cannot.
-- fall back to templates (`agents/templates.py`) when there is no API key, so the demo never fails.
-- have their outputs written to the audit chain with the model name and a hash of the prompt.
+  values, and outcomes. Not genotypes, donor IDs, family IDs, cohort membership, or free text.
+  Tests plant canary strings in sensitive fields and assert that they do not reach agent input.
+- never hold authority. An agent cannot approve a request or override the deterministic policy
+  engine; the release decision is made by code.
+- run offline. The current `agents/llm.py` is a compatibility facade that deliberately ignores
+  provider credentials and transports and always reports the hosted LLM unavailable. There are
+  no outbound AI-provider requests. Explanations use deterministic templates and the steward
+  copilot uses its bounded local rules planner.
+- record advisory output and evidence metadata in the audit chain; this is not an external,
+  independently anchored audit service.
 
-### The steward copilot (the one agent that chooses what to do next)
+### The steward copilot (deterministic investigation assistant)
 
-`agents/copilot.py` investigates a held or flagged request for a human steward. Unlike the other
-agents it is a loop: it picks a tool, reads the result, and decides whether to pick another or to
-recommend `approve`, `deny` or `more_info`. Its guardrails are code, not instructions to a model:
+`agents/copilot.py` investigates a held or flagged request for a human steward. It is a bounded
+rules-based loop: it picks a read-only tool, reads the result, and may recommend
+`approve`, `deny`, or `more_info`. Its guardrails are code:
 
-- **Read-only by construction.** It is built from a dict of zero-argument read functions and is
-  never given the service object, so it has no way to approve, deny, freeze, release or edit. A
-  test inspects its source for any write call and rejects unknown (write-like) tool names.
-- **Sanitised.** Every tool result passes through the same `sanitize()` whitelist as the other
-  agents before it is stored or shown to a model. Planted canary strings and instruction text in
-  tool output never reach a prompt (tested).
-- **Bounded.** At most 6 tool calls, each tool once, and it refuses to advise before reading the
-  basics (case, consent, risk).
-- **Never more permissive than the rules.** A deterministic rule set computes a baseline
-  recommendation from the same evidence. If a model recommends something more permissive, its
-  answer is discarded and the rules' answer is used. A model can add caution, never remove it.
-- **Grounded.** Numbers in a model's rationale must appear in the evidence, or the rationale is
-  replaced by the deterministic one.
-- **Works with no key.** A deterministic planner chooses the tools and the rules write the text.
-- **Audited.** Each tool call and the final recommendation are written to the hash chain with the
-  model name and prompt hashes. Endpoint: `POST /requests/{id}/copilot` (steward only).
+- **Read-only by construction.** It receives a dictionary of zero-argument read functions, not the
+  service object, so it cannot approve, deny, freeze, release, or edit.
+- **Sanitised.** Tool results pass through the same `sanitize()` whitelist before being stored
+  or shown. Sensitive canary strings and instruction text in tool output are tested.
+- **Bounded.** At most six tool calls, each tool once, and it refuses to advise before reading
+  the basic case, consent, and risk evidence.
+- **No policy override.** A deterministic rule set computes the baseline recommendation. The
+  copilot cannot recommend a more permissive outcome than that baseline.
+- **Grounded.** Any numeric rationale must be present in the evidence or is replaced by the
+  deterministic explanation.
+- **Offline.** No model provider, API key, network connection, or remote inference is involved.
+- **Audited.** Tool calls and recommendations are written to the local hash chain. Endpoint:
+  `POST /requests/{id}/copilot` (steward only).
+
+## Audit checkpoint trust boundary
+
+Audit checkpoints contain an unkeyed SHA-256 digest. The `signed_by` field is an attribution label only; it is not a cryptographic signature and does not authenticate the publisher. Verification checks structure, digest consistency, and the checkpointed audit-chain prefix. For authenticity and truncation resistance, export checkpoints to an independently controlled, authenticated system or have a separately managed signing service sign and retain them. Do not rely on a checkpoint stored only beside the database it is meant to protect.
 
 ## Modules
 

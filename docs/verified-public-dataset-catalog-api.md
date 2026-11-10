@@ -1,48 +1,37 @@
-# Verified public dataset catalogue API
+# Verified public genomic catalogue API
 
-## Route
+The public catalogue is served by the first-party Python/Starlette API. It has no Supabase Edge Function, browser publishable key, hosted Auth dependency, or PostgREST access path.
 
-`GET /datasets` on the GenomeGuard Supabase Edge Function.
+## Routes
 
-The route is read-only. It calls `public.gg_list_verified_public_datasets()`; it does not read the private manifest table directly from the browser.
+- `GET /catalogue/sources` — curated external source metadata and review boundaries.
+- `GET /catalogue/datasets` — only verified public dataset manifests whose normalized sample, variant, and genotype-call counts reconcile with the stored rows.
+- `GET /catalogue/chromosomes?assembly=GRCh37|GRCh38` — reference chromosome lengths plus coverage measured from verified normalized dataset imports.
+- `GET /variants/search?q=22:105123:A:G` — exact coordinate metadata lookup only; no gene-symbol annotation is implied.
+- `GET /variants/population-frequency?chromosome=22&position=105123&reference_allele=A&alternate_allele=G&assembly=GRCh38` — exact allele lookup against approved aggregate population references.
 
-## Visibility contract
+The browser uses same-origin routes. Vercel rewrites application requests to the configured GenomeGuard Python API. The local application serves the same routes directly.
 
-A dataset is returned only when all of these are true in the private manifest:
+## Dataset publication gate
 
-- `data_use_review = 'approved_public_research'`
-- `import_status = 'loaded'`
-- variant, genotype-call, and sample counts are all greater than zero
-- `imported_at` is present
+A dataset appears in `/catalogue/datasets` only when all of the following hold:
 
-The database function is `SECURITY DEFINER` with an empty search path, fully qualified object names, and execute privilege restricted to `service_role`. The underlying manifest has no direct grants to browser roles.
+- The manifest is reviewed and approved for the declared public-research use.
+- The source release, HTTPS source URL, reference assembly, and SHA-256 are present.
+- Import status is `loaded`.
+- Stored sample, variant, and called-genotype counts are non-zero and reconcile with measured normalized rows.
+- The imported source file and its reuse statement/citation match the reviewed manifest.
 
-## Response
+A manifest row is not proof of individual consent, scientific validity, or legal authorization. A source appearing in `/catalogue/sources` does not mean the artifact has been downloaded, checksum-verified, imported, or approved.
 
-```json
-{
-  "datasets": [],
-  "dataset_count": 0,
-  "provenance_note": "Only datasets reviewed for public research and marked loaded with verified non-zero counts are listed. Dataset-level reuse review is not participant-specific consent or clinical authorization."
-}
-```
+## PostgreSQL storage
 
-The empty array is the correct response when no qualifying dataset exists. Do not seed a placeholder row, infer coverage from the chromosome reference catalogue, or label an import as loaded before validating the actual source artifact and reconciling database counts.
+The native migration `backend/migrations/002_normalized_public_references.sql` creates the `genomeguard` schema and its normalized sample, variant, genotype-call, dataset-manifest, and aggregate-frequency tables. It is applied by the numbered PostgreSQL migration runner. The older `supabase/` migrations are historical artifacts and must not be applied to a new installation.
 
-## Security and failure behaviour
+The application queries the normalized tables using its server-side PostgreSQL connection. Aggregate population-frequency reads execute in a read-only transaction and filter to manifests with both `data_use_review='approved_public_research'` and `import_status='loaded'`. The endpoint never queries individual genotype calls for population-frequency responses.
 
-- The route never returns manifest rows that are pending review, rejected, failed, retired, or not fully loaded.
-- A database/RPC failure returns HTTP 503 and no fabricated catalogue.
-- The manifest table remains private; no broad browser table grants or RLS policies are added.
-- This endpoint does not authorize access to genotype records or establish participant-specific consent.
-- The endpoint is not considered production-integrated until the deployed frontend routing and live smoke test are verified.
+## Empty and unavailable behavior
 
-## Verification
+An empty catalogue is an honest result when no qualifying import exists. Missing schema, database access, or query support returns an unavailable response. The API never substitutes synthetic counts or invented population frequencies.
 
-The deployment-config workflow applies migrations to a clean PostgreSQL database and checks that the function returns no datasets on an empty manifest, is not executable by `anon` or `authenticated`, and is executable by `service_role`.
-
-The live catalogue remains empty until a source-reviewed import completes all required validation.
-
-## Browser gateway authentication
-
-The public read-only dataset and chromosome catalogue requests send the Supabase project's `sb_publishable_…` key in the `apikey` header. This key is designed for browser exposure and is not a service-role credential. All governed routes still require a verified Supabase user bearer token, and private schemas must remain inaccessible to browser roles. The repository's Gitleaks configuration narrowly allowlists this publishable-key format only in the public catalogue frontend paths; never add service-role keys, database URLs, or secret keys to the allowlist.
+The local demo cohort is synthetic and is not inserted into the verified public catalogue. No public reference is claimed as imported merely because a source or manifest is listed.

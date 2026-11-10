@@ -236,12 +236,23 @@ def test_audit_endpoints_and_tamper_demo_over_http():
     assert ok_anchor["ok"] is True
     view = c.get("/audit", headers=ADMIN).json()
     assert view["entries"][0]["idx"] == head["length"] and view["verify"]["ok"]
+    checkpoint = c.get("/audit/checkpoint").json()
+    assert c.post("/audit/verify-checkpoint", json=checkpoint).json()["valid"] is True
     assert c.post("/admin/tamper/4").status_code == 401
     bad = c.post("/admin/tamper/4", headers=ADMIN).json()
     assert bad["ok"] is False and bad["first_broken_index"] == 4
     assert c.get("/audit/verify").json()["first_broken_index"] == 4
     assert c.get(f"/audit/verify?anchor_length={head['length']}&anchor_hash={head['head_hash']}"
                  ).json()["ok"] is False
+    assert c.get("/audit/verify?anchor_length=not-a-number&anchor_hash=" + "0" * 64).status_code == 400
+    assert c.get("/audit/verify?anchor_length=0").status_code == 400
+    assert c.get("/audit/verify?anchor_length=-1&anchor_hash=" + "0" * 64).status_code == 400
+    assert c.get("/audit/verify?anchor_length=0&anchor_hash=bad").status_code == 400
+    assert c.get("/audit/checkpoint?signer=" + "x" * 129).status_code == 400
+    malformed = dict(checkpoint, length="not-an-integer")
+    assert c.post("/audit/verify-checkpoint", json=malformed).json() == {
+        "valid": False, "reason": "malformed_checkpoint"
+    }
 
 
 def test_tamper_endpoint_403_when_disabled():
@@ -308,11 +319,32 @@ def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
     assert bad.status_code == 422
 
 
-def test_demo_accounts_endpoint_only_in_demo_mode():
+def test_demo_accounts_endpoint_only_in_demo_mode(monkeypatch):
+    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
     svc, c = make_client()
     j = c.get("/demo/requesters").json()
     assert {r["tier"] for r in j["requesters"]} == {"registered", "anonymous", "controlled"}
-    assert j["admin_key"]
+    assert j["admin_key"] == "demo-admin-key"
+
+
+def test_public_demo_accounts_never_disclose_custom_admin_credential(monkeypatch):
+    secret = "staging-admin-secret-that-must-never-be-public-123456"
+    monkeypatch.setenv("GG_ADMIN_API_KEY", secret)
+    _, client = make_client()
+    response = client.get("/demo/requesters")
+    assert response.status_code == 200
+    assert "admin_key" not in response.json()
+    assert secret not in response.text
+
+
+def test_public_demo_accounts_can_only_disclose_explicit_local_demo_key(monkeypatch):
+    secret = "local-only-demo-secret-12345678901234567890"
+    monkeypatch.setenv("GG_ADMIN_API_KEY", secret)
+    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
+    _, client = make_client()
+    response = client.get("/demo/requesters")
+    assert response.status_code == 200
+    assert response.json()["admin_key"] == secret
 
 
 def test_no_response_ever_leaks_genotype_like_data():
@@ -410,6 +442,7 @@ def test_catalogue_endpoints():
     c_data = c_resp.json()
     assert c_data["reference_assembly"] == "GRCh38"
     assert c_data["chromosome_count"] == 25
+    assert c_data["coverage_available"] is True
     chr22 = next(ch for ch in c_data["chromosomes"] if ch["chromosome"] == "22")
     assert chr22["data_coverage"]["variant_data_loaded"] is False
     assert chr22["data_coverage"]["variant_count"] == 0
@@ -426,6 +459,27 @@ def test_catalogue_endpoints():
 
     bad = c.get("/catalogue/chromosomes?assembly=invalid")
     assert bad.status_code == 400
+
+
+def test_chromosome_reference_lengths_remain_available_when_coverage_query_fails(monkeypatch):
+    from app.store import CatalogueUnavailableError
+
+    svc, client = make_client()
+
+    def unavailable(_assembly):
+        raise CatalogueUnavailableError("simulated reference-store outage")
+
+    monkeypatch.setattr(svc.store, "verified_public_chromosome_coverage", unavailable)
+    response = client.get("/catalogue/chromosomes?assembly=GRCh38")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["chromosome_count"] == 25
+    assert data["coverage_available"] is False
+    assert "no dataset coverage is asserted" in data["provenance_note"]
+    assert all(row["data_coverage"]["coverage_status"] == "unavailable"
+               for row in data["chromosomes"])
+    assert all(row["data_coverage"]["variant_data_loaded"] is False
+               for row in data["chromosomes"])
 
 
 def test_public_source_catalogue_is_discovery_only_and_keeps_review_boundaries():

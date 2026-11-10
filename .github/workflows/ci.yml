@@ -40,6 +40,33 @@ jobs:
         env:
           GG_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/genomeguard_test
         run: make test
+      - name: Exercise encrypted PostgreSQL backup, restore and audit verification
+        env:
+          PGPASSWORD: postgres
+          GG_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/genomeguard_backup_source
+          GG_RESTORE_TEST_URL: postgresql://postgres:postgres@localhost:5432/genomeguard_backup_restore
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes age postgresql-client
+          createdb --host=localhost --username=postgres genomeguard_backup_source
+          createdb --host=localhost --username=postgres genomeguard_backup_restore
+          PYTHONPATH=backend .venv/bin/python - <<'PY'
+          from app.core.audit_chain import AuditChain
+          from app.postgres_store import PostgresStore
+          from app.store import AuditStore
+
+          store = PostgresStore("postgresql://postgres:postgres@localhost:5432/genomeguard_backup_source")
+          try:
+              chain = AuditChain(AuditStore(store))
+              chain.append("ci", "backup-test.created", {"fixture": "synthetic"})
+              chain.append("ci", "backup-test.verified", {"fixture": "synthetic"})
+          finally:
+              store.close()
+          PY
+          age-keygen --output /tmp/genomeguard-age-identity.txt
+          export GG_BACKUP_AGE_RECIPIENT="$(age-keygen --y /tmp/genomeguard-age-identity.txt)"
+          export GG_BACKUP_AGE_IDENTITY_FILE=/tmp/genomeguard-age-identity.txt
+          bash scripts/postgres_backup_restore_check.sh
       - run: make eval-smoke
       - run: make eval
       - run: make demo

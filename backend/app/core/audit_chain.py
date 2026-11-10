@@ -104,11 +104,27 @@ def verify(entries: list[dict], anchor: dict | None = None) -> dict:
         prev = stored
     out = {"ok": True, "length": len(entries), "head_hash": prev, "first_broken_index": None,
            "reason": None}
-    if anchor is not None and (anchor["length"] > len(entries) or (
-            anchor["length"] <= len(entries) and anchor["length"] > 0
-            and entries[anchor["length"] - 1]["hash"] != anchor["head_hash"])):
-        out.update(ok=False, first_broken_index=min(anchor["length"], len(entries)) or 1,
-                   reason="anchor_mismatch")
+    if anchor is not None:
+        if not isinstance(anchor, dict):
+            return _bad(entries, 1, "malformed_anchor")
+        length = anchor.get("length")
+        head_hash = anchor.get("head_hash")
+        if (
+            isinstance(length, bool)
+            or not isinstance(length, int)
+            or length < 0
+            or not isinstance(head_hash, str)
+            or len(head_hash) != 64
+            or any(char not in "0123456789abcdef" for char in head_hash)
+        ):
+            return _bad(entries, 1, "malformed_anchor")
+        if (
+            length > len(entries)
+            or (length == 0 and head_hash != GENESIS)
+            or (length > 0 and entries[length - 1]["hash"] != head_hash)
+        ):
+            out.update(ok=False, first_broken_index=min(length, len(entries)) or 1,
+                       reason="anchor_mismatch")
     return out
 
 
@@ -155,9 +171,12 @@ class AuditChain:
         return verify(self.store.all(), anchor)
 
     def checkpoint(self, signed_by: str = "system") -> dict:
-        """Create a verifiable, exportable cryptographic checkpoint of the current audit head.
-        This checkpoint can be published to an external transparency log, anchored in Git,
-        or archived by auditors to prevent undetected history rewriting or truncation."""
+        """Create an exportable, unsigned integrity checkpoint of the current audit head.
+
+        The digest is unkeyed and ``signed_by`` is only an attribution label, not a signature.
+        Publish the checkpoint through an independently controlled, authenticated channel to
+        detect valid-prefix truncation and rewritten history; do not treat this JSON as proof
+        of signer identity or authenticity by itself."""
         head_data = self.head()
         now_ts = datetime.now(UTC).isoformat(timespec="microseconds")
         body = {
@@ -172,22 +191,49 @@ class AuditChain:
         return body
 
     def verify_checkpoint(self, checkpoint: dict) -> dict:
-        """Verify that a given checkpoint matches both its internal digest and the current audit chain."""
-        try:
-            expected_body = {
-                "version": checkpoint.get("version", "1.0"),
-                "length": checkpoint["length"],
-                "head_hash": checkpoint["head_hash"],
-                "timestamp": checkpoint["timestamp"],
-                "signed_by": checkpoint.get("signed_by", "system"),
-            }
-            computed_digest = hashlib.sha256(canonical_json(expected_body).encode("ascii")).hexdigest()
-            if computed_digest != checkpoint.get("checkpoint_digest"):
-                return {"valid": False, "reason": "checkpoint_digest_mismatch"}
-        except (KeyError, TypeError):
+        """Verify checkpoint structure, its unkeyed digest, and the anchored audit prefix."""
+        if not isinstance(checkpoint, dict):
             return {"valid": False, "reason": "malformed_checkpoint"}
+        try:
+            length = checkpoint["length"]
+            head_hash = checkpoint["head_hash"]
+            timestamp = checkpoint["timestamp"]
+            signed_by = checkpoint.get("signed_by", "system")
+            version = checkpoint.get("version", "1.0")
+            digest = checkpoint["checkpoint_digest"]
+            if (
+                isinstance(length, bool)
+                or not isinstance(length, int)
+                or length < 0
+                or not isinstance(head_hash, str)
+                or len(head_hash) != 64
+                or any(char not in "0123456789abcdef" for char in head_hash)
+                or not isinstance(timestamp, str)
+                or not timestamp
+                or not isinstance(signed_by, str)
+                or len(signed_by) > 128
+                or version != "1.0"
+                or not isinstance(digest, str)
+                or len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)
+            ):
+                return {"valid": False, "reason": "malformed_checkpoint"}
+            expected_body = {
+                "version": version,
+                "length": length,
+                "head_hash": head_hash,
+                "timestamp": timestamp,
+                "signed_by": signed_by,
+            }
+            computed_digest = hashlib.sha256(
+                canonical_json(expected_body).encode("ascii")
+            ).hexdigest()
+        except (KeyError, TypeError, ValueError):
+            return {"valid": False, "reason": "malformed_checkpoint"}
+        if computed_digest != digest:
+            return {"valid": False, "reason": "checkpoint_digest_mismatch"}
 
-        chain_verification = self.verify(anchor={"length": checkpoint["length"], "head_hash": checkpoint["head_hash"]})
+        chain_verification = self.verify(anchor={"length": length, "head_hash": head_hash})
         return {
             "valid": chain_verification["ok"],
             "checkpoint": checkpoint,
