@@ -116,7 +116,7 @@ def test_postgres_synthetic_cohort_seed_round_trips_with_tenant_columns(pg_store
     loaded = pg_store.load_dataset(master, "integration-synthetic")
     assert loaded.genotypes.shape == (12, 24)
     assert len(loaded.donors) == 12
-    assert len(loaded.variants) == 24
+    assert loaded.n_variants == 24
     assert pg_store.one(
         "SELECT organization_id FROM donors ORDER BY id LIMIT 1"
     )["organization_id"] is None
