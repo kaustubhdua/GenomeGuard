@@ -14,6 +14,7 @@ from app.service import ServiceError
 from app.store import Store
 from tests.helpers import make_service
 
+
 def signed_event(private, dataset_id, event_type="withdrawn"):
     payload = {
         "schema_version": "1.0",
