@@ -177,7 +177,7 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     )
     assert held_response.status_code == 201
     held = held_response.json()
-    assert held["status"] == "held" and held["needs_human"] is True
+    assert held["outcome"] == "escalate" and held["status"] == "held" and held["needs_human"] is True
     assert held.get("release") in (None, {})
 
     request_path = f"/requests/{held['id']}"
@@ -188,7 +188,7 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         json={"approve": False, "reviewer": "Org A Steward"},
     ).status_code == 200
     reviewed = client.get(request_path, headers=controlled_headers).json()
-    assert reviewed["status"] == "denied"
+    assert reviewed["outcome"] == "deny" and reviewed["status"] == "denied"
     assert reviewed["reviewed_by"] == "Org A Steward"
     assert reviewed.get("release") in (None, {})
     assert client.post(
