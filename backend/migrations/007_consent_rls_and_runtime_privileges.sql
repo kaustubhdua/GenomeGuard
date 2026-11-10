@@ -24,6 +24,25 @@ BEGIN
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_runtime';
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
+      IF EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'genomeguard_app_runtime'
+          AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole)
+      ) THEN
+        RAISE EXCEPTION
+          'genomeguard_app_runtime must be provisioned as NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE before migrations';
+      END IF;
+      IF pg_has_role('genomeguard_app_runtime', 'genomeguard_owner', 'MEMBER') THEN
+        RAISE EXCEPTION
+          'genomeguard_app_runtime must not inherit genomeguard_owner privileges';
+      END IF;
+      EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_app_runtime';
+      EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_app_runtime';
+      EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_app_runtime';
+      EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_app_runtime';
+      EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_app_runtime';
+    END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_owner') THEN
       IF pg_has_role('genomeguard_runtime', 'genomeguard_owner', 'MEMBER') THEN
         RAISE EXCEPTION
