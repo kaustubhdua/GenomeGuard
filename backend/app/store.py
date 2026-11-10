@@ -176,17 +176,17 @@ class Store:
         """Return no imported coverage unless a normalized manifest backs the rows."""
         return []
 
-    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None) -> None:
+    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None, *, _db=None) -> None:
         """Write a cohort and its provenance. Genotypes are encrypted before database storage."""
         v = cohort.variants
         planted = set(cohort.planted)
         with self.lock:
-            if self.one("SELECT event_id FROM consent_events LIMIT 1"):
+            d = _db or self.db
+            if d.execute("SELECT event_id FROM consent_events LIMIT 1").fetchone():
                 raise RuntimeError(
                     "cohort replacement is blocked while participant consent events exist; "
                     "use a reviewed dataset-version migration"
                 )
-            d = self.db
             for t in ("genotypes", "donor_access", "consent_events", "donors", "variants", "relationships"):
                 d.execute(f"DELETE FROM {t}")
             d.execute("DELETE FROM cohort_metadata")
@@ -196,7 +196,7 @@ class Store:
                           "source": "legacy-unspecified"
                       }))))
             d.executemany(
-                "INSERT INTO variants VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO variants(id,chrom,pos,ref,alt,maf,is_rare,planted) VALUES(?,?,?,?,?,?,?,?)",
                 [(i + 1, str(v["chrom"][i]), int(v["pos"][i]), str(v["ref"][i]), str(v["alt"][i]),
                   float(v["maf"][i]), int(v["is_rare"][i]), int(i in planted))
                  for i in range(len(v["pos"]))])
@@ -213,7 +213,7 @@ class Store:
                 )
                 blob = crypto.encrypt(master, dataset_id, dn["id"],
                                       _blob(cohort.genotypes[dn["id"] - 1]))
-                d.execute("INSERT INTO genotypes VALUES(?,?)", (dn["id"], blob))
+                d.execute("INSERT INTO genotypes(donor_id,genotype_blob) VALUES(?,?)", (dn["id"], blob))
             d.executemany(
                 "INSERT INTO relationships(donor_a,donor_b,relation,meioses,shared_fraction) "
                 "VALUES(?,?,?,?,?)",
