@@ -70,7 +70,9 @@ def test_default_eval_is_unchanged_and_synthetic(monkeypatch):
     monkeypatch.setattr(
         run_eval.Dataset,
         "synthetic",
-        classmethod(lambda cls: original(n_donors=340, n_variants=80, n_families=68, seed=5)),
+        classmethod(lambda cls, **kwargs: original(
+            n_donors=340, n_variants=80, n_families=68, **kwargs
+        )),
     )
     res = run_eval.run_all(quick=True)
     assert res["meta"]["dataset"] == "synthetic" and res["robustness"]
