@@ -149,7 +149,9 @@ def test_transform_json_shape():
 
 def test_demo_scenario_on_synthetic_cohort():
     """Registered researcher asks for frequencies incl. the planted rare variants."""
-    ds = Dataset.synthetic()
+    # Keep the representative 600-donor pedigree, but avoid a 600x3000 matrix in a unit test.
+    # The default production-sized generator remains covered by the dedicated eval smoke job.
+    ds = Dataset.synthetic(n_donors=600, n_variants=800, n_families=120, seed=1337)
     ids = [d.id for d in ds.donors][:300]
     common = [j for j in range(ds.n_variants) if ds.maf[j] >= 0.1][:20]
     carried = [j for j in ds.planted if 1 <= (ds.genotypes[:300, j] > 0).sum() < 5]
