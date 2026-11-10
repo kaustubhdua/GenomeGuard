@@ -69,9 +69,9 @@ BEGIN
     END IF;
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
+    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_runtime';
-    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
     -- genomeguard_runtime is the actual GG_DATABASE_URL principal. Ownership moves to
     -- genomeguard_owner above, so restore only the DML needed by the application.
     EXECUTE 'GRANT USAGE ON SCHEMA genomeguard_runtime, genomeguard TO genomeguard_runtime';
