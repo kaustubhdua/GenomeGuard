@@ -64,7 +64,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_hash_unique
   ON donors(source_sample_id_hash) WHERE source_sample_id_hash IS NOT NULL;
 CREATE TABLE IF NOT EXISTS consent_events(
   event_id TEXT PRIMARY KEY, donor_id INTEGER NOT NULL, dataset_id TEXT NOT NULL,
-  event_type TEXT NOT NULL, consent_json TEXT NOT NULL, source_issuer TEXT NOT NULL,
+  event_type TEXT NOT NULL, consent_blob BLOB NOT NULL, source_issuer TEXT NOT NULL,
   source_record_sha256 TEXT NOT NULL, effective_at TEXT NOT NULL, received_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS donor_access_donor ON donor_access(donor_id);
 CREATE TABLE IF NOT EXISTS alerts(id INTEGER PRIMARY KEY AUTOINCREMENT, requester_id INTEGER,
@@ -311,13 +311,13 @@ class Store:
 
     def record_consent_event(
         self, event_id: str, donor_id: int, dataset_id: str, event_type: str,
-        consent: dict, source_issuer: str, source_record_sha256: str, effective_at: str,
+        consent_blob: bytes, source_issuer: str, source_record_sha256: str, effective_at: str,
     ) -> None:
         self.x(
-            "INSERT INTO consent_events(event_id,donor_id,dataset_id,event_type,consent_json,"
+            "INSERT INTO consent_events(event_id,donor_id,dataset_id,event_type,consent_blob,"
             "source_issuer,source_record_sha256,effective_at,received_at) "
             "VALUES(?,?,?,?,?,?,?,?,?)",
-            (event_id, donor_id, dataset_id, event_type, json.dumps(jsonable(consent)),
+            (event_id, donor_id, dataset_id, event_type, consent_blob,
              source_issuer, source_record_sha256, effective_at, now_iso()),
         )
 
