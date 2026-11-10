@@ -53,6 +53,25 @@ def pg_store():
         store.close()
 
 
+
+def test_postgres_runtime_startup_skips_schema_migrations(pg_store, monkeypatch):
+    url = os.environ["GG_TEST_DATABASE_URL"]
+
+    def fail_if_called(self):
+        raise AssertionError("web runtime must not apply schema migrations")
+
+    monkeypatch.setattr(PostgresStore, "_migrate", fail_if_called)
+    runtime_store = PostgresStore(url, run_migrations=False)
+    try:
+        assert runtime_store.one(
+            "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        ) is not None
+        runtime_store.assert_least_privilege_runtime()
+    finally:
+        runtime_store.close()
+
+
+
 def test_postgres_store_uses_schema_separate_from_normalized_supabase_tables(pg_store):
     assert pg_store.one("SELECT current_schema() AS schema")["schema"] == "genomeguard_runtime"
 
