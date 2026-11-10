@@ -250,7 +250,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
             async def handler(request: Request):
                 try:
-                    # Each route authenticates inside its own handler so protocol-specific
+                    # Admin routes establish an authenticated, transaction-local RLS context
+                    # for every database operation in the handler. The handler's own admin()
+                    # call remains as defense in depth and preserves route-local validation.
+                    if who == "admin":
+                        admin(request)
+                        with S().store.transaction():
+                            S().store.set_admin_access()
+                            return await fn(request)
+                    # Other routes authenticate inside their handlers so protocol-specific
                     # error envelopes (for example GA4GH Beacon) remain intact.
                     return await fn(request)
                 except ServiceError as e:
