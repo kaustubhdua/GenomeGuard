@@ -1,7 +1,7 @@
 name: ci
 on:
   push:
-    branches: [main]
+    branches: [main, feat/institutional-production-controls]
   pull_request:
     branches: [main, feat/remove-supabase-runtime]
   workflow_dispatch:
