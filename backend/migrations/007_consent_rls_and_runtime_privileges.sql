@@ -24,6 +24,16 @@ BEGIN
       WHERE n.nspname = 'genomeguard_runtime'
         AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'genomeguard_runtime')
         AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+        AND (
+          c.relkind <> 'S'
+          OR NOT EXISTS (
+            SELECT 1 FROM pg_depend d
+            WHERE d.classid = 'pg_class'::regclass
+              AND d.objid = c.oid
+              AND d.refclassid = 'pg_class'::regclass
+              AND d.deptype IN ('a', 'i')
+          )
+        )
     LOOP
       IF object_row.relkind = 'S' THEN
         EXECUTE format('ALTER SEQUENCE genomeguard_runtime.%I OWNER TO genomeguard_owner', object_row.relname);
