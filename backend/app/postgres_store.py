@@ -74,6 +74,53 @@ def _translate(sql: str) -> str:
     return statement.replace("?", "%s")
 
 
+def _ensure_migration_schema_access(connection: psycopg.Connection) -> None:
+    """Let the migration owner create objects in a legacy runtime-owned schema.
+
+    Older staging databases may have been bootstrapped with genomeguard_runtime as
+    the schema owner. The migration principal is deliberately not a member with
+    inherited runtime privileges, but may have SET ROLE permission. In that
+    narrowly scoped case, ask the current schema owner to grant CREATE to the
+    migration principal; migration 007 later transfers ownership and revokes
+    runtime CREATE. Fresh schemas already owned by the migration principal need
+    no special handling.
+    """
+    with connection.transaction():
+        row = connection.execute(
+            "SELECT current_user AS migration_role, "
+            "n.nspowner::regrole::text AS schema_owner, "
+            "has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS can_create, "
+            "pg_has_role(current_user,'genomeguard_runtime','SET') AS can_set_runtime "
+            "FROM pg_namespace n WHERE n.nspname='genomeguard_runtime'"
+        ).fetchone()
+        if not row:
+            raise RuntimeError("GenomeGuard PostgreSQL runtime schema is missing")
+        if row["can_create"]:
+            return
+        if (
+            row["schema_owner"] == "genomeguard_runtime"
+            and row["migration_role"] == "genomeguard_owner"
+            and row["can_set_runtime"]
+        ):
+            connection.execute("SET ROLE genomeguard_runtime")
+            try:
+                connection.execute(
+                    "GRANT CREATE ON SCHEMA genomeguard_runtime TO genomeguard_owner"
+                )
+            finally:
+                connection.execute("RESET ROLE")
+            granted = connection.execute(
+                "SELECT has_schema_privilege('genomeguard_owner',"
+                "'genomeguard_runtime','CREATE') AS can_create"
+            ).fetchone()["can_create"]
+            if granted:
+                return
+        raise RuntimeError(
+            "PostgreSQL migration principal cannot CREATE in genomeguard_runtime; "
+            "make it the schema owner or grant it migration-only CREATE before startup"
+        )
+
+
 class _ConnectionCompat:
     """Minimal connection facade for the existing Store methods; SQL remains parameterized."""
     def __init__(self, connection: psycopg.Connection, store) -> None:
@@ -212,6 +259,7 @@ class PostgresStore(Store):
         # connection is deliberately never used for schema creation or migrations.
         connection = self.migration_connection or self.connection
         with self.lock:
+            _ensure_migration_schema_access(connection)
             for version, migration in migrations:
                 with connection.transaction():
                     connection.execute(
