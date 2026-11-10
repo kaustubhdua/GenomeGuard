@@ -899,7 +899,6 @@ class GenomeGuardService:
         elif event_type == "restored":
             # A restore is accepted only with a newly signed, complete consent payload above.
             withdrawn = False
-        self.ds.donors[donor_id - 1] = replace(donor, consent=consent, withdrawn=withdrawn)
         self.store.set_donor_consent(donor_id, consent)
         withdrawn_at = (
             payload["effective_at"] if event_type == "withdrawn"
@@ -921,6 +920,8 @@ class GenomeGuardService:
              "source_record_sha256": source_digest, "effective_at": payload["effective_at"],
              "withdrawn": withdrawn, "issuer": trusted_issuer},
         )
+        # Update the in-memory cohort only after all durable writes and audit append succeed.
+        self.ds.donors[donor_id - 1] = replace(donor, consent=consent, withdrawn=withdrawn)
         return self.donor_profile(donor_id)
 
     FHIR_BASE = "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package"
