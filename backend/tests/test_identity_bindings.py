@@ -124,6 +124,65 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         json={"subject": "researcher-sub", "organization_id": "org-b"},
     ).status_code == 403
 
+    # An organization steward can provision a researcher in their own organization,
+    # then bind that researcher's exact OIDC subject. Institutional mode never returns
+    # a fallback API key.
+    provisioned_researcher = client.post(
+        "/admin/requesters",
+        headers=steward_headers,
+        json={
+            "name": "New Org A Researcher", "institution": "Example University",
+            "credential_level": "registered", "role": "researcher", "organization_id": "org-a",
+        },
+    )
+    assert provisioned_researcher.status_code == 201
+    created = provisioned_researcher.json()
+    assert created["identity_binding_required"] is True
+    assert "api_key" not in created
+    bound = client.post(
+        "/admin/oidc-bindings",
+        headers=steward_headers,
+        json={
+            "requester_id": created["id"], "subject": "new-researcher-sub",
+            "organization_id": "org-a",
+        },
+    )
+    assert bound.status_code == 201
+    assert client.get(
+        "/me", headers={"Authorization": "Bearer new-researcher-sub"},
+    ).status_code == 200
+
+    # The same steward cannot create users in another tenant or grant a peer
+    # the steward role. A reviewer cannot provision accounts at all.
+    cross_org_provision = client.post(
+        "/admin/requesters",
+        headers=steward_headers,
+        json={
+            "name": "Tenant B Researcher", "institution": "Tenant B Institute",
+            "credential_level": "registered", "role": "researcher", "organization_id": "org-b",
+        },
+    )
+    assert cross_org_provision.status_code == 403
+    assert cross_org_provision.json()["error"] == "cross_organization_requester_forbidden"
+    peer_steward = client.post(
+        "/admin/requesters",
+        headers=steward_headers,
+        json={
+            "name": "Another Steward", "institution": "Example University",
+            "credential_level": "controlled", "role": "steward", "organization_id": "org-a",
+        },
+    )
+    assert peer_steward.status_code == 403
+    assert peer_steward.json()["error"] == "steward_role_provisioning_forbidden"
+    assert client.post(
+        "/admin/requesters",
+        headers=reviewer_headers,
+        json={
+            "name": "Reviewer Created User", "institution": "Example University",
+            "credential_level": "registered", "role": "researcher", "organization_id": "org-a",
+        },
+    ).status_code == 403
+
     global_admin_id = svc.store.add_requester(
         "Global Administrator", "admin", "controlled", "GenomeGuard Operations",
         hash_key("unused-global-admin-key"),

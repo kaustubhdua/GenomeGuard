@@ -293,8 +293,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 path == "/audit" or path.startswith("/audit/")
                 or path.startswith("/reports/compliance")
                 or path in {
-                    "/admin/consent-events", "/admin/dataset-qc", "/admin/requesters",
-                    "/admin/untamper",
+                    "/admin/consent-events", "/admin/dataset-qc", "/admin/untamper",
                 }
                 or path.startswith("/admin/tamper/")
             )
@@ -307,6 +306,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 path.endswith("/release") or path.endswith("/copilot")
                 or path.endswith("/exposure") or path == "/admin/vcf-qc"
                 or path.startswith("/admin/oidc-bindings")
+                or path == "/admin/requesters"
                 or (path.startswith("/requesters/") and
                     (path.endswith("/freeze") or path.endswith("/unfreeze")))
             ):
@@ -559,6 +559,17 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             )
         if organization_id is not None and organization_id not in settings.oidc_allowed_organizations:
             raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
+        reviewer_scope = request.state.admin_principal.get("organization_id")
+        if reviewer_scope and organization_id != reviewer_scope:
+            raise ServiceError(
+                403, "cross_organization_requester_forbidden",
+                "an organization-scoped steward may only provision identities in their own organization",
+            )
+        if reviewer_scope and role == "steward":
+            raise ServiceError(
+                403, "steward_role_provisioning_forbidden",
+                "an organization-scoped steward cannot grant another steward role",
+            )
         if not isinstance(name, str) or not 2 <= len(name.strip()) <= 120:
             raise ServiceError(422, "invalid_request", "name must contain 2 to 120 characters")
         if not isinstance(institution, str) or not 2 <= len(institution.strip()) <= 200:
