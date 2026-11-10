@@ -484,6 +484,12 @@ class PostgresStore(Store):
             "AS decisions_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.donors','TRUNCATE') "
             "AS donors_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','TRUNCATE') "
+            "AS variants_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','TRUNCATE') "
+            "AS relationships_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','TRUNCATE') "
+            "AS metadata_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.genotypes','TRUNCATE') "
             "AS genotypes_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.epsilon_ledger','TRUNCATE') "
@@ -501,6 +507,7 @@ class PostgresStore(Store):
             or row["rolcreatedb"] or row["rolcreaterole"] or row["database_create"]
             or row["runtime_create"] or row["reference_create"] or row["owner_member"]
             or row["requests_truncate"] or row["decisions_truncate"] or row["donors_truncate"]
+            or row["variants_truncate"] or row["relationships_truncate"] or row["metadata_truncate"]
             or row["genotypes_truncate"] or row["ledger_truncate"] or row["alerts_truncate"]
             or row["consent_truncate"]
         )
