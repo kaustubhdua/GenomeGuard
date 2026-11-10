@@ -13,7 +13,7 @@ CREATE TRIGGER audit_log_immutable
 BEFORE UPDATE OR DELETE ON audit_log
 FOR EACH ROW EXECUTE FUNCTION genomeguard.reject_audit_log_mutation();
 
-DO $
+DO $block$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_runtime') THEN
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM genomeguard_runtime';
@@ -24,4 +24,4 @@ BEGIN
     EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON schema_migrations FROM genomeguard_app_runtime';
   END IF;
 END;
-$$;
+$block$;
