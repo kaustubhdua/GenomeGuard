@@ -24,7 +24,9 @@ def make_service(**kw):
     s.db_path = ":memory:"
     # Keep per-test service fixtures deliberately small; statistical-scale behavior
     # is covered by dedicated deterministic tests in test_synth/test_redteam.
-    s.n_donors, s.n_variants, s.n_families = 120, 300, 24
+    # Keep the donor/family mix representative for cohort-filter and k-anonymity tests,
+    # while reducing variant work; large-matrix behavior has dedicated statistical tests.
+    s.n_donors, s.n_variants, s.n_families = 300, 300, 60
     for k, v in kw.items():
         setattr(s, k, v)
     return bootstrap(s)
