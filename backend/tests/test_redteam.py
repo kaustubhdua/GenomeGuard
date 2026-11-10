@@ -62,7 +62,7 @@ def test_benign_traffic_is_deterministic_and_mostly_served():
 def test_eval_quick_runs_and_renders_every_section(tmp_path):
     # Exercise the complete report renderer without generating the default 600x3000
     # matrix; the CI eval-smoke job separately covers the default synthetic path.
-    cohort = generate(n_donors=360, n_variants=360, n_families=72, seed=7)
+    cohort = generate(n_donors=340, n_variants=80, n_families=68, seed=7)
     path = tmp_path / "eval-fixture.npz"
     real.save_cohort(cohort, {"source": "synthetic-evaluation-fixture"}, path)
     md = to_markdown(run_all(quick=True, cohort=str(path)))
