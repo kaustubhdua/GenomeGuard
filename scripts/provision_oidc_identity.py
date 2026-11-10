@@ -49,6 +49,7 @@ def main() -> int:
     store = PostgresStore(database_url, run_migrations=False)
     try:
         with store.transaction():
+            store.set_admin_access()
             # A random one-way hash satisfies the legacy non-null column but the key is never
             # disclosed or used; OIDC is the only enabled production authentication method.
             key_hash = hashlib.sha256(secrets.token_urlsafe(48).encode("utf-8")).hexdigest()
