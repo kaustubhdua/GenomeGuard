@@ -202,7 +202,14 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     def admin_call(fn, *args, **kwargs):
         with S().store.transaction():
-            S().store.set_admin_access()
+            set_admin = getattr(S().store, "set_admin_access", None)
+            if set_admin is not None:
+                set_admin()
+            elif settings.tenant_isolation_required and not settings.demo_mode:
+                raise ServiceError(
+                    503, "tenant_store_unsupported",
+                    "tenant-isolated admin access requires PostgreSQL RLS",
+                )
             return fn(*args, **kwargs)
 
     def admin(request: Request) -> None:
