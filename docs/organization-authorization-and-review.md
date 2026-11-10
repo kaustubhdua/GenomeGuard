@@ -27,7 +27,7 @@ RLS protects tenant-owned PostgreSQL records, but it is not a substitute for app
 The public 1000 Genomes mode uses dataset-level public-release terms; synthetic demo mode uses synthetic consent attributes. Neither is participant-specific consent for a private cohort.
 
 The production-controls branch adds:
-- Exact source-sample reconciliation using a SHA-256 hash stored in the cohort database rather than retaining the raw source identifier.
+- Exact source-sample reconciliation using a dataset-keyed HMAC-SHA-256 stored in the cohort database rather than retaining the raw source identifier.
 - An Ed25519-signed consent-event ingestion path for consent updates, withdrawal and re-consent.
 - Trusted issuer and dataset binding, signature verification, event-id idempotency, effective-time validation and a durable consent event ledger.
 - An append-only PostgreSQL consent ledger; UPDATE/DELETE are rejected by a database trigger.
