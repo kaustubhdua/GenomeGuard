@@ -57,7 +57,12 @@ def test_benign_traffic_is_deterministic_and_mostly_served():
     assert a["served_rate"] > 0.8
 
 
-def test_eval_quick_runs_and_renders_every_section():
-    md = to_markdown(run_all(quick=True))
+def test_eval_quick_runs_and_renders_every_section(tmp_path):
+    # Exercise the complete report renderer without generating the default 600x3000
+    # matrix; the CI eval-smoke job separately covers the default synthetic path.
+    cohort = generate(n_donors=360, n_variants=360, n_families=72, seed=7)
+    path = tmp_path / "eval-fixture.npz"
+    real.save_cohort(cohort, {"source": "synthetic-evaluation-fixture"}, path)
+    md = to_markdown(run_all(quick=True, cohort=str(path)))
     for heading in ("## 1.", "## 2.", "## 3.", "## 4.", "## 5.", "## 6.", "do NOT show"):
         assert heading in md
