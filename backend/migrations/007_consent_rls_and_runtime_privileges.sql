@@ -10,19 +10,19 @@ CREATE POLICY consent_events_admin_only ON consent_events
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gg_app_runtime') THEN
-    EXECUTE 'ALTER ROLE gg_app_runtime NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE';
-    EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM gg_app_runtime';
-    EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM gg_app_runtime';
-    EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM gg_app_runtime';
-    EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM gg_app_runtime';
-    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM gg_app_runtime';
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_runtime') THEN
+    EXECUTE 'ALTER ROLE genomeguard_runtime NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE';
+    EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_runtime';
+    EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
+    EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_runtime';
+    EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_runtime';
+    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_owner') THEN
-      EXECUTE 'REVOKE genomeguard_owner FROM gg_app_runtime';
+      EXECUTE 'REVOKE genomeguard_owner FROM genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
-           || 'REVOKE TRUNCATE ON TABLES FROM gg_app_runtime';
+           || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
-           || 'REVOKE TRUNCATE ON TABLES FROM gg_app_runtime';
+           || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
     END IF;
   END IF;
 END;
