@@ -69,16 +69,6 @@ BEGIN
       REFERENCES genomeguard_runtime.donors(id, organization_id);
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname='donor_access_donor_organization_fk'
-      AND conrelid='genomeguard_runtime.donor_access'::regclass
-  ) THEN
-    ALTER TABLE genomeguard_runtime.donor_access
-      ADD CONSTRAINT donor_access_donor_organization_fk
-      FOREIGN KEY (donor_id, organization_id)
-      REFERENCES genomeguard_runtime.donors(id, organization_id);
-  END IF;
 END;
 $gg_cohort_constraints$;
 
@@ -209,6 +199,50 @@ CREATE POLICY donor_access_admin_delete ON genomeguard_runtime.donor_access
     current_setting('gg.admin_access', true) = 'on'
     OR current_user = 'genomeguard_owner'
   );
+
+
+-- Access-event organization_id is the requesting tenant, not necessarily the
+-- ownership of a shared public/synthetic donor. A tenant may query a public donor;
+-- it must never log or read another institution's private donor.
+DO $gg_donor_access_fk$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname='donor_access_donor_organization_fk'
+      AND conrelid='genomeguard_runtime.donor_access'::regclass
+  ) THEN
+    ALTER TABLE genomeguard_runtime.donor_access
+      DROP CONSTRAINT donor_access_donor_organization_fk;
+  END IF;
+END;
+$gg_donor_access_fk$;
+
+CREATE OR REPLACE FUNCTION genomeguard_runtime.enforce_donor_access_organization()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $gg_donor_access_org$
+DECLARE
+  donor_organization text;
+BEGIN
+  SELECT organization_id INTO donor_organization
+  FROM genomeguard_runtime.donors WHERE id=NEW.donor_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'donor is not visible in the active organization scope';
+  END IF;
+  IF donor_organization IS NOT NULL
+     AND donor_organization IS DISTINCT FROM NEW.organization_id THEN
+    RAISE EXCEPTION 'donor-access event organization does not match donor owner';
+  END IF;
+  RETURN NEW;
+END;
+$gg_donor_access_org$;
+
+DROP TRIGGER IF EXISTS donor_access_organization_guard ON genomeguard_runtime.donor_access;
+CREATE TRIGGER donor_access_organization_guard
+  BEFORE INSERT OR UPDATE OF donor_id, organization_id
+  ON genomeguard_runtime.donor_access
+  FOR EACH ROW EXECUTE FUNCTION genomeguard_runtime.enforce_donor_access_organization();
+
 
 -- The web role can read shared/public and tenant-scoped cohort rows, but cannot
 -- ingest, rewrite, or delete genotype, variant, relationship, or metadata rows.
