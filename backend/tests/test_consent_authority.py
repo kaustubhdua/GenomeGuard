@@ -5,9 +5,9 @@ import sqlite3
 from datetime import UTC, datetime
 from uuid import uuid4
 
-import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+import pytest
 
 from app.core.audit_chain import canonical_json
 from app.service import ServiceError
