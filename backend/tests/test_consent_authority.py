@@ -64,6 +64,15 @@ def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
             event, public_key_b64=public, trusted_issuer="https://consent.example.edu",
         )
 
+    update_event = signed_event(private, svc.dataset_id, event_type="consent_updated")
+    assert svc.apply_signed_consent_event(
+        update_event, public_key_b64=public, trusted_issuer="https://consent.example.edu",
+    )["withdrawn"] is True
+    restore_event = signed_event(private, svc.dataset_id, event_type="restored")
+    assert svc.apply_signed_consent_event(
+        restore_event, public_key_b64=public, trusted_issuer="https://consent.example.edu",
+    )["withdrawn"] is False
+
 
 def test_signed_consent_rejects_tampering_and_unknown_source_sample():
     svc = make_service()
