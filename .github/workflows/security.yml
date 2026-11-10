@@ -1,7 +1,7 @@
 name: security-verification
 on:
   push:
-    branches: [main]
+    branches: [main, feat/institutional-production-controls]
   pull_request:
     branches: [main, feat/remove-supabase-runtime]
   schedule:
