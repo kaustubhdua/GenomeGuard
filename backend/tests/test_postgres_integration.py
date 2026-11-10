@@ -479,17 +479,15 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
             assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {1}
             assert pg_store.q("SELECT purpose FROM donor_access") == []
 
+        connection.execute("RESET ROLE")
+        connection.commit()
         with pytest.raises(psycopg.Error):
             with pg_store.transaction():
-                pg_store.set_tenant("tenant-a")
                 pg_store.x(
                     "INSERT INTO relationships(donor_a,donor_b,relation,organization_id) "
                     "VALUES(?,?,?,?)",
                     (990001, 990002, "cross-tenant", "tenant-a"),
                 )
-
-        connection.execute("RESET ROLE")
-        connection.commit()
 
         # The application role's default organization column binds donor-access events
         # to the active tenant, and the composite FK rejects another tenant's donor.
