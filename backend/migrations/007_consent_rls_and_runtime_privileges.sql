@@ -8,8 +8,46 @@ CREATE POLICY consent_events_admin_only ON consent_events
   USING (current_setting('gg.admin_access', true) = 'on')
   WITH CHECK (current_setting('gg.admin_access', true) = 'on');
 
-DO $$
+DO $
+DECLARE
+  object_row RECORD;
 BEGIN
+  -- Move schema/object ownership to the migration principal before revoking CREATE
+  -- from the application principal. Existing explicit DML grants are preserved.
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_owner')
+     AND EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'genomeguard_runtime') THEN
+    ALTER SCHEMA genomeguard_runtime OWNER TO genomeguard_owner;
+    FOR object_row IN
+      SELECT c.relkind, c.relname
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'genomeguard_runtime'
+        AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'genomeguard_runtime')
+        AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+    LOOP
+      IF object_row.relkind = 'S' THEN
+        EXECUTE format('ALTER SEQUENCE genomeguard_runtime.%I OWNER TO genomeguard_owner', object_row.relname);
+      ELSIF object_row.relkind = 'v' THEN
+        EXECUTE format('ALTER VIEW genomeguard_runtime.%I OWNER TO genomeguard_owner', object_row.relname);
+      ELSIF object_row.relkind = 'm' THEN
+        EXECUTE format('ALTER MATERIALIZED VIEW genomeguard_runtime.%I OWNER TO genomeguard_owner', object_row.relname);
+      ELSIF object_row.relkind = 'f' THEN
+        EXECUTE format('ALTER FOREIGN TABLE genomeguard_runtime.%I OWNER TO genomeguard_owner', object_row.relname);
+      ELSE
+        EXECUTE format('ALTER TABLE genomeguard_runtime.%I OWNER TO genomeguard_owner', object_row.relname);
+      END IF;
+    END LOOP;
+    FOR object_row IN
+      SELECT p.oid::regprocedure AS signature
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'genomeguard_runtime'
+        AND p.proowner = (SELECT oid FROM pg_roles WHERE rolname = 'genomeguard_runtime')
+    LOOP
+      EXECUTE format('ALTER FUNCTION %s OWNER TO genomeguard_owner', object_row.signature);
+    END LOOP;
+  END IF;
+
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_runtime') THEN
     IF EXISTS (
       SELECT 1 FROM pg_roles
