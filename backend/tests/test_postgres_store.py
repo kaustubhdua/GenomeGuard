@@ -246,3 +246,42 @@ def test_runtime_and_migration_connections_are_separated(monkeypatch):
                for statement, _ in connections[1].statements)
     assert store.migration_connection is None
     store.close()
+
+
+def test_schema_migrations_execute_only_through_owner_connection():
+    from contextlib import nullcontext
+    from threading import RLock
+
+    from app.postgres_store import PostgresStore
+
+    class Cursor:
+        def fetchone(self):
+            return None
+
+    class FakeConnection:
+        def __init__(self):
+            self.statements = []
+
+        def transaction(self):
+            return nullcontext()
+
+        def execute(self, statement, args=(), **kwargs):
+            self.statements.append((statement, args, kwargs))
+            return Cursor()
+
+    runtime = FakeConnection()
+    owner = FakeConnection()
+    store = object.__new__(PostgresStore)
+    store.connection = runtime
+    store.migration_connection = owner
+    store.lock = RLock()
+
+    store._migrate()
+
+    assert runtime.statements == []
+    assert any("CREATE TABLE IF NOT EXISTS schema_migrations" in sql
+               for sql, _args, _kwargs in owner.statements)
+    assert any("CREATE OR REPLACE FUNCTION" in sql
+               for sql, _args, _kwargs in owner.statements)
+    assert all(kwargs.get("prepare") is False for sql, _args, kwargs in owner.statements
+               if "CREATE OR REPLACE FUNCTION" in sql)
