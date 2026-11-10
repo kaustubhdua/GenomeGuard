@@ -624,7 +624,19 @@ class PostgresStore(Store):
             "AND c.relname='donor_access'), false) AS donor_access_rls_forced, "
             "EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='genomeguard_runtime' "
             "AND tablename='donor_access' AND policyname='donor_access_scoped_insert' AND cmd='INSERT') "
-            "AS donor_access_insert_policy "
+            "AS donor_access_insert_policy, "
+            "COALESCE((SELECT count(*)=4 FROM pg_class c JOIN pg_namespace n "
+            "ON n.oid=c.relnamespace WHERE n.nspname='genomeguard_runtime' "
+            "AND c.relname IN ('genotypes','variants','relationships','cohort_metadata') "
+            "AND c.relrowsecurity AND c.relforcerowsecurity), false) AS cohort_rls_forced, "
+            "COALESCE((SELECT count(*)=6 FROM information_schema.columns "
+            "WHERE table_schema='genomeguard_runtime' AND table_name IN "
+            "('donors','genotypes','variants','relationships','cohort_metadata','donor_access') "
+            "AND column_name='organization_id'), false) AS cohort_org_columns, "
+            "COALESCE((SELECT count(*)=4 FROM pg_policies WHERE schemaname='genomeguard_runtime' "
+            "AND policyname IN ('genotypes_organization_read','variants_organization_read',"
+            "'relationships_organization_read','cohort_metadata_organization_read') "
+            "AND cmd='SELECT'), false) AS cohort_read_policies "
             "FROM pg_roles r WHERE r.rolname=current_user"
         ).fetchone()
         if not row:
@@ -653,6 +665,8 @@ class PostgresStore(Store):
             or row["ledger_delete"] or row["bindings_delete"]
             or not row["donors_rls_forced"] or not row["donors_admin_policy"]
             or not row["donor_access_rls_forced"] or not row["donor_access_insert_policy"]
+            or not row["cohort_rls_forced"] or not row["cohort_org_columns"]
+            or not row["cohort_read_policies"]
         )
         if unsafe:
             raise RuntimeError(
