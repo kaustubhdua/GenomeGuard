@@ -481,6 +481,10 @@ class PostgresStore(Store):
             "has_database_privilege(current_user,current_database(),'CREATE') AS database_create, "
             "has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS runtime_create, "
             "has_schema_privilege(current_user,'genomeguard','CREATE') AS reference_create, "
+            "EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "WHERE n.nspname IN ('genomeguard_runtime','genomeguard') "
+            "AND c.relkind IN ('r','p') AND c.relowner=(SELECT oid FROM pg_roles "
+            "WHERE rolname=current_user)) AS owns_application_tables, "
             "COALESCE((SELECT pg_has_role(current_user, oid, 'MEMBER') FROM pg_roles "
             "WHERE rolname='genomeguard_owner'), false) AS owner_member, "
             "has_table_privilege(current_user,'genomeguard_runtime.requests','TRUNCATE') "
@@ -502,7 +506,15 @@ class PostgresStore(Store):
             "has_table_privilege(current_user,'genomeguard_runtime.alerts','TRUNCATE') "
             "AS alerts_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') "
-            "AS consent_truncate "
+            "AS consent_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requesters','TRUNCATE') "
+            "AS requesters_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.identity_bindings','TRUNCATE') "
+            "AS bindings_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','UPDATE') "
+            "AS consent_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','DELETE') "
+            "AS consent_delete "
             "FROM pg_roles r WHERE r.rolname=current_user"
         ).fetchone()
         if not row:
@@ -510,11 +522,13 @@ class PostgresStore(Store):
         unsafe = (
             row["role"] == "genomeguard_owner" or row["rolsuper"] or row["rolbypassrls"]
             or row["rolcreatedb"] or row["rolcreaterole"] or row["database_create"]
-            or row["runtime_create"] or row["reference_create"] or row["owner_member"]
+            or row["runtime_create"] or row["reference_create"] or row["owns_application_tables"]
+            or row["owner_member"]
             or row["requests_truncate"] or row["decisions_truncate"] or row["donors_truncate"]
             or row["variants_truncate"] or row["relationships_truncate"] or row["metadata_truncate"]
             or row["genotypes_truncate"] or row["ledger_truncate"] or row["alerts_truncate"]
-            or row["consent_truncate"]
+            or row["consent_truncate"] or row["requesters_truncate"] or row["bindings_truncate"]
+            or row["consent_update"] or row["consent_delete"]
         )
         if unsafe:
             raise RuntimeError(
