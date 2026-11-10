@@ -1,5 +1,5 @@
 -- Make the audit chain append-only even for the application runtime principal.
-CREATE OR REPLACE FUNCTION reject_audit_log_mutation()
+CREATE OR REPLACE FUNCTION genomeguard.reject_audit_log_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -11,7 +11,7 @@ $$;
 DROP TRIGGER IF EXISTS audit_log_immutable ON audit_log;
 CREATE TRIGGER audit_log_immutable
 BEFORE UPDATE OR DELETE ON audit_log
-FOR EACH ROW EXECUTE FUNCTION reject_audit_log_mutation();
+FOR EACH ROW EXECUTE FUNCTION genomeguard.reject_audit_log_mutation();
 
 DO $$
 BEGIN
