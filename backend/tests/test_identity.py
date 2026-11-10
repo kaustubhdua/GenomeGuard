@@ -1,9 +1,9 @@
 import time
 from types import SimpleNamespace
 
+from cryptography.hazmat.primitives.asymmetric import rsa
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.identity import OIDCAuthenticationError, verify_access_token
 
