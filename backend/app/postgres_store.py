@@ -126,6 +126,18 @@ class PostgresStore(Store):
             )
         )
         try:
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
+                runtime_role = self.connection.execute(
+                    "SELECT current_user AS role"
+                ).fetchone()["role"]
+                migration_role = self.migration_connection.execute(
+                    "SELECT current_user AS role"
+                ).fetchone()["role"]
+                if runtime_role == migration_role:
+                    raise ValueError(
+                        "GG_DATABASE_URL and GG_MIGRATION_DATABASE_URL must authenticate "
+                        "as different PostgreSQL roles"
+                    )
             if run_migrations:
                 # Only the migration principal may create schemas or run DDL. The ordinary
                 # application connection receives a search_path after the owner creates it.
