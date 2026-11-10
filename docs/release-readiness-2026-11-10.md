@@ -4,123 +4,111 @@ Updated: 10 November 2026
 
 ## Executive status
 
-GenomeGuard has a substantial first-party Python/Starlette research application, browser UI, synthetic/public-data workflows, evaluation tooling, and institutional-control foundations. The repository is **not yet verified as a finished hackathon release**, because the latest exact-head CI and a deployment of the new code to synthetic staging are still pending.
+GenomeGuard is a first-party Python/Starlette research application with a browser workbench, synthetic/public-data workflow, PostgreSQL persistence, institutional-control foundations, and evaluation/interoperability tooling.
 
-It is **not production-ready for controlled participant genomic data or clinical use**. Institutional identity, consent authority, cohort data partitioning, independent audit anchoring, provider-level recovery, and external governance remain separate requirements.
+The repository is **not yet verified as a final submission build**: the latest exact-head CI and hosted staging acceptance must finish on the same commit. A live synthetic-only Render staging service now starts successfully, connects to Neon through distinct runtime and migration credentials, loads a freshly encrypted 600-donor synthetic cohort, and provisions four demo personas. The exact PR head still needs to be deployed and accepted.
+
+This is **not production-ready for controlled participant genomic data or clinical use**. The live demo uses synthetic data and simulated consent. Institutional OIDC, authoritative consent, external audit anchoring, provider recovery policy, and governance approvals remain external dependencies.
 
 ## Source and pull-request topology
 
-- PR #111, the Supabase-free runtime, was merged to `main`. Main is at merge commit `0ff7b8c4c5223787606781057224326bab8e2cc1`.
-- PR #112 was merged into the intermediate `feat/remove-supabase-runtime` branch, not directly into main.
-- PR #113 is the current draft proposal from `feat/institutional-production-controls` to `main`. It contains the institutional-control implementation and follow-up database fixes discovered during validation.
-- Keep PR #113 in draft until exact-head CI, staging acceptance, and the restricted-role staging deployment pass. Do not bypass review by moving the main ref directly.
+- PR #111 (Supabase-free runtime) is merged into `main`.
+- PR #112 (institutional controls) was merged into the intermediate `feat/remove-supabase-runtime` branch, not directly into `main`.
+- PR #113 is the current draft proposal from `feat/institutional-production-controls` to `main`.
+- Keep PR #113 draft until exact-head CI and staging acceptance are green. Do not bypass review or merge an unverified commit.
+- Main remains on the previously merged Supabase-free baseline. Production has not been changed.
 
-## Verified PostgreSQL migration exercise
+## PostgreSQL migrations and direct validation
 
-A disposable child branch in the linked Neon staging project was created specifically for this exercise:
+Two disposable Neon child branches were used:
 
-- Branch: `gg-controls-validation-2026-11-10`
-- Branch ID: `br-royal-morning-a1kkj0ho`
-- Parent: `br-morning-field-a19ap5kw`
-- Database: `genomeguard`
+| Purpose | Branch | Branch ID |
+|---|---|---|
+| Render synthetic staging | `gg-render-staging-2026-11-10` | `br-flat-wildflower-a1pgfnhn` |
+| Independent controls validation | `gg-controls-validation-2026-11-10` | `br-royal-morning-a1kkj0ho` |
 
-Migrations 003–009 were applied in order on this disposable branch after the existing 001–002 baseline. The migration ledger reports versions 1 through 9.
+Migrations **001–012** are applied on both branches. The migration ledger reports every version from 1 through 12.
 
-### Defects discovered and corrected in source
+### Defects discovered and fixed
 
-1. Migration 007 transferred ownership to `genomeguard_owner` but did not grant the actual `genomeguard_runtime` application role the DML/sequence privileges required by the service. It now grants the required DML and sequence privileges and sets matching default privileges for future owner-created objects. It revokes UPDATE/DELETE/TRUNCATE on the consent ledger after the broad grants.
-2. Migration 009 had mismatched PostgreSQL dollar-quote delimiters. The audit-trigger function and privilege block now have matching delimiters.
-3. Existing staging databases can have `genomeguard_runtime` as the owner of the pre-existing runtime schema. The migration runner now detects that legacy state and, only when the migration owner can safely SET ROLE to the schema owner, grants migration-only CREATE to `genomeguard_owner`. Migration 007 then transfers ownership and removes runtime CREATE. Other ownership mismatches fail closed with an actionable error.
-4. PostgreSQL integration tests now assert that the runtime role can read/append consent events but cannot update, delete, or truncate them. A regression test covers migration bootstrap for the legacy runtime-owned schema.
+1. Migration 007 transferred ownership but omitted the required grants to the actual `genomeguard_runtime` application role. It now grants only documented service DML and required sequence access, then revokes consent-ledger mutation.
+2. Migration 009 contained mismatched dollar-quote delimiters and could not create the audit immutability trigger. The delimiters are corrected.
+3. Migration 010 removes broad cohort DML from the web role. It leaves cohort reads available, limits donor consent changes to an admin-scoped update, and prevents runtime modification of variants, genotypes, relationships, and cohort metadata.
+4. Migration 011 adds organization ownership to cohort rows, forces RLS on donors, genotypes, variants, relationships, cohort metadata, and donor-access events, and adds composite donor/organization constraints for genotype and relationship rows.
+5. Migration 012 corrects donor-access event binding: a tenant can record access to a shared public/synthetic donor, but cannot log access to another organization's private donor. A row trigger enforces that distinction while preserving the ordinary donor foreign key.
+6. The migration runner now avoids `CREATE SCHEMA IF NOT EXISTS` when the schema is already provisioned, because even that statement requires database CREATE privilege. It fails with an actionable error if initial schema provisioning is genuinely missing.
+7. Synthetic demo cohort seeding uses the separate migration-owner connection for the one-time cohort write. Runtime web credentials do not receive broad cohort write/delete privileges. PostgreSQL INSERTs use explicit column lists so added tenant columns do not break seeding.
+8. Demo requester bootstrap now sets an explicit unscoped-demo context inside one transaction rather than weakening tenant RLS globally.
 
 ### Direct database checks
 
-On the disposable validation branch, the runtime principal was verified as:
+On both disposable branches:
 
-- not superuser, not BYPASSRLS, not CREATEDB, not CREATEROLE;
-- unable to CREATE in either GenomeGuard schema;
-- not a member of `genomeguard_owner`;
-- not owner of application tables;
-- unable to TRUNCATE protected tables;
-- able to append audit entries, but unable to update/delete/truncate audit entries;
-- able to read and append consent events, but unable to update/delete/truncate them;
-- able to read the migration ledger, but unable to insert/update/delete it.
+- Runtime role is not superuser, does not have BYPASSRLS, CREATEDB, or CREATEROLE, cannot create in either application schema, is not a member of the owner role, and owns no application tables.
+- Runtime can read the migration ledger but cannot write it.
+- Runtime can append audit and consent events but cannot update, delete, or truncate those ledgers.
+- Runtime can read the public/synthetic cohort and tenant-scoped rows, but cannot insert/update/delete variants, genotypes, relationships, or cohort metadata.
+- Donor consent updates are available only through the admin-scoped policy; donor inserts/deletes are not granted to runtime.
+- Donor-access rows are append-only to runtime and bound to the requesting organization.
+- RLS is enabled and forced for requesters, requests, decisions, epsilon ledger, alerts, identity bindings, consent events, donors, genotypes, variants, relationships, cohort metadata, and donor-access records.
 
-RLS was enabled and forced for requesters, requests, decisions, epsilon ledger, alerts, identity bindings, and consent events. Identity-binding policy was present after migration 008.
+Synthetic rows for two organizations were inserted and queried as separate runtime principals. Tenant A and tenant B saw their own rows plus the shared public/synthetic rows, but not the other tenant's rows. An unscoped session saw only shared rows. A relationship attempting to link donors across organizations was rejected by the composite foreign key. A tenant could log access to a shared public donor; access to another tenant's private donor was rejected by the donor-access trigger.
 
-Synthetic test identities for two organizations were used to verify that tenant A and tenant B saw only their own identity bindings. An insert attempting to write an organization-B request while scoped to organization A was rejected by PostgreSQL with an RLS violation. Missing tenant context returned no requester, request, or identity-binding rows.
+The staging branch currently contains a freshly generated synthetic cohort (600 donors, 600 encrypted genotype records, 3,000 variants, 959 relationships), four unscoped demo requesters, and audit events. No real participant data was used.
 
-The validation branch contains disposable test rows and is not the Render staging database or a production database.
+## Hosted synthetic staging
 
-### Important cohort-data boundary
+- Service: `genomeguard-staging-pr113`
+- URL: https://genomeguard-staging-pr113.onrender.com
+- Service ID: `srv-dbpjsie1egvs73cajdlg`
+- Neon database branch: `br-flat-wildflower-a1pgfnhn`
+- Live deployment observed: `52126ade746fae914bd90f67c800328aa1da8be7`
+- Logs show application startup complete, `GET /health` returning 200, and the four demo requesters present in PostgreSQL.
+- The live service uses distinct runtime and migration URLs and a unique staging encryption key. Database URLs and secrets are not exposed to the browser or this report.
+- The checked-in Blueprint specifies `/health/live`, but the live Render service currently reports an empty provider health-check path. A Blueprint adoption plan is still required to reconcile this without changing production.
+- The latest PR head is newer than the currently observed live deployment. Deploy and verify the final exact head before submission.
 
-The current schema does not apply tenant RLS to the shared cohort/reference tables `donors`, `genotypes`, `variants`, `relationships`, `donor_access`, or `cohort_metadata`. The current design treats the public/synthetic cohort as shared service data and relies on server-side application policy; it does not provide participant-level tenant partitioning for arbitrary institution-supplied cohorts. Do not expose database credentials to browsers or untrusted clients. Before controlled multi-institution cohorts are accepted, define and test an explicit cohort ownership/access model or isolate each institution's cohort in a separate database/schema with independently verified policy.
-
-## Current staging and production state
-
-### Render synthetic staging
-
-- Service: `genomeguard-staging` (`srv-dbp41m5bedkc73fk4aug`)
-- URL: https://genomeguard-staging.onrender.com
-- Render branch: `feat/remove-supabase-runtime`
-- Last inspected live deploy: `dep-dbp64otbedkc73fq1ec0`, commit `60fc7f33c1a971cbca37195f9c41b2eef23ed005`
-- The service is still on the earlier branch; it has not yet been deployed from PR #113.
-- Render service details report auto-deploy enabled but no provider health-check path configured. The checked-in Blueprint and live service configuration therefore need reconciliation.
-- Logs show normal page/API requests returning 200 and `/health/ready` returning 503. In synthetic demo mode, fail-closed readiness is expected and must not be described as production readiness.
-- The Render connector does not expose the service's secret environment values. Its exact Neon branch URL binding is therefore not asserted here.
-
-### Linked Neon project
-
-The default branch `br-patient-recipe-a1agz4kb` in the linked staging project has 600 synthetic donors, 3,000 variants, 600 genotype rows, and 16 audit rows. Its migration ledger still reports only versions 1 and 2. It has the `genomeguard_owner` and `genomeguard_runtime` roles. The migration exercise was deliberately completed on the separate disposable child branch, not on this default branch.
-
-The Neon project is on Free v3 with a six-hour history-retention window and no scheduled snapshot policy. This is not an approved production recovery plan. The CI encrypted backup/restore test and the documented synthetic snapshot restore are not substitutes for provider-level PITR, offsite retention, key custody, and recurring restore drills.
-
-### Production
-
-The Render production service `genomeguard` (`srv-dbev1ka9lscs738813t0`) still deploys the `main` branch. No production environment variables, database, deployment, or data were changed in this work. The previously documented production persistence model uses SQLite on an ephemeral hosting filesystem and must be replaced before any production claim.
+The previous staging service on `feat/remove-supabase-runtime` remains separate and unchanged.
 
 ## CI and delivery status
 
-- The earlier exact-head CI run `42736856617` was cancelled during the PostgreSQL integration step; its later steps were skipped.
-- The cancelled run is not evidence of a passing test suite.
-- New workflows were queued for the updated PR head. Record their final conclusions in PR #113 before marking the project release-ready.
-- Vercel preview status is reported separately from Render staging; a successful preview build does not establish database, OIDC, consent, or production readiness.
-- Repository branch protection is not enabled on the current plan. Preserve review and required-check discipline manually.
+- Earlier CI run `42850704480` failed at lint due to import formatting; that issue was fixed.
+- CI run `42851307521` on commit `c451dd6279fa809318fbafbfc8e68a10dc4cbe3b` passed lint and seed and is running PostgreSQL integration tests. It is not the latest PR head.
+- On that run, deployment configuration, CodeQL (Python and JavaScript), dependency audit, FHIR R4 Consent validation, GA4GH Beacon v2 validation, and the real-data image build passed.
+- The staging acceptance workflow is still running and must finish against the exact deployed PR head.
+- A Vercel preview or successful Docker image build is not proof of database, OIDC, consent, or staging workflow readiness.
 
-## Product capabilities and demo scope
+## Cohort and institutional boundary
 
-The intended hackathon demonstration is synthetic/public-data research governance:
+The database now supports organization-owned cohort rows with RLS and composite donor/organization integrity. The current service loads the shared public/synthetic cohort into one in-memory dataset at startup; it does not yet provide a complete per-institution private-cohort ingestion and per-tenant in-memory dataset lifecycle. Keep the hosted app on public/synthetic data. Do not claim controlled institution-supplied cohort processing is production-complete.
 
-- research request submission and policy/risk decisions;
-- output transformation and privacy-budget tracking;
-- steward review and audit verification;
-- public-source provenance and genotype QC;
-- synthetic consent examples and FHIR/Beacon interoperability demonstrations;
-- OIDC identity/organization-control foundations;
-- repeatable evaluations, API tests, browser journeys, responsive checks, and accessibility automation.
+The public/synthetic rows are intentionally visible across organizations. Private rows must have an explicit `organization_id`; application roles cannot import or rewrite cohort data through broad web DML. Any future institutional cohort-ingestion workflow must preserve tenant-scoped context and prove the same isolation end to end.
 
-Do not present dataset-level public-release terms as participant-specific consent, a synthetic FHIR resource as an actual consent record, QC success as import approval, or a risk heuristic as a formally audited differential-privacy guarantee.
+## Recovery and operations
 
-## Remaining release gates
+- The encrypted PostgreSQL backup/restore and audit-verification test is part of CI and must pass on the final head.
+- The linked Neon project is on a free plan with a short history-retention window and no scheduled snapshot policy. This is suitable only for disposable demo staging, not production recovery.
+- No institution-approved PITR/offsite retention, RPO/RTO, independent key custody, monitoring/alert routing, or recurring restore drill has been verified.
+- The live Render service is on a free plan. The provider health-check path still needs to be reconciled with the checked-in Blueprint.
 
-### Before calling the hackathon demo finished
+## Final hackathon submission gates
 
-1. Complete exact-head CI on PR #113: PostgreSQL integration, encrypted backup/restore, evaluation, demo, syntax/compile, browser routes, responsive behavior, axe checks, and guided tour.
-2. Deploy the exact tested commit to the synthetic Render staging service using a restricted runtime URL and a separate migration-owner URL. Keep synthetic demo mode explicit.
-3. Verify startup migrations, role assertions, database persistence, route behavior, audit verification, and browser journeys against the deployed SHA.
-4. Reconcile the live Render service with the checked-in Blueprint, including the health-check path and auto-deploy policy.
-5. Refresh the demo script, architecture/data-flow diagrams, screenshots, and evaluation results so they describe the deployed commit rather than an earlier build.
-6. Perform a manual keyboard/screen-reader review in addition to automated accessibility checks.
+1. Complete exact-head CI: PostgreSQL integration, encrypted backup/restore, audit verification, evaluation, demo, Python/JS checks, Playwright browser routes, responsive layouts, and axe accessibility.
+2. Deploy the exact tested commit to `genomeguard-staging-pr113`.
+3. Verify `/health`, `/health/ready`, database readiness, demo personas, request submission, steward approval/rejection, output transformation, privacy-budget accounting, audit verification, consent examples, FHIR/Beacon outputs, and browser journeys.
+4. Reconcile the live Render health-check path with `render.staging.yaml` through a reviewed Blueprint plan.
+5. Capture current screenshots and a five-minute demo recording using `docs/hackathon-demo-guide.md`.
+6. Keep the README, current-status page, and demo guide aligned with the deployed SHA.
 
-### Before controlled-data or production use
+## External gates before controlled-data or production use
 
-1. Supply an institutional OIDC issuer/client, trusted JWKS, verified organization lifecycle, MFA/revocation policy, and real provisioned identities.
-2. Establish authoritative consent-source integration, correct sample mapping, withdrawal timing, and institution-approved legal/ethics governance.
-3. Define tenant ownership and row-level isolation for institution-supplied cohort data, not only operational requests.
-4. Use an approved durable database plan with scheduled backups/PITR, retention, independent key custody, monitoring, and tested RPO/RTO.
-5. Configure external immutable audit anchoring/signing, trusted timestamps, and key rotation/custody.
-6. Complete independent threat-model, penetration, cryptographic, privacy, legal, ethics, and (if applicable) clinical/regulatory review.
+1. Institution-supplied OIDC issuer/client, trusted JWKS, verified organization lifecycle, MFA/revocation policy, and real provisioned identities.
+2. Authoritative consent-source integration, correct sample mapping, withdrawal timing, and institution-approved legal/ethics governance.
+3. Per-institution cohort ingestion and dataset lifecycle, including tenant-bound in-memory processing and full end-to-end tests.
+4. Approved durable database/PITR, offsite backup retention, monitoring, RPO/RTO, restore drills, and independent key custody.
+5. External immutable audit anchoring, trusted timestamps, signing-key rotation/custody, and independent review.
+6. Threat-model, penetration, cryptographic, privacy, legal, ethics, and (if applicable) clinical/regulatory review.
 
 ## Safety boundary
 
-GenomeGuard remains research software. Keep synthetic/public-data demo behavior separate from participant/controlled data. Do not load private or controlled genomic records, claim clinical validity, or enable a real institution until the institution's identity, consent, data-use, privacy, and operational approvals are in place.
+GenomeGuard remains research software. The live environment is synthetic-only. Do not upload private or controlled-access participant genomic data, claim clinical validity, or enable a real institution until identity, consent, data-use, privacy, operational, and governance approvals are in place.
