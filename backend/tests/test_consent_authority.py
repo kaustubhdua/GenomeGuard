@@ -7,9 +7,10 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from helpers import make_service
+
 from app.core.audit_chain import canonical_json
 from app.service import ServiceError
-from helpers import make_service
 
 
 def signed_event(private, dataset_id, event_type="withdrawn"):
