@@ -1,3 +1,4 @@
+import pytest
 from starlette.testclient import TestClient
 
 from app.api import create_app
@@ -22,6 +23,18 @@ def test_oidc_binding_is_tenant_scoped_revocable_and_auditable():
     assert store.requester_by_oidc(
         "https://id.example.edu", "subject-1", "org-b",
     ) is None
+    # Repeating the same provisioning request is idempotent, but a subject cannot
+    # silently move to a different requester within the same organization.
+    store.add_identity_binding(
+        requester_id, "https://id.example.edu", "subject-1", "org-a",
+    )
+    other_id = store.add_requester(
+        "Other", "researcher", "registered", "Example University", hash_key("other-key"),
+    )
+    with pytest.raises(ValueError, match="already bound"):
+        store.add_identity_binding(
+            other_id, "https://id.example.edu", "subject-1", "org-a",
+        )
     request_id = store.add_request(
         requester_id, "2026-11-10T00:00:00Z", {"purpose": "disease_research"},
     )
