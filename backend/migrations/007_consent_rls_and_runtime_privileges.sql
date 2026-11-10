@@ -71,15 +71,18 @@ BEGIN
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_runtime';
-    -- genomeguard_runtime is the actual GG_DATABASE_URL principal. Ownership moves to
-    -- genomeguard_owner above, so restore only the DML needed by the application.
+    -- The application role is not a data-import or schema-maintenance principal.
+    -- Grant read access by default, then only the writes used by live API workflows.
     EXECUTE 'GRANT USAGE ON SCHEMA genomeguard_runtime, genomeguard TO genomeguard_runtime';
-    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_runtime';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_runtime';
     EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO genomeguard_runtime';
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard TO genomeguard_runtime';
+    EXECUTE 'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings, genomeguard_runtime.donors TO genomeguard_runtime';
+    EXECUTE 'GRANT INSERT ON TABLE genomeguard_runtime.alerts, genomeguard_runtime.donor_access, genomeguard_runtime.audit_log, genomeguard_runtime.consent_events TO genomeguard_runtime';
+    EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.schema_migrations FROM genomeguard_runtime';
+    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.audit_log, genomeguard_runtime.consent_events FROM genomeguard_runtime';
     EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_runtime';
-    EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
-    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
+    EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
       IF EXISTS (
         SELECT 1 FROM pg_roles
@@ -94,14 +97,17 @@ BEGIN
           'genomeguard_app_runtime must not inherit genomeguard_owner privileges';
       END IF;
       EXECUTE 'GRANT USAGE ON SCHEMA genomeguard_runtime, genomeguard TO genomeguard_app_runtime';
-      EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_app_runtime';
+      EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_app_runtime';
       EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO genomeguard_app_runtime';
       EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard TO genomeguard_app_runtime';
+      EXECUTE 'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings, genomeguard_runtime.donors TO genomeguard_app_runtime';
+      EXECUTE 'GRANT INSERT ON TABLE genomeguard_runtime.alerts, genomeguard_runtime.donor_access, genomeguard_runtime.audit_log, genomeguard_runtime.consent_events TO genomeguard_app_runtime';
+      EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.schema_migrations FROM genomeguard_app_runtime';
+      EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.audit_log, genomeguard_runtime.consent_events FROM genomeguard_app_runtime';
       EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_app_runtime';
-      EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_app_runtime';
+      EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_app_runtime';
       EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_app_runtime';
       EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_app_runtime';
-      EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_app_runtime';
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_owner') THEN
       IF pg_has_role('genomeguard_runtime', 'genomeguard_owner', 'MEMBER') THEN
@@ -109,26 +115,26 @@ BEGIN
           'genomeguard_runtime must not inherit genomeguard_owner privileges; remove provider role membership before migrations';
       END IF;
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
-           || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
-      EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
-           || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
+           || 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLES FROM genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
-           || 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO genomeguard_runtime';
+           || 'GRANT SELECT ON TABLES TO genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
            || 'GRANT USAGE, SELECT ON SEQUENCES TO genomeguard_runtime';
+      EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
+           || 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLES FROM genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
            || 'GRANT SELECT ON TABLES TO genomeguard_runtime';
       IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
         EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
-             || 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO genomeguard_app_runtime';
+             || 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLES FROM genomeguard_app_runtime';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
+             || 'GRANT SELECT ON TABLES TO genomeguard_app_runtime';
         EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
              || 'GRANT USAGE, SELECT ON SEQUENCES TO genomeguard_app_runtime';
-        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
-             || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_app_runtime';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
+             || 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLES FROM genomeguard_app_runtime';
         EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
              || 'GRANT SELECT ON TABLES TO genomeguard_app_runtime';
-        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
-             || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_app_runtime';
       END IF;
     END IF;
   END IF;
