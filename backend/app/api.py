@@ -1059,6 +1059,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("POST", "/donor/{id:int}/withdraw", "Withdraw consent for all future requests", "donor")
     async def donor_withdraw(request):
+        if not settings.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant withdrawal must be recorded by the configured authoritative consent source",
+            )
         return _j(S().donor_set_withdrawn(donor_auth(request), True))
 
     @route("PUT", "/donor/{id:int}/consent", "Change what you agree to (use, disease, limits); "
@@ -1069,6 +1074,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("POST", "/donor/{id:int}/restore", "Give consent again after withdrawing", "donor")
     async def donor_restore(request):
+        if not settings.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant re-consent must be recorded by a new signed authoritative consent event",
+            )
         return _j(S().donor_set_withdrawn(donor_auth(request), False))
 
     @route("POST", "/donor/{id:int}/ask", "Ask the consent concierge one of a fixed set of "
