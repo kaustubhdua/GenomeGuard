@@ -565,7 +565,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 "data_level": gran, "is_commercial": q.get("commercial") == "true",
                 "variant_filter": {"variant_ids": [hits[0] + 1]}}
         try:
-            d = await run_in_threadpool(svc.submit, r, body)
+            d = await run_in_threadpool(scoped_requester_call, r, svc.submit, r, body)
         except ServiceError as exc:
             message = ("Request not permitted by governance policy" if exc.status == 403
                        else "Request parameters failed governance validation")
@@ -591,15 +591,21 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/requests", "List requests (own; all with admin key)", "requester|admin")
     async def list_requests(request):
         if S().is_admin(request.headers.get("x-admin-key")):
-            return _j({"requests": S().requests_for(None)})
-        return _j({"requests": [requester_view(x) for x in S().requests_for(requester(request))]})
+            rows = admin_call(S().requests_for, None)
+            return _j({"requests": rows})
+        identity = requester(request)
+        rows = scoped_requester_call(identity, S().requests_for, identity)
+        return _j({"requests": [requester_view(x) for x in rows]})
 
     @route("GET", "/requests/{id:int}", "One decision in detail", "requester|admin")
     async def get_request(request):
         rid = request.path_params["id"]
         is_admin = S().is_admin(request.headers.get("x-admin-key"))
         current = None if is_admin else requester(request)
-        d = S().store.decision(rid)
+        d = (
+            admin_call(S().store.decision, rid) if is_admin
+            else scoped_requester_call(current, S().store.decision, rid)
+        )
         # Use the same response for missing and non-owned requests to prevent ID enumeration.
         if not d or (current is not None and d["requester_id"] != current["id"]):
             raise ServiceError(404, "not_found", "no such request")
@@ -664,10 +670,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         require_governed_data(svc)
         q = request.query_params
         pop = q.get("population")
-        out = svc.eligibility(
+        out = scoped_requester_call(
+            r, svc.eligibility,
             r, q.get("purpose", "general_research"), q.get("disease") or None,
             q.get("commercial", "false").lower() == "true", q.get("data_level", "frequency"),
-            {"population": pop} if pop else {})
+            {"population": pop} if pop else {},
+        )
         return _j(out)
 
     @route("POST", "/requests/preview", "Non-consuming privacy and utility preview", "requester")
