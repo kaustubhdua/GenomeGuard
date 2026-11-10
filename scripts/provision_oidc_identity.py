@@ -37,6 +37,12 @@ def main() -> int:
         parser.error("GG_DATABASE_URL must be the restricted PostgreSQL runtime URL")
     if not issuer.startswith("https://") or not audience:
         parser.error("GG_OIDC_ISSUER and GG_OIDC_AUDIENCE must be configured")
+    if os.environ.get("GG_OIDC_REQUIRED", "").lower() != "true" or (
+        os.environ.get("GG_OIDC_ADMIN_REQUIRED", "").lower() != "true"
+    ):
+        parser.error("enable GG_OIDC_REQUIRED and GG_OIDC_ADMIN_REQUIRED before steward bootstrap")
+    if not args.subject or len(args.subject) > 255 or not args.name.strip() or not args.institution.strip():
+        parser.error("subject, name and institution must be non-empty and within schema limits")
     if args.organization_id not in allowed:
         parser.error("--organization-id must be in GG_OIDC_ALLOWED_ORGANIZATIONS")
 
