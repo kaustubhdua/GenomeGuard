@@ -97,9 +97,17 @@ class PostgresStore(Store):
     backend = "postgresql"
     durable = True  # means PostgreSQL is configured, not that provider backups are verified
 
-    def __init__(self, database_url: str, *, connect_timeout: int = 10) -> None:
+    def __init__(
+        self, database_url: str, *, migration_database_url: str | None = None,
+        connect_timeout: int = 10, run_migrations: bool = True,
+    ) -> None:
         if not database_url or not database_url.startswith(("postgres://", "postgresql://")):
-            raise ValueError("GG_DATABASE_URL must be a PostgreSQL connection URL")
+            raise ValueError("GG_DATABASE_URL must be a PostgreSQL runtime connection URL")
+        if migration_database_url and (
+            not migration_database_url.startswith(("postgres://", "postgresql://"))
+            or migration_database_url == database_url
+        ):
+            raise ValueError("GG_MIGRATION_DATABASE_URL must be a distinct PostgreSQL owner URL")
         self.path = "postgresql"
         self.database_url = database_url
         self.connect_timeout = connect_timeout
@@ -107,30 +115,61 @@ class PostgresStore(Store):
         self._transaction_depth = 0
         self.connection = psycopg.connect(
             database_url, connect_timeout=connect_timeout, row_factory=dict_row,
-            application_name="GenomeGuard",
+            application_name="GenomeGuard-runtime",
         )
-        # Keep runtime tables isolated from normalized genomic reference tables.
-        # The database URL is a server-side secret; never put it in frontend/Vercel public env vars.
+        self.migration_connection = (
+            psycopg.connect(
+                migration_database_url, connect_timeout=connect_timeout, row_factory=dict_row,
+                application_name="GenomeGuard-migrations",
+            ) if run_migrations and migration_database_url else (
+                self.connection if run_migrations else None
+            )
+        )
         try:
-            with self.connection.transaction():
-                # Legacy service tables and normalized public references have separate
-                # schemas because they intentionally use different data contracts.
-                schema_exists = self.connection.execute(
-                    "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'genomeguard_runtime') AS present"
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
+                runtime_role = self.connection.execute(
+                    "SELECT current_user AS role"
+                ).fetchone()["role"]
+                migration_role = self.migration_connection.execute(
+                    "SELECT current_user AS role"
+                ).fetchone()["role"]
+                if runtime_role == migration_role:
+                    raise ValueError(
+                        "GG_DATABASE_URL and GG_MIGRATION_DATABASE_URL must authenticate "
+                        "as different PostgreSQL roles"
+                    )
+            if run_migrations:
+                # Only the migration principal may create schemas or run DDL. The ordinary
+                # application connection receives a search_path after the owner creates it.
+                with self.migration_connection.transaction():
+                    self.migration_connection.execute(
+                        "CREATE SCHEMA IF NOT EXISTS genomeguard_runtime"
+                    )
+                    self.migration_connection.execute(
+                        "SET search_path TO genomeguard_runtime, public"
+                    )
+            else:
+                # Operator tools that only provision records must never run schema DDL.
+                present = self.connection.execute(
+                    "SELECT EXISTS (SELECT 1 FROM pg_namespace "
+                    "WHERE nspname='genomeguard_runtime') AS present"
                 ).fetchone()["present"]
-                if not schema_exists:
-                    self.connection.execute("CREATE SCHEMA genomeguard_runtime")
+                if not present:
+                    raise RuntimeError("GenomeGuard PostgreSQL schema is not migrated")
+            with self.connection.transaction():
                 self.connection.execute("SET search_path TO genomeguard_runtime, public")
+            self.db = _ConnectionCompat(self.connection, self)
+            if run_migrations:
+                self._migrate()
         except Exception:
             self.connection.close()
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
+                self.migration_connection.close()
             raise
-        self.db = _ConnectionCompat(self.connection, self)
-        try:
-            self._migrate()
-        except Exception:
-            self.connection.close()
-            raise
-
+        finally:
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
+                self.migration_connection.close()
+                self.migration_connection = None
 
     def _ensure_connection(self) -> None:
         """Reconnect after provider restarts without retrying an interrupted transaction.
@@ -158,7 +197,7 @@ class PostgresStore(Store):
         self.db.connection = connection
 
     def _migrate(self) -> None:
-        """Apply each numbered native PostgreSQL migration exactly once."""
+        """Apply numbered migrations using the privileged migration-only connection."""
         if not _MIGRATIONS.is_dir():
             raise RuntimeError(f"PostgreSQL migrations directory is missing: {_MIGRATIONS}")
         migrations = []
@@ -168,26 +207,33 @@ class PostgresStore(Store):
                 migrations.append((int(prefix), path))
         if not migrations or migrations[0][0] != 1:
             raise RuntimeError("PostgreSQL migration 001_initial_postgres.sql is required")
+
+        # Production must execute DDL through the separate owner credential. The runtime
+        # connection is deliberately never used for schema creation or migrations.
+        connection = self.migration_connection or self.connection
         with self.lock:
             for version, migration in migrations:
-                with self.connection.transaction():
-                    self.connection.execute(
+                with connection.transaction():
+                    connection.execute(
+                        "SET search_path TO genomeguard_runtime, public"
+                    )
+                    connection.execute(
                         "CREATE TABLE IF NOT EXISTS schema_migrations "
                         "(version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
                     )
-                    applied = self.connection.execute(
+                    applied = connection.execute(
                         "SELECT version FROM schema_migrations WHERE version=%s", (version,)
                     ).fetchone()
                     if applied:
                         continue
-                    sql = "\n".join(
+                    sql = "\\n".join(
                         line for line in migration.read_text(encoding="utf-8").splitlines()
                         if not line.lstrip().startswith("--")
                     )
-                    for statement in sql.split(";"):
-                        if statement.strip():
-                            self.connection.execute(statement)
-                    self.connection.execute(
+                    # Psycopg's simple-query protocol accepts the full migration script,
+                    # preserving semicolons inside PL/pgSQL dollar-quoted function bodies.
+                    connection.execute(sql, prepare=False)
+                    connection.execute(
                         "INSERT INTO schema_migrations(version) VALUES (%s)", (version,)
                     )
 
@@ -438,6 +484,107 @@ class PostgresStore(Store):
                     (idx, stamp, actor, action, json.dumps(safe_payload), previous, entry["hash"]),
                 )
                 return entry
+
+    def assert_least_privilege_runtime(self) -> None:
+        """Fail closed if the connected application principal can bypass tenant controls."""
+        row = self.connection.execute(
+            "SELECT current_user AS role, r.rolsuper, r.rolbypassrls, r.rolcreatedb, "
+            "r.rolcreaterole, "
+            "has_database_privilege(current_user,current_database(),'CREATE') AS database_create, "
+            "has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS runtime_create, "
+            "has_schema_privilege(current_user,'genomeguard','CREATE') AS reference_create, "
+            "EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "WHERE n.nspname IN ('genomeguard_runtime','genomeguard') "
+            "AND c.relkind IN ('r','p') AND c.relowner=(SELECT oid FROM pg_roles "
+            "WHERE rolname=current_user)) AS owns_application_tables, "
+            "COALESCE((SELECT pg_has_role(current_user, oid, 'MEMBER') FROM pg_roles "
+            "WHERE rolname='genomeguard_owner'), false) AS owner_member, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requests','TRUNCATE') "
+            "AS requests_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.decisions','TRUNCATE') "
+            "AS decisions_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','TRUNCATE') "
+            "AS donors_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','TRUNCATE') "
+            "AS variants_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','TRUNCATE') "
+            "AS relationships_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','TRUNCATE') "
+            "AS metadata_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','TRUNCATE') "
+            "AS genotypes_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.epsilon_ledger','TRUNCATE') "
+            "AS ledger_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','TRUNCATE') "
+            "AS alerts_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') "
+            "AS consent_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requesters','TRUNCATE') "
+            "AS requesters_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.identity_bindings','TRUNCATE') "
+            "AS bindings_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','UPDATE') "
+            "AS audit_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','DELETE') "
+            "AS audit_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','TRUNCATE') "
+            "AS audit_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','INSERT') "
+            "AS migrations_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','UPDATE') "
+            "AS migrations_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','DELETE') "
+            "AS migrations_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','TRUNCATE') "
+            "AS migrations_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','UPDATE') "
+            "AS consent_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','DELETE') "
+            "AS consent_delete "
+            "FROM pg_roles r WHERE r.rolname=current_user"
+        ).fetchone()
+        if not row:
+            raise RuntimeError("could not inspect the PostgreSQL runtime principal")
+        unsafe = (
+            row["role"] == "genomeguard_owner" or row["rolsuper"] or row["rolbypassrls"]
+            or row["rolcreatedb"] or row["rolcreaterole"] or row["database_create"]
+            or row["runtime_create"] or row["reference_create"] or row["owns_application_tables"]
+            or row["owner_member"]
+            or row["requests_truncate"] or row["decisions_truncate"] or row["donors_truncate"]
+            or row["variants_truncate"] or row["relationships_truncate"] or row["metadata_truncate"]
+            or row["genotypes_truncate"] or row["ledger_truncate"] or row["alerts_truncate"]
+            or row["consent_truncate"] or row["requesters_truncate"] or row["bindings_truncate"]
+            or row["audit_update"] or row["audit_delete"] or row["audit_truncate"]
+            or row["migrations_insert"] or row["migrations_update"]
+            or row["migrations_delete"] or row["migrations_truncate"]
+            or row["consent_update"] or row["consent_delete"]
+        )
+        if unsafe:
+            raise RuntimeError(
+                "PostgreSQL runtime principal is over-privileged; use genomeguard_runtime "
+                "with no BYPASSRLS, schema CREATE, table TRUNCATE, audit mutation, "
+                "or migration-ledger write privileges"
+            )
+
+    def set_tenant(self, organization_id: str) -> None:
+        """Set transaction-local tenant context after OIDC binding validation."""
+        if not organization_id or self._transaction_depth < 1:
+            raise RuntimeError("tenant context requires an active transaction and organization ID")
+        self.connection.execute(
+            "SELECT set_config('gg.organization_id', %s, true)", (organization_id,),
+        )
+
+    def set_admin_access(self) -> None:
+        """Enable cross-tenant RLS access only inside an already-authenticated admin request."""
+        if self._transaction_depth < 1:
+            raise RuntimeError("admin context requires an active transaction")
+        self.connection.execute("SELECT set_config('gg.admin_access', 'on', true)")
+
+    def set_allow_unscoped_demo(self) -> None:
+        """Allow unscoped legacy API keys only in the synthetic demo transaction."""
+        if self._transaction_depth < 1:
+            raise RuntimeError("demo context requires an active transaction")
+        self.connection.execute("SELECT set_config('gg.allow_unscoped_demo', 'on', true)")
 
     def close(self) -> None:
         with self.lock:

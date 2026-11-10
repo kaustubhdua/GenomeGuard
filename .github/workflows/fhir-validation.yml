@@ -10,7 +10,7 @@ on:
       - "fhir/ig/**"
       - ".github/workflows/fhir-validation.yml"
   pull_request:
-    branches: [main]
+    branches: [main, feat/remove-supabase-runtime]
     paths:
       - "backend/app/service.py"
       - "backend/tests/test_fhir.py"

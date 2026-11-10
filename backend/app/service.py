@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import re
 import time
 from collections.abc import Callable
@@ -58,7 +59,16 @@ def transactional(method):
         transaction = getattr(self.store, "transaction", None)
         if transaction is None:
             return method(self, *args, **kwargs)
+        requester = next(
+            (value for value in args if isinstance(value, dict)
+             and ("organization_id" in value or value.get("_allow_unscoped_demo"))),
+            None,
+        )
         with transaction():
+            if requester and requester.get("organization_id"):
+                self.store.set_tenant(requester["organization_id"])
+            elif requester and requester.get("_allow_unscoped_demo"):
+                self.store.set_allow_unscoped_demo()
             return method(self, *args, **kwargs)
     return wrapped
 
@@ -108,13 +118,43 @@ class GenomeGuardService:
     def authenticate(self, key: str | None) -> dict | None:
         return self.store.requester_by_key(hash_key(key)) if key else None
 
+    def authenticate_oidc(self, issuer: str, subject: str, organization_id: str) -> dict | None:
+        """Resolve only an explicitly provisioned issuer/subject/tenant binding."""
+        return self.store.requester_by_oidc(issuer, subject, organization_id)
+
+    @transactional
+    def bind_oidc_identity(
+        self, requester_id: int, issuer: str, subject: str, organization_id: str,
+    ) -> None:
+        self.store.add_identity_binding(requester_id, issuer, subject, organization_id)
+        self.audit.append("admin", "identity.oidc_bound", {
+            "requester_id": requester_id, "issuer": issuer, "subject_hash": hashlib.sha256(
+                subject.encode("utf-8")
+            ).hexdigest(), "organization_id": organization_id,
+        })
+
+    @transactional
+    def revoke_oidc_identity(self, issuer: str, subject: str, organization_id: str) -> None:
+        self.store.revoke_identity_binding(issuer, subject, organization_id)
+        self.audit.append("admin", "identity.oidc_revoked", {
+            "issuer": issuer, "subject_hash": hashlib.sha256(subject.encode("utf-8")).hexdigest(),
+            "organization_id": organization_id,
+        })
+
     def is_admin(self, key: str | None) -> bool:
         return bool(key) and hmac.compare_digest(hash_key(key), self.admin_hash)
 
     @transactional
-    def create_requester(self, name: str, role: str, level: str, institution: str, key: str) -> int:
-        rid = self.store.add_requester(name, role, level, institution, hash_key(key))
-        self.audit.append("admin", "requester.created", {"requester_id": rid, "tier": level})
+    def create_requester(
+        self, name: str, role: str, level: str, institution: str, key: str,
+        *, organization_id: str | None = None,
+    ) -> int:
+        rid = self.store.add_requester(
+            name, role, level, institution, hash_key(key), organization_id=organization_id,
+        )
+        self.audit.append("admin", "requester.created", {
+            "requester_id": rid, "tier": level, "organization_id": organization_id,
+        })
         return rid
 
     # ================================================================== validation
@@ -787,6 +827,110 @@ class GenomeGuardService:
                                                                        len(new["modifiers"])]})
         return self.donor_profile(donor_id)
 
+    @transactional
+    def apply_signed_consent_event(
+        self, event: dict, *, public_key_b64: str, trusted_issuer: str,
+    ) -> dict:
+        """Apply a signed source-system consent change to one mapped participant."""
+        from app.consent_authority import ConsentAuthorityError, verify_consent_event
+
+        try:
+            payload, source_digest = verify_consent_event(
+                event,
+                public_key_b64=public_key_b64,
+                trusted_issuer=trusted_issuer,
+                expected_dataset_id=self.dataset_id,
+            )
+        except ConsentAuthorityError as exc:
+            raise ServiceError(422, "invalid_consent_authority_event", str(exc)) from None
+        if self.store.consent_event_exists(payload["event_id"]):
+            raise ServiceError(409, "duplicate_consent_event", "this consent event was already applied")
+        row = self.store.donor_by_source_sample_id(
+            payload["source_sample_id"], self.master, self.dataset_id,
+        )
+        if not row:
+            raise ServiceError(404, "participant_not_found",
+                               "source sample is not part of the active cohort")
+        donor_id = int(row["id"])
+        donor = self._donor(donor_id)
+        if donor.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_not_individual_consent",
+                               "dataset-level public terms cannot be converted into participant consent")
+
+        incoming = payload["consent"]
+        use = str(incoming.get("use", "")).upper()
+        if use not in self.CONSENT_USES:
+            raise ServiceError(422, "invalid_consent", "signed consent use must be GRU, HMB or DS")
+        disease = incoming.get("disease")
+        if use == "DS":
+            if not isinstance(disease, str) or not re.fullmatch(r"[a-z_]{2,32}", disease):
+                raise ServiceError(422, "invalid_consent", "DS consent requires a lowercase disease label")
+        else:
+            disease = None
+        modifiers = incoming.get("modifiers", [])
+        if (not isinstance(modifiers, list)
+                or not all(isinstance(item, str) for item in modifiers)
+                or {item.upper() for item in modifiers} - set(self.CONSENT_MODS)):
+            raise ServiceError(422, "invalid_consent", "signed consent modifiers are invalid")
+        population = incoming.get("population")
+        if population is not None and (
+            not isinstance(population, str) or len(population) > 80
+        ):
+            raise ServiceError(422, "invalid_consent", "population restriction is invalid")
+        consent_date = incoming.get("consent_date")
+        if not isinstance(consent_date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", consent_date):
+            raise ServiceError(422, "invalid_consent", "participant consent_date must be YYYY-MM-DD")
+        from datetime import date
+        try:
+            date.fromisoformat(consent_date)
+        except ValueError:
+            raise ServiceError(422, "invalid_consent", "participant consent_date is invalid") from None
+
+        consent = {
+            **donor.consent,
+            "use": use,
+            "disease": disease,
+            "modifiers": sorted({item.upper() for item in modifiers}),
+            "population": population,
+            "consent_date": consent_date,
+            "consent_basis": "participant_records",
+            "consent_simulated": False,
+            "consent_authority_issuer": trusted_issuer,
+            "consent_event_id": payload["event_id"],
+        }
+        event_type = payload["event_type"]
+        # A routine consent update must never silently reverse a prior withdrawal.
+        withdrawn = donor.withdrawn
+        if event_type == "withdrawn":
+            withdrawn = True
+        elif event_type == "restored":
+            # A restore is accepted only with a newly signed, complete consent payload above.
+            withdrawn = False
+        self.store.set_donor_consent(donor_id, consent)
+        withdrawn_at = (
+            payload["effective_at"] if event_type == "withdrawn"
+            else None if event_type == "restored"
+            else row.get("withdrawn_at")
+        )
+        self.store.set_donor_withdrawn(donor_id, withdrawn_at)
+        consent_blob = crypto.encrypt(
+            self.master, self.dataset_id, donor_id,
+            json.dumps(consent, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8"),
+        )
+        self.store.record_consent_event(
+            payload["event_id"], donor_id, self.dataset_id, event_type, consent_blob,
+            trusted_issuer, source_digest, payload["effective_at"],
+        )
+        self.audit.append(
+            f"donor:{self._donor_ref(donor_id)}", f"consent.authority_{event_type}",
+            {"donor_ref": self._donor_ref(donor_id), "event_id": payload["event_id"],
+             "source_record_sha256": source_digest, "effective_at": payload["effective_at"],
+             "withdrawn": withdrawn, "issuer": trusted_issuer},
+        )
+        # Update the in-memory cohort only after all durable writes and audit append succeed.
+        self.ds.donors[donor_id - 1] = replace(donor, consent=consent, withdrawn=withdrawn)
+        return self.donor_profile(donor_id)
+
     FHIR_BASE = "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package"
     FHIR_EXT = FHIR_BASE + "/StructureDefinition-"
 
@@ -1183,7 +1327,17 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         if s.database_url:
             from app.postgres_store import PostgresStore
 
-            store = PostgresStore(s.database_url)
+            migration_url = s.migration_database_url or None
+            store = PostgresStore(
+                s.database_url,
+                migration_database_url=migration_url,
+            )
+            if migration_url:
+                store.assert_least_privilege_runtime()
+                # The privileged credential is used only to apply migrations; drop it from
+                # process configuration once PostgresStore has closed its owner connection.
+                s.migration_database_url = ""
+                os.environ.pop("GG_MIGRATION_DATABASE_URL", None)
         else:
             store = Store(s.db_path)
     master = crypto.load_master_key(s.master_key)
@@ -1201,7 +1355,12 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                               seed=s.seed, n_planted=s.n_planted_rare, rare_maf=p.rare_maf)
             cohort_meta = {"source": "GenomeGuard synthetic generator", "genotypes_real": False,
                            "consent_simulated": True, "consent_records_matched": 0}
-        store.save_cohort(cohort, master, s.dataset_id, metadata=cohort_meta)
+        if store.path == "postgresql":
+            with store.transaction():
+                store.set_admin_access()
+                store.save_cohort(cohort, master, s.dataset_id, metadata=cohort_meta)
+        else:
+            store.save_cohort(cohort, master, s.dataset_id, metadata=cohort_meta)
     stored_meta = store.cohort_metadata()
     if not stored_meta:
         if not s.demo_mode:

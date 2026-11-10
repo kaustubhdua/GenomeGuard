@@ -143,14 +143,186 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         return state["svc"]
 
     def requester(request: Request) -> dict:
-        r = S().authenticate(request.headers.get("x-api-key"))
+        cached = getattr(request.state, "authenticated_requester", None)
+        if cached is not None:
+            return cached
+        authorization = request.headers.get("authorization", "")
+        if authorization.startswith("Bearer "):
+            if not (settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
+                    and settings.oidc_allowed_organizations):
+                raise ServiceError(503, "oidc_not_configured",
+                                   "institutional OIDC is not configured on this instance")
+            from app.identity import OIDCAuthenticationError, verify_access_token
+
+            try:
+                identity = verify_access_token(
+                    authorization[7:].strip(),
+                    issuer=settings.oidc_issuer,
+                    audience=settings.oidc_audience,
+                    jwks_url=settings.oidc_jwks_url,
+                    organization_claim=settings.oidc_organization_claim,
+                    allowed_organizations=settings.oidc_allowed_organizations,
+                )
+            except OIDCAuthenticationError:
+                raise ServiceError(401, "unauthorized", "invalid institutional bearer token") from None
+            r = scoped_identity_lookup(
+                identity.organization_id, S().authenticate_oidc,
+                identity.issuer, identity.subject, identity.organization_id,
+            )
+            if not r:
+                raise ServiceError(403, "identity_not_provisioned",
+                                   "verified identity is not provisioned for this organization")
+            if r.get("role") != "researcher":
+                raise ServiceError(403, "role_not_allowed",
+                                   "this identity is not provisioned for researcher access")
+            request.state.authenticated_requester = r
+            return r
+        if settings.oidc_required:
+            raise ServiceError(401, "unauthorized", "institutional bearer token required")
+        if settings.demo_mode:
+            with S().store.transaction():
+                set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
+                if set_demo is not None:
+                    set_demo()
+                r = S().authenticate(request.headers.get("x-api-key"))
+        else:
+            r = S().authenticate(request.headers.get("x-api-key"))
         if not r:
             raise ServiceError(401, "unauthorized", "missing or unknown X-API-Key")
+        if settings.tenant_isolation_required:
+            raise ServiceError(403, "tenant_identity_required",
+                               "a verified organization-bound OIDC identity is required")
+        if settings.demo_mode and not r.get("organization_id"):
+            r = {**r, "_allow_unscoped_demo": True}
+        request.state.authenticated_requester = r
         return r
 
-    def admin(request: Request) -> None:
+    def scoped_identity_lookup(organization_id: str, fn, *args, **kwargs):
+        """Resolve OIDC bindings inside the same tenant scope enforced by PostgreSQL RLS."""
+        with S().store.transaction():
+            set_tenant = getattr(S().store, "set_tenant", None)
+            if set_tenant is not None:
+                set_tenant(organization_id)
+            elif settings.tenant_isolation_required and not settings.demo_mode:
+                raise ServiceError(
+                    503, "tenant_store_unsupported",
+                    "tenant-isolated identity lookup requires PostgreSQL RLS",
+                )
+            return fn(*args, **kwargs)
+
+    def scoped_requester_call(identity: dict, fn, *args, **kwargs):
+        with S().store.transaction():
+            if identity.get("organization_id"):
+                S().store.set_tenant(identity["organization_id"])
+            elif identity.get("_allow_unscoped_demo") and settings.demo_mode:
+                S().store.set_allow_unscoped_demo()
+            elif settings.tenant_isolation_required:
+                raise ServiceError(403, "tenant_identity_required",
+                                   "verified organization scope is required")
+            return fn(*args, **kwargs)
+
+    def apply_admin_scope(principal: dict) -> None:
+        """Apply the narrowest RLS scope for the authenticated reviewer principal."""
+        organization_id = principal.get("organization_id")
+        if organization_id:
+            set_tenant = getattr(S().store, "set_tenant", None)
+            if set_tenant is None:
+                if settings.tenant_isolation_required and not settings.demo_mode:
+                    raise ServiceError(
+                        503, "tenant_store_unsupported",
+                        "organization-scoped reviewer access requires PostgreSQL RLS",
+                    )
+                # Local/demo SQLite has no database RLS. It is never accepted in non-demo mode.
+                return
+            set_tenant(organization_id)
+            return
+        set_admin = getattr(S().store, "set_admin_access", None)
+        if set_admin is not None:
+            set_admin()
+        elif settings.tenant_isolation_required and not settings.demo_mode:
+            raise ServiceError(
+                503, "tenant_store_unsupported",
+                "tenant-isolated admin access requires PostgreSQL RLS",
+            )
+
+    def admin_call(principal: dict, fn, *args, **kwargs):
+        with S().store.transaction():
+            apply_admin_scope(principal)
+            return fn(*args, **kwargs)
+
+    def admin(request: Request) -> dict:
+        authorization = request.headers.get("authorization", "")
+        if authorization.startswith("Bearer "):
+            if not (settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
+                    and settings.oidc_allowed_organizations):
+                raise ServiceError(503, "oidc_not_configured",
+                                   "institutional OIDC is not configured on this instance")
+            from app.identity import OIDCAuthenticationError, verify_access_token
+
+            try:
+                identity = verify_access_token(
+                    authorization[7:].strip(),
+                    issuer=settings.oidc_issuer,
+                    audience=settings.oidc_audience,
+                    jwks_url=settings.oidc_jwks_url,
+                    organization_claim=settings.oidc_organization_claim,
+                    allowed_organizations=settings.oidc_allowed_organizations,
+                )
+            except OIDCAuthenticationError:
+                raise ServiceError(401, "unauthorized", "invalid institutional bearer token") from None
+            principal = scoped_identity_lookup(
+                identity.organization_id, S().authenticate_oidc,
+                identity.issuer, identity.subject, identity.organization_id,
+            )
+            if not principal or principal.get("role") not in {"reviewer", "steward", "admin"}:
+                raise ServiceError(403, "steward_identity_required",
+                                   "a provisioned reviewer or steward identity is required")
+            # Every OIDC identity, including an organization-level "admin", remains
+            # bound to the organization asserted by the verified token. Global database
+            # access is reserved for the separately controlled X-Admin-Key credential.
+            scoped_principal = {
+                "role": principal["role"],
+                "organization_id": identity.organization_id,
+                "auth_organization_id": identity.organization_id,
+                "issuer": identity.issuer,
+                "subject": identity.subject,
+                "global": False,
+            }
+            path = request.url.path
+            global_only = (
+                path == "/audit" or path.startswith("/audit/")
+                or path.startswith("/reports/compliance")
+                or path in {
+                    "/admin/consent-events", "/admin/dataset-qc", "/admin/requesters",
+                    "/admin/untamper",
+                }
+                or path.startswith("/admin/tamper/")
+            )
+            if global_only:
+                raise ServiceError(
+                    403, "global_steward_access_required",
+                    "this operation requires the separately controlled global administrator credential",
+                )
+            if scoped_principal["role"] == "reviewer" and (
+                path.endswith("/release") or path.endswith("/copilot")
+                or path.endswith("/exposure") or path == "/admin/vcf-qc"
+                or path.startswith("/admin/oidc-bindings")
+                or (path.startswith("/requesters/") and
+                    (path.endswith("/freeze") or path.endswith("/unfreeze")))
+            ):
+                raise ServiceError(
+                    403, "steward_role_required",
+                    "this operation requires an organization steward role",
+                )
+            request.state.admin_principal = scoped_principal
+            return scoped_principal
+        if settings.oidc_admin_required:
+            raise ServiceError(401, "unauthorized", "institutional reviewer bearer token required")
         if not S().is_admin(request.headers.get("x-admin-key")):
             raise ServiceError(401, "unauthorized", "admin key required (X-Admin-Key)")
+        global_principal = {"role": "admin", "organization_id": None, "global": True}
+        request.state.admin_principal = global_principal
+        return global_principal
 
     def require_governed_data(svc: GenomeGuardService) -> None:
         if not svc.release_enabled:
@@ -165,6 +337,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
             async def handler(request: Request):
                 try:
+                    # Admin routes establish an authenticated, transaction-local RLS context
+                    # for every database operation in the handler. The handler's own admin()
+                    # call remains as defense in depth and preserves route-local validation.
+                    if who == "admin":
+                        principal = admin(request)
+                        with S().store.transaction():
+                            apply_admin_scope(principal)
+                            return await fn(request)
+                    # Other routes authenticate inside their handlers so protocol-specific
+                    # error envelopes (for example GA4GH Beacon) remain intact.
                     return await fn(request)
                 except ServiceError as e:
                     return _j(e.to_json(), e.status)
@@ -198,6 +380,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "durable_storage_verified": False,
             "external_audit_anchor_verified": False,
             "institutional_identity_provider_verified": False,
+            "participant_consent_authority_configured": bool(
+                settings.consent_authority_required
+                and settings.consent_authority_issuer.startswith("https://")
+                and settings.consent_authority_public_key
+            ),
         }
 
     @route("GET", "/health/live", "Cheap process liveness probe; does not initialize the cohort or database", "public")
@@ -252,7 +439,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def demo_requesters(request):
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "demo mode is off")
-        reqs = {r["name"]: r for r in S().store.requesters()}
+        with S().store.transaction():
+            set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
+            if set_demo is not None:
+                set_demo()
+            reqs = {r["name"]: r for r in S().store.requesters()}
         payload = {"requesters": [
             {"id": reqs[n]["id"], "name": n, "role": ro, "tier": lv, "api_key": k,
              "frozen": reqs[n]["frozen_at"] is not None}
@@ -263,6 +454,93 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             payload["admin_key"] = settings.admin_api_key
         return _j(payload)
 
+    @route("GET", "/auth/oidc", "Institutional OIDC API configuration (no secrets)", "public")
+    async def oidc_configuration(request):
+        configured = bool(
+            settings.oidc_issuer and settings.oidc_audience and settings.oidc_client_id
+            and settings.oidc_redirect_uri and settings.oidc_jwks_url
+            and settings.oidc_allowed_organizations
+        )
+        return _j({
+            "enabled": configured,
+            "required": settings.oidc_required,
+            "issuer": settings.oidc_issuer if configured else None,
+            "audience": settings.oidc_audience if configured else None,
+            "client_id": settings.oidc_client_id if configured else None,
+            "redirect_uri": settings.oidc_redirect_uri if configured else None,
+            "jwks_url": settings.oidc_jwks_url if configured else None,
+            "scopes": settings.oidc_scopes if configured else None,
+            "organization_claim": settings.oidc_organization_claim if configured else None,
+        })
+
+    @route("POST", "/admin/oidc-bindings", "Bind a provisioned requester to a verified OIDC subject", "admin")
+    async def oidc_bind(request):
+        admin(request)
+        if not settings.oidc_issuer or not settings.oidc_allowed_organizations:
+            raise ServiceError(503, "oidc_not_configured", "institutional OIDC is not configured")
+        body = await _body(request)
+        requester_id = body.get("requester_id")
+        subject = body.get("subject")
+        organization_id = body.get("organization_id")
+        if isinstance(requester_id, bool) or not isinstance(requester_id, int) or requester_id < 1:
+            raise ServiceError(422, "invalid_request", "requester_id must be a positive integer")
+        if not isinstance(subject, str) or not 1 <= len(subject) <= 255:
+            raise ServiceError(422, "invalid_request", "subject must contain 1 to 255 characters")
+        if organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
+        reviewer_scope = request.state.admin_principal.get("organization_id")
+        if reviewer_scope and organization_id != reviewer_scope:
+            raise ServiceError(
+                403, "cross_organization_binding_forbidden",
+                "an organization-scoped reviewer may only provision identities in their own organization",
+            )
+        try:
+            S().bind_oidc_identity(
+                requester_id, settings.oidc_issuer, subject, organization_id,
+            )
+        except ValueError as exc:
+            raise ServiceError(409, "identity_binding_conflict", str(exc)) from None
+        return _j({"bound": True, "requester_id": requester_id,
+                   "organization_id": organization_id}, 201)
+
+    @route("POST", "/admin/consent-events", "Apply an externally signed participant consent event", "admin")
+    async def signed_consent_event(request):
+        admin(request)
+        if not settings.consent_authority_required or not (
+            settings.consent_authority_issuer and settings.consent_authority_public_key
+        ):
+            raise ServiceError(503, "consent_authority_not_configured",
+                               "a trusted participant consent authority is not configured")
+        body = await _body(request)
+        result = admin_call(
+            request.state.admin_principal, S().apply_signed_consent_event,
+            body,
+            public_key_b64=settings.consent_authority_public_key,
+            trusted_issuer=settings.consent_authority_issuer,
+        )
+        return _j({"applied": True, "participant": result}, 200)
+
+    @route("POST", "/admin/oidc-bindings/revoke", "Revoke an OIDC identity binding", "admin")
+    async def oidc_revoke(request):
+        admin(request)
+        if not settings.oidc_issuer:
+            raise ServiceError(503, "oidc_not_configured", "institutional OIDC is not configured")
+        body = await _body(request)
+        subject = body.get("subject")
+        organization_id = body.get("organization_id")
+        if not isinstance(subject, str) or not 1 <= len(subject) <= 255:
+            raise ServiceError(422, "invalid_request", "subject must contain 1 to 255 characters")
+        if organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
+        reviewer_scope = request.state.admin_principal.get("organization_id")
+        if reviewer_scope and organization_id != reviewer_scope:
+            raise ServiceError(
+                403, "cross_organization_binding_forbidden",
+                "an organization-scoped reviewer may only revoke identities in their own organization",
+            )
+        S().revoke_oidc_identity(settings.oidc_issuer, subject, organization_id)
+        return _j({"revoked": True, "organization_id": organization_id})
+
     @route("POST", "/admin/requesters", "Provision a requester API key (returned once)", "admin")
     async def provision_requester(request):
         admin(request)
@@ -272,6 +550,15 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         name = body.get("name")
         institution = body.get("institution")
         level = body.get("credential_level", "registered")
+        role = body.get("role", "researcher")
+        organization_id = body.get("organization_id")
+        if settings.oidc_required and organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(
+                422, "organization_required",
+                "organization_id must identify an enabled organization when institutional OIDC is required",
+            )
+        if organization_id is not None and organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
         if not isinstance(name, str) or not 2 <= len(name.strip()) <= 120:
             raise ServiceError(422, "invalid_request", "name must contain 2 to 120 characters")
         if not isinstance(institution, str) or not 2 <= len(institution.strip()) <= 200:
@@ -279,17 +566,28 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if level not in ("registered", "controlled"):
             raise ServiceError(422, "invalid_request",
                                "credential_level must be registered or controlled")
+        if role not in ("researcher", "reviewer", "steward"):
+            raise ServiceError(422, "invalid_request",
+                               "role must be researcher, reviewer or steward")
         key = secrets.token_urlsafe(32)
-        requester_id = S().create_requester(name.strip(), "researcher", level,
-                                            institution.strip(), key)
-        return _j({"id": requester_id, "name": name.strip(), "institution": institution.strip(),
-                   "credential_level": level, "api_key": key, "shown_once": True}, 201)
+        requester_id = S().create_requester(
+            name.strip(), role, level, institution.strip(), key, organization_id=organization_id,
+        )
+        result = {"id": requester_id, "name": name.strip(), "institution": institution.strip(),
+                  "role": role, "credential_level": level, "organization_id": organization_id}
+        if not settings.oidc_required:
+            result.update(api_key=key, shown_once=True)
+        else:
+            result["identity_binding_required"] = True
+        return _j(result, 201)
 
     @route("GET", "/me", "Who am I, my budget", "requester")
     async def me(request):
         r = requester(request)
-        return _j({"id": r["id"], "name": r["name"], "tier": r["credential_level"],
-                   "frozen": r["id"] in S().monitor.frozen, **S().budget(r["id"])})
+        budget = scoped_requester_call(r, S().budget, r["id"])
+        return _j({"id": r["id"], "name": r["name"], "role": r["role"],
+                   "institution": r["institution"], "tier": r["credential_level"],
+                   "frozen": r["id"] in S().monitor.frozen, **budget})
 
     @route("POST", "/requests", "Submit a data request; returns decision, explanation, risk, "
            "transform summary and (if released) aggregate data", "requester")
@@ -298,7 +596,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         svc = S()
         require_governed_data(svc)
         body = await _body(request)
-        d = await run_in_threadpool(svc.submit, r, body)
+        d = await run_in_threadpool(scoped_requester_call, r, svc.submit, r, body)
         return _j(d if svc.is_admin(request.headers.get("x-admin-key")) else requester_view(d), 201)
 
     @route("GET", "/beacon/g_variants", "GA4GH Beacon v2 style allele lookup, governed by the "
@@ -366,7 +664,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 "data_level": gran, "is_commercial": q.get("commercial") == "true",
                 "variant_filter": {"variant_ids": [hits[0] + 1]}}
         try:
-            d = await run_in_threadpool(svc.submit, r, body)
+            d = await run_in_threadpool(scoped_requester_call, r, svc.submit, r, body)
         except ServiceError as exc:
             message = ("Request not permitted by governance policy" if exc.status == 403
                        else "Request parameters failed governance validation")
@@ -391,16 +689,45 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                             "note": "aggregate answer after consent, risk and noise checks"}})
     @route("GET", "/requests", "List requests (own; all with admin key)", "requester|admin")
     async def list_requests(request):
-        if S().is_admin(request.headers.get("x-admin-key")):
-            return _j({"requests": S().requests_for(None)})
-        return _j({"requests": [requester_view(x) for x in S().requests_for(requester(request))]})
+        if request.headers.get("authorization", "").startswith("Bearer "):
+            try:
+                identity = requester(request)
+            except ServiceError as exc:
+                if exc.code != "role_not_allowed":
+                    raise
+                admin(request)
+                rows = admin_call(request.state.admin_principal, S().requests_for, None)
+                return _j({"requests": rows})
+        elif S().is_admin(request.headers.get("x-admin-key")):
+            admin(request)
+            rows = admin_call(request.state.admin_principal, S().requests_for, None)
+            return _j({"requests": rows})
+        else:
+            identity = requester(request)
+        rows = scoped_requester_call(identity, S().requests_for, identity)
+        return _j({"requests": [requester_view(x) for x in rows]})
 
     @route("GET", "/requests/{id:int}", "One decision in detail", "requester|admin")
     async def get_request(request):
         rid = request.path_params["id"]
         is_admin = S().is_admin(request.headers.get("x-admin-key"))
-        current = None if is_admin else requester(request)
-        d = S().store.decision(rid)
+        current = None
+        if request.headers.get("authorization", "").startswith("Bearer "):
+            try:
+                current = requester(request)
+            except ServiceError as exc:
+                if exc.code != "role_not_allowed":
+                    raise
+                admin(request)
+                is_admin = True
+        elif not is_admin:
+            current = requester(request)
+        elif is_admin:
+            admin(request)
+        d = (
+            admin_call(request.state.admin_principal, S().store.decision, rid) if is_admin
+            else scoped_requester_call(current, S().store.decision, rid)
+        )
         # Use the same response for missing and non-owned requests to prevent ID enumeration.
         if not d or (current is not None and d["requester_id"] != current["id"]):
             raise ServiceError(404, "not_found", "no such request")
@@ -422,7 +749,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             approve = action == "approve"
         who = str(b.get("reviewer", "reviewer"))[:32]
         d = await run_in_threadpool(
-            S().review, request.path_params["id"], who, approve, action,
+            admin_call, request.state.admin_principal, S().review, request.path_params["id"], who, approve, action,
         )
         return _j(d)
 
@@ -432,7 +759,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         body = await _body(request)
         who = str(body.get("reviewer", "reviewer"))[:32]
         result = await run_in_threadpool(
-            S().release_approved, request.path_params["id"], who,
+            admin_call, request.state.admin_principal, S().release_approved, request.path_params["id"], who,
         )
         return _j(result)
 
@@ -442,16 +769,20 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def copilot(request):
         admin(request)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
-        return _j(await run_in_threadpool(S().copilot_review, request.path_params["id"], refresh))
+        return _j(await run_in_threadpool(
+            admin_call, request.state.admin_principal, S().copilot_review, request.path_params["id"], refresh,
+        ))
 
     @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model); "
            "steward-only because it describes withheld variants and registry relatives", "admin")
     async def exposure(request):
         admin(request)
         rid = request.path_params["id"]
-        if not S().store.decision(rid, with_release=False):
-            raise ServiceError(404, "not_found", "no such request")
-        return _j(S().exposure(rid))
+        def exposure():
+            if not S().store.decision(rid, with_release=False):
+                raise ServiceError(404, "not_found", "no such request")
+            return S().exposure(rid)
+        return _j(admin_call(request.state.admin_principal, exposure))
 
     @route("GET", "/consent/summary", "How many donors would be eligible (counts only)",
            "requester")
@@ -461,10 +792,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         require_governed_data(svc)
         q = request.query_params
         pop = q.get("population")
-        out = svc.eligibility(
+        out = scoped_requester_call(
+            r, svc.eligibility,
             r, q.get("purpose", "general_research"), q.get("disease") or None,
             q.get("commercial", "false").lower() == "true", q.get("data_level", "frequency"),
-            {"population": pop} if pop else {})
+            {"population": pop} if pop else {},
+        )
         return _j(out)
 
     @route("POST", "/requests/preview", "Non-consuming privacy and utility preview", "requester")
@@ -473,7 +806,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         svc = S()
         require_governed_data(svc)
         body = await _body(request)
-        return _j(svc.preview(r, body))
+        return _j(scoped_requester_call(r, svc.preview, r, body))
 
     @route("GET", "/variants/search", "Exact coordinate or variant-ID lookup; metadata only", "public")
     async def variant_search(request):
@@ -735,7 +1068,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/anomalies", "Per-requester timelines and alerts", "admin")
     async def anomalies(request):
         admin(request)
-        return _j(S().anomalies())
+        return _j(admin_call(request.state.admin_principal, S().anomalies))
 
     @route("POST", "/requesters/{id:int}/freeze", "Freeze an account", "admin")
     async def freeze(request):
@@ -752,14 +1085,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def compliance(request):
         admin(request)
         q = request.query_params
-        return _j(await run_in_threadpool(S().compliance_report, q.get("from"), q.get("to")))
+        return _j(await run_in_threadpool(
+            admin_call, S().compliance_report, q.get("from"), q.get("to"),
+        ))
 
     @route("GET", "/reports/compliance/export",
            "Downloadable cryptographic compliance evidence pack (DPDP, GDPR, HIPAA)", "admin")
     async def compliance_export(request):
         admin(request)
         q = request.query_params
-        evidence = await run_in_threadpool(S().compliance_evidence_pack, q.get("from"), q.get("to"))
+        evidence = await run_in_threadpool(
+            admin_call, S().compliance_evidence_pack, q.get("from"), q.get("to"),
+        )
         return _j(evidence)
 
     @route("GET", "/eval/results", "Stored red-team evaluation metrics", "public")
@@ -798,6 +1135,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("POST", "/donor/{id:int}/withdraw", "Withdraw consent for all future requests", "donor")
     async def donor_withdraw(request):
+        if not settings.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant withdrawal must be recorded by the configured authoritative consent source",
+            )
         return _j(S().donor_set_withdrawn(donor_auth(request), True))
 
     @route("PUT", "/donor/{id:int}/consent", "Change what you agree to (use, disease, limits); "
@@ -808,6 +1150,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("POST", "/donor/{id:int}/restore", "Give consent again after withdrawing", "donor")
     async def donor_restore(request):
+        if not settings.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant re-consent must be recorded by a new signed authoritative consent event",
+            )
         return _j(S().donor_set_withdrawn(donor_auth(request), False))
 
     @route("POST", "/donor/{id:int}/ask", "Ask the consent concierge one of a fixed set of "

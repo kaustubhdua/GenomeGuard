@@ -197,3 +197,91 @@ def test_read_query_reconnects_before_using_broken_provider_session(monkeypatch)
         ("SET search_path TO genomeguard_runtime, public", ()),
         ("SELECT 1", ()),
     ]
+
+
+
+def test_runtime_and_migration_connections_are_separated(monkeypatch):
+    from contextlib import nullcontext
+
+    from app.postgres_store import PostgresStore
+
+    class FakeConnection:
+        def __init__(self, url):
+            self.url = url
+            self.closed = False
+            self.statements = []
+
+        def transaction(self):
+            return nullcontext()
+
+        def execute(self, statement, args=()):
+            self.statements.append((statement, args))
+
+        def close(self):
+            self.closed = True
+
+    connections = []
+
+    def connect(url, **kwargs):
+        connection = FakeConnection(url)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr("app.postgres_store.psycopg.connect", connect)
+    monkeypatch.setattr(PostgresStore, "_migrate", lambda self: None)
+
+    store = PostgresStore(
+        "postgresql://runtime.invalid/db",
+        migration_database_url="postgresql://owner.invalid/db",
+    )
+
+    assert len(connections) == 2
+    assert store.connection is connections[0]
+    assert connections[0].url == "postgresql://runtime.invalid/db"
+    assert connections[1].url == "postgresql://owner.invalid/db"
+    assert connections[0].closed is False
+    assert connections[1].closed is True
+    assert all("CREATE SCHEMA" not in statement for statement, _ in connections[0].statements)
+    assert any("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime" in statement
+               for statement, _ in connections[1].statements)
+    assert store.migration_connection is None
+    store.close()
+
+
+def test_schema_migrations_execute_only_through_owner_connection():
+    from contextlib import nullcontext
+    from threading import RLock
+
+    from app.postgres_store import PostgresStore
+
+    class Cursor:
+        def fetchone(self):
+            return None
+
+    class FakeConnection:
+        def __init__(self):
+            self.statements = []
+
+        def transaction(self):
+            return nullcontext()
+
+        def execute(self, statement, args=(), **kwargs):
+            self.statements.append((statement, args, kwargs))
+            return Cursor()
+
+    runtime = FakeConnection()
+    owner = FakeConnection()
+    store = object.__new__(PostgresStore)
+    store.connection = runtime
+    store.migration_connection = owner
+    store.lock = RLock()
+
+    store._migrate()
+
+    assert runtime.statements == []
+    assert any("CREATE TABLE IF NOT EXISTS schema_migrations" in sql
+               for sql, _args, _kwargs in owner.statements)
+    assert any("CREATE OR REPLACE FUNCTION" in sql
+               for sql, _args, _kwargs in owner.statements)
+    assert all(kwargs.get("prepare") is False for sql, _args, kwargs in owner.statements
+               if "CREATE OR REPLACE FUNCTION" in sql)

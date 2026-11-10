@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 
+import psycopg
 import pytest
 
 from app.core.audit_chain import AuditChain
@@ -16,12 +17,30 @@ def pg_store():
     url = os.environ.get("GG_TEST_DATABASE_URL")
     if not url:
         pytest.skip("GG_TEST_DATABASE_URL is not configured")
+    with psycopg.connect(url, autocommit=True) as admin:
+        admin.execute(
+            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "WHERE rolname='genomeguard_runtime') THEN "
+            "CREATE ROLE genomeguard_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
+            "NOCREATEDB NOCREATEROLE; END IF; END $"
+        )
+        admin.execute("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime")
+        admin.execute("GRANT USAGE ON SCHEMA genomeguard_runtime TO genomeguard_runtime")
+        admin.execute(
+            "ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA genomeguard_runtime "
+            "GRANT ALL ON TABLES TO genomeguard_runtime"
+        )
+        admin.execute(
+            "ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA genomeguard_runtime "
+            "GRANT ALL ON SEQUENCES TO genomeguard_runtime"
+        )
     store = PostgresStore(url)
     # This fixture must only ever point to a disposable test database.
     with store.lock, store.connection.transaction():
         store.connection.execute(
-            "TRUNCATE audit_log, donor_access, epsilon_ledger, decisions, requests, "
-            "requesters, alerts, genotypes, donors, variants, relationships, cohort_metadata "
+            "TRUNCATE audit_log, donor_access, consent_events, identity_bindings, "
+            "epsilon_ledger, decisions, requests, requesters, alerts, genotypes, donors, "
+            "variants, relationships, cohort_metadata "
             "RESTART IDENTITY CASCADE"
         )
     try:
@@ -123,7 +142,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -135,6 +154,37 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
         "dataset_genotype_calls", "population_reference_manifest",
         "population_variant_frequency",
     } <= tables
+
+
+def test_postgres_audit_log_is_append_only(pg_store):
+    audit = AuditChain(AuditStore(pg_store))
+    audit.append("integration-test", "audit.appended", {"synthetic": True})
+    with pytest.raises(psycopg.Error, match="append-only"):
+        with pg_store.transaction():
+            pg_store.x("UPDATE audit_log SET action='rewritten' WHERE idx=1")
+    with pytest.raises(psycopg.Error, match="append-only"):
+        with pg_store.transaction():
+            pg_store.x("DELETE FROM audit_log WHERE idx=1")
+
+
+def test_postgres_runtime_role_cannot_mutate_audit_or_migration_ledgers(pg_store):
+    with pg_store.transaction():
+        pg_store.connection.execute("SET ROLE genomeguard_runtime")
+        pg_store.assert_least_privilege_runtime()
+        privileges = pg_store.q(
+            "SELECT "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','INSERT') AS audit_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','UPDATE') AS audit_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','DELETE') AS audit_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','TRUNCATE') AS audit_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','SELECT') AS migrations_select, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','INSERT') AS migrations_insert"
+        )[0]
+        assert privileges == {
+            "audit_insert": True, "audit_update": False, "audit_delete": False,
+            "audit_truncate": False, "migrations_select": True, "migrations_insert": False,
+        }
+        pg_store.connection.execute("RESET ROLE")
 
 
 def test_postgres_empty_population_reference_lookup_is_truthful(pg_store):
@@ -154,7 +204,205 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
         versions = [row["version"] for row in reopened.q(
             "SELECT version FROM schema_migrations ORDER BY version"
         )]
-        assert versions == [1, 2]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     finally:
         reopened.close()
 
+
+
+def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_store):
+    from uuid import uuid4
+
+    role = "gg_test_rls_" + uuid4().hex[:12]
+    pg_store.connection.execute(f'CREATE ROLE "{role}" NOLOGIN')
+    try:
+        pg_store.connection.execute(
+            f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT SELECT, INSERT, UPDATE, DELETE ON requests, decisions, epsilon_ledger, alerts '
+            f'TO "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT SELECT ON requesters, identity_bindings, consent_events TO "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
+        )
+
+        pg_store.x(
+            "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (998, "test", "TEST", "{}", 998, None),
+        )
+        with pg_store.transaction():
+            pg_store.set_admin_access()
+            pg_store.record_consent_event(
+                "00000000-0000-4000-8000-000000000002", 998, "test-dataset", "withdrawn",
+                b"encrypted-consent-payload", "https://consent.example.edu", "b" * 64,
+                "2026-11-10T00:00:00Z",
+            )
+        ids = {}
+        with pg_store.transaction():
+            pg_store.set_admin_access()
+            for org in ("tenant-a", "tenant-b"):
+                rid = pg_store.add_requester(
+                    f"Researcher {org}", "researcher", "registered", org, f"hash-{org}",
+                )
+                pg_store.add_identity_binding(
+                    rid, "https://id.example.edu", f"subject-{org}", org,
+                )
+                req_id = pg_store.add_request(
+                    rid, "2026-11-10T00:00:00Z",
+                    {"purpose": "research", "disease": None, "is_commercial": False,
+                     "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
+                )
+                pg_store.save_decision(req_id, {
+                    "outcome": "deny", "reasons": ["test"], "risk": {}, "transform": {},
+                    "explanation": "test", "needs_human": False, "private": {}, "release": None,
+                })
+                ids[org] = req_id
+
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
+        with pg_store.transaction():
+            pg_store.set_tenant("tenant-a")
+            visible = {row["id"] for row in pg_store.q("SELECT id FROM requests")}
+            assert visible == {ids["tenant-a"]}
+            decisions = {row["request_id"] for row in pg_store.q("SELECT request_id FROM decisions")}
+            assert decisions == {ids["tenant-a"]}
+            assert {row["organization_id"] for row in pg_store.q(
+                "SELECT organization_id FROM requesters"
+            )} == {"tenant-a"}
+            assert {row["subject"] for row in pg_store.q(
+                "SELECT subject FROM identity_bindings"
+            )} == {"subject-tenant-a"}
+
+        with pg_store.transaction():
+            # No organization context is default-deny for tenant-owned rows.
+            assert pg_store.q("SELECT id FROM requests") == []
+            assert pg_store.q("SELECT id FROM requesters") == []
+            assert pg_store.q("SELECT subject FROM identity_bindings") == []
+            assert pg_store.q("SELECT event_id FROM consent_events") == []
+            assert pg_store.q(
+                "SELECT has_table_privilege(current_user,'requests','TRUNCATE') AS can_truncate"
+            )[0]["can_truncate"] is False
+
+        with pg_store.transaction():
+            pg_store.set_admin_access()
+            assert {row["id"] for row in pg_store.q("SELECT id FROM requests")} == set(ids.values())
+            assert {row["organization_id"] for row in pg_store.q(
+                "SELECT organization_id FROM requesters"
+            )} == {"tenant-a", "tenant-b"}
+            assert {row["subject"] for row in pg_store.q(
+                "SELECT subject FROM identity_bindings"
+            )} == {"subject-tenant-a", "subject-tenant-b"}
+            assert pg_store.q("SELECT event_id FROM consent_events") == [
+                {"event_id": "00000000-0000-4000-8000-000000000002"},
+            ]
+
+        with pytest.raises(psycopg.Error):
+            with pg_store.transaction():
+                pg_store.set_tenant("tenant-a")
+                pg_store.x(
+                    "INSERT INTO requests(requester_id,organization_id,ts,purpose,disease,"
+                    "is_commercial,data_level,cohort_filter_json,variant_filter_json,status) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (1, "tenant-b", "2026-11-10T00:00:00Z", "research", None, 0,
+                     "frequency", "{}", "{}", "pending"),
+                )
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
+    finally:
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
+        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+
+
+
+def test_postgres_consent_event_ledger_rejects_update_and_delete(pg_store):
+    pg_store.x(
+        "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at) "
+        "VALUES(?,?,?,?,?,?)",
+        (999, "test", "TEST", "{}", 999, None),
+    )
+    with pg_store.transaction():
+        pg_store.set_admin_access()
+        pg_store.record_consent_event(
+            "00000000-0000-4000-8000-000000000001", 999, "test-dataset", "withdrawn",
+            b"encrypted-consent-payload", "https://consent.example.edu", "a" * 64,
+            "2026-11-10T00:00:00Z",
+        )
+    with pytest.raises(psycopg.Error, match="append-only"):
+        with pg_store.transaction():
+            pg_store.set_admin_access()
+            pg_store.x(
+                "UPDATE consent_events SET event_type='consent_updated' "
+                "WHERE event_id=?",
+                ("00000000-0000-4000-8000-000000000001",),
+            )
+    with pytest.raises(psycopg.Error, match="append-only"):
+        with pg_store.transaction():
+            pg_store.set_admin_access()
+            pg_store.x(
+                "DELETE FROM consent_events WHERE event_id=?",
+                ("00000000-0000-4000-8000-000000000001",),
+            )
+
+
+
+def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
+    from uuid import uuid4
+
+    role = "gg_test_runtime_" + uuid4().hex[:12]
+    pg_store.connection.execute(
+        f'CREATE ROLE "{role}" NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE'
+    )
+    pg_store.connection.execute(
+        f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+    )
+    pg_store.connection.commit()
+    try:
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
+        pg_store.assert_least_privilege_runtime()
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
+
+        pg_store.connection.execute(
+            f'GRANT TRUNCATE ON TABLE genomeguard_runtime.requests TO "{role}"'
+        )
+        pg_store.connection.commit()
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
+        with pytest.raises(RuntimeError, match="over-privileged"):
+            pg_store.assert_least_privilege_runtime()
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
+        pg_store.connection.execute(
+            f'REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT UPDATE ON TABLE genomeguard_runtime.audit_log TO "{role}"'
+        )
+        pg_store.connection.commit()
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
+        with pytest.raises(RuntimeError, match="over-privileged"):
+            pg_store.assert_least_privilege_runtime()
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
+    finally:
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
+        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+
+
+
+def test_postgres_rejects_distinct_urls_for_the_same_runtime_and_migration_role():
+    url = os.environ["GG_TEST_DATABASE_URL"]
+    with pytest.raises(ValueError, match="different PostgreSQL roles"):
+        PostgresStore(
+            url,
+            migration_database_url=url + "?application_name=misleading-distinct-url",
+        )

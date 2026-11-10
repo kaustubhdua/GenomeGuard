@@ -2,7 +2,7 @@ name: Deployment configuration checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/remove-supabase-runtime]
   push:
     branches: [main]
   workflow_dispatch:

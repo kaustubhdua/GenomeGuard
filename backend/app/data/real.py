@@ -443,8 +443,9 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
             consent, withdrawn = _consent(rng, pop), bool(rng.random() < withdrawn_rate)
         else:
             consent, withdrawn = _validated_consent(consent_records[sample], sample)
-        donors.append({"id": i, "cohort_id": "1000G-" + pop, "population": pop,
-                       "consent": consent, "family_id": i, "withdrawn": withdrawn})
+        donors.append({"id": i, "cohort_id": "1000G-" + pop, "source_sample_id": sample,
+                       "population": pop, "consent": consent, "family_id": i,
+                       "withdrawn": withdrawn})
     fam_of = {}
     for d, s in zip(donors, chosen, strict=True):
         d["family_id"] = fam_of.setdefault(info[s]["family"], len(fam_of) + 1)
