@@ -390,6 +390,10 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
     try:
         with pg_store.transaction():
             pg_store.x(
+                "INSERT INTO cohort_metadata(id,dataset_id,metadata_json) VALUES(1,?,?)",
+                ("shared-synthetic", "{}"),
+            )
+            pg_store.x(
                 "INSERT INTO donors(id,cohort_id,population,consent_json,organization_id) "
                 "VALUES(?,?,?,?,?)",
                 (990001, "tenant-a-cohort", "TST", "{}", "tenant-a"),
@@ -511,6 +515,7 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
         pg_store.x("DELETE FROM relationships WHERE donor_a BETWEEN 990001 AND 990003")
         pg_store.x("DELETE FROM genotypes WHERE donor_id BETWEEN 990001 AND 990003")
         pg_store.x("DELETE FROM variants WHERE id BETWEEN 880001 AND 880003")
+        pg_store.x("DELETE FROM cohort_metadata WHERE id=1")
         pg_store.x("DELETE FROM donors WHERE id BETWEEN 990001 AND 990003")
         connection.execute(f'DROP OWNED BY "{role}"')
         connection.execute(f'DROP ROLE IF EXISTS "{role}"')
