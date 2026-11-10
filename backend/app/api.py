@@ -277,14 +277,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if not principal or principal.get("role") not in {"reviewer", "steward", "admin"}:
                 raise ServiceError(403, "steward_identity_required",
                                    "a provisioned reviewer or steward identity is required")
-            is_global_admin = principal.get("role") == "admin"
+            # Every OIDC identity, including an organization-level "admin", remains
+            # bound to the organization asserted by the verified token. Global database
+            # access is reserved for the separately controlled X-Admin-Key credential.
             scoped_principal = {
                 "role": principal["role"],
-                "organization_id": None if is_global_admin else identity.organization_id,
+                "organization_id": identity.organization_id,
                 "auth_organization_id": identity.organization_id,
                 "issuer": identity.issuer,
                 "subject": identity.subject,
-                "global": is_global_admin,
+                "global": False,
             }
             path = request.url.path
             global_only = (
@@ -296,7 +298,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 }
                 or path.startswith("/admin/tamper/")
             )
-            if global_only and not is_global_admin:
+            if global_only:
                 raise ServiceError(
                     403, "global_steward_access_required",
                     "this operation requires the separately controlled global administrator credential",
