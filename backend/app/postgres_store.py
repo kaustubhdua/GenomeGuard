@@ -185,7 +185,7 @@ class PostgresStore(Store):
         self.db.connection = connection
 
     def _migrate(self) -> None:
-        """Apply numbered native migrations using the separate owner connection."""
+        """Apply numbered migrations using the privileged migration-only connection."""
         if not _MIGRATIONS.is_dir():
             raise RuntimeError(f"PostgreSQL migrations directory is missing: {_MIGRATIONS}")
         migrations = []
@@ -195,28 +195,33 @@ class PostgresStore(Store):
                 migrations.append((int(prefix), path))
         if not migrations or migrations[0][0] != 1:
             raise RuntimeError("PostgreSQL migration 001_initial_postgres.sql is required")
-        conn = self.migration_connection or self.connection
+
+        # Production must execute DDL through the separate owner credential. The runtime
+        # connection is deliberately never used for schema creation or migrations.
+        connection = self.migration_connection or self.connection
         with self.lock:
             for version, migration in migrations:
-                with conn.transaction():
-                    conn.execute(
+                with connection.transaction():
+                    connection.execute(
+                        "SET search_path TO genomeguard_runtime, public"
+                    )
+                    connection.execute(
                         "CREATE TABLE IF NOT EXISTS schema_migrations "
                         "(version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
                     )
-                    applied = conn.execute(
+                    applied = connection.execute(
                         "SELECT version FROM schema_migrations WHERE version=%s", (version,)
                     ).fetchone()
                     if applied:
                         continue
-                    sql = "\n".join(
+                    sql = "\\n".join(
                         line for line in migration.read_text(encoding="utf-8").splitlines()
                         if not line.lstrip().startswith("--")
                     )
-                    if sql.strip():
-                        # Use PostgreSQL's simple-query protocol so dollar-quoted PL/pgSQL
-                        # function bodies remain intact; splitting on semicolons is unsafe.
-                        conn.execute(sql, prepare=False)
-                    conn.execute(
+                    # Psycopg's simple-query protocol accepts the full migration script,
+                    # preserving semicolons inside PL/pgSQL dollar-quoted function bodies.
+                    connection.execute(sql, prepare=False)
+                    connection.execute(
                         "INSERT INTO schema_migrations(version) VALUES (%s)", (version,)
                     )
 
