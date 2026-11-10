@@ -588,7 +588,43 @@ class PostgresStore(Store):
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','UPDATE') "
             "AS consent_update, "
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','DELETE') "
-            "AS consent_delete "
+            "AS consent_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','INSERT') AS donors_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','UPDATE') AS donors_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','DELETE') AS donors_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donor_access','UPDATE') AS donor_access_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donor_access','DELETE') AS donor_access_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','INSERT') AS variants_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','UPDATE') AS variants_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','DELETE') AS variants_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','INSERT') AS genotypes_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','UPDATE') AS genotypes_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','DELETE') AS genotypes_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','INSERT') AS relationships_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','UPDATE') AS relationships_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','DELETE') AS relationships_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','INSERT') AS metadata_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','UPDATE') AS metadata_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','DELETE') AS metadata_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','UPDATE') AS alerts_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','DELETE') AS alerts_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requesters','DELETE') AS requesters_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requests','DELETE') AS requests_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.decisions','DELETE') AS decisions_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.epsilon_ledger','DELETE') AS ledger_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.identity_bindings','DELETE') AS bindings_delete, "
+            "COALESCE((SELECT c.relrowsecurity AND c.relforcerowsecurity FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='genomeguard_runtime' "
+            "AND c.relname='donors'), false) AS donors_rls_forced, "
+            "EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='genomeguard_runtime' "
+            "AND tablename='donors' AND policyname='donors_admin_update' AND cmd='UPDATE') "
+            "AS donors_admin_policy, "
+            "COALESCE((SELECT c.relrowsecurity AND c.relforcerowsecurity FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='genomeguard_runtime' "
+            "AND c.relname='donor_access'), false) AS donor_access_rls_forced, "
+            "EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='genomeguard_runtime' "
+            "AND tablename='donor_access' AND policyname='donor_access_scoped_insert' AND cmd='INSERT') "
+            "AS donor_access_insert_policy "
             "FROM pg_roles r WHERE r.rolname=current_user"
         ).fetchone()
         if not row:
@@ -606,6 +642,17 @@ class PostgresStore(Store):
             or row["migrations_insert"] or row["migrations_update"]
             or row["migrations_delete"] or row["migrations_truncate"]
             or row["consent_update"] or row["consent_delete"]
+            or row["donors_insert"] or row["donors_delete"]
+            or row["donor_access_update"] or row["donor_access_delete"]
+            or row["variants_insert"] or row["variants_update"] or row["variants_delete"]
+            or row["genotypes_insert"] or row["genotypes_update"] or row["genotypes_delete"]
+            or row["relationships_insert"] or row["relationships_update"] or row["relationships_delete"]
+            or row["metadata_insert"] or row["metadata_update"] or row["metadata_delete"]
+            or row["alerts_update"] or row["alerts_delete"]
+            or row["requesters_delete"] or row["requests_delete"] or row["decisions_delete"]
+            or row["ledger_delete"] or row["bindings_delete"]
+            or not row["donors_rls_forced"] or not row["donors_admin_policy"]
+            or not row["donor_access_rls_forced"] or not row["donor_access_insert_policy"]
         )
         if unsafe:
             raise RuntimeError(
