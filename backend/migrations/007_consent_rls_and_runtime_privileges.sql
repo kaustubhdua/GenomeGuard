@@ -8,7 +8,7 @@ CREATE POLICY consent_events_admin_only ON consent_events
   USING (current_setting('gg.admin_access', true) = 'on')
   WITH CHECK (current_setting('gg.admin_access', true) = 'on');
 
-DO $
+DO $gg_migration$
 DECLARE
   object_row RECORD;
 BEGIN
@@ -93,4 +93,4 @@ BEGIN
     END IF;
   END IF;
 END;
-$$;
+$gg_migration$;
