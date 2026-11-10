@@ -407,7 +407,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(503, "consent_authority_not_configured",
                                "a trusted participant consent authority is not configured")
         body = await _body(request)
-        result = S().apply_signed_consent_event(
+        result = admin_call(
+            S().apply_signed_consent_event,
             body,
             public_key_b64=settings.consent_authority_public_key,
             trusted_issuer=settings.consent_authority_issuer,
