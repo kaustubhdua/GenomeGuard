@@ -468,6 +468,32 @@ class PostgresStore(Store):
                 )
                 return entry
 
+    def assert_least_privilege_runtime(self) -> None:
+        """Fail closed if the connected application principal can bypass tenant controls."""
+        row = self.connection.execute(
+            "SELECT current_user AS role, r.rolsuper, r.rolbypassrls, r.rolcreatedb, "
+            "r.rolcreaterole, "
+            "has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS runtime_create, "
+            "has_schema_privilege(current_user,'genomeguard','CREATE') AS reference_create, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requests','TRUNCATE') "
+            "AS requests_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') "
+            "AS consent_truncate "
+            "FROM pg_roles r WHERE r.rolname=current_user"
+        ).fetchone()
+        if not row:
+            raise RuntimeError("could not inspect the PostgreSQL runtime principal")
+        unsafe = (
+            row["role"] == "genomeguard_owner" or row["rolsuper"] or row["rolbypassrls"]
+            or row["rolcreatedb"] or row["rolcreaterole"] or row["runtime_create"]
+            or row["reference_create"] or row["requests_truncate"] or row["consent_truncate"]
+        )
+        if unsafe:
+            raise RuntimeError(
+                "PostgreSQL runtime principal is over-privileged; use genomeguard_runtime "
+                "with no BYPASSRLS, schema CREATE, or table TRUNCATE privileges"
+            )
+
     def set_tenant(self, organization_id: str) -> None:
         """Set transaction-local tenant context after OIDC binding validation."""
         if not organization_id or self._transaction_depth < 1:
