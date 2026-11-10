@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 
+import psycopg
 import pytest
 
 from app.core.audit_chain import AuditChain
@@ -217,7 +218,7 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
             pg_store.set_admin_access()
             assert {row["id"] for row in pg_store.q("SELECT id FROM requests")} == set(ids.values())
 
-        with pytest.raises(Exception):
+        with pytest.raises(psycopg.Error):
             with pg_store.transaction():
                 pg_store.set_tenant("tenant-a")
                 pg_store.x(
@@ -247,14 +248,14 @@ def test_postgres_consent_event_ledger_rejects_update_and_delete(pg_store):
         b"encrypted-consent-payload", "https://consent.example.edu", "a" * 64,
         "2026-11-10T00:00:00Z",
     )
-    with pytest.raises(Exception, match="append-only"):
+    with pytest.raises(psycopg.Error, match="append-only"):
         with pg_store.transaction():
             pg_store.x(
                 "UPDATE consent_events SET event_type='consent_updated' "
                 "WHERE event_id=?",
                 ("00000000-0000-4000-8000-000000000001",),
             )
-    with pytest.raises(Exception, match="append-only"):
+    with pytest.raises(psycopg.Error, match="append-only"):
         with pg_store.transaction():
             pg_store.x(
                 "DELETE FROM consent_events WHERE event_id=?",
