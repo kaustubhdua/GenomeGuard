@@ -22,7 +22,9 @@ DEMO_REQ = {"purpose": "disease_research", "disease": "diabetes", "data_level": 
 def make_service(**kw):
     s = Settings()
     s.db_path = ":memory:"
-    s.n_donors, s.n_variants, s.n_families = 300, 800, 60
+    # Keep per-test service fixtures deliberately small; statistical-scale behavior
+    # is covered by dedicated deterministic tests in test_synth/test_redteam.
+    s.n_donors, s.n_variants, s.n_families = 120, 300, 24
     for k, v in kw.items():
         setattr(s, k, v)
     return bootstrap(s)
