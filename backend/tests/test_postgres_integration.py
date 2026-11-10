@@ -241,9 +241,9 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
         with pg_store.transaction():
             pg_store.set_admin_access()
             assert {row["id"] for row in pg_store.q("SELECT id FROM requests")} == set(ids.values())
-            assert {row["id"] for row in pg_store.q("SELECT id FROM requesters")} == {
-                row["id"] for row in pg_store.q("SELECT id FROM requesters")
-            }
+            assert {row["organization_id"] for row in pg_store.q(
+                "SELECT organization_id FROM requesters"
+            )} == {"tenant-a", "tenant-b"}
             assert {row["subject"] for row in pg_store.q(
                 "SELECT subject FROM identity_bindings"
             )} == {"subject-tenant-a", "subject-tenant-b"}
