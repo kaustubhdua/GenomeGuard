@@ -1325,6 +1325,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                 migration_database_url=migration_url,
             )
             if migration_url:
+                store.assert_least_privilege_runtime()
                 # The privileged credential is used only to apply migrations; drop it from
                 # process configuration once PostgresStore has closed its owner connection.
                 s.migration_database_url = ""
