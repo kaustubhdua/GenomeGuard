@@ -91,6 +91,15 @@ The public/synthetic rows are intentionally visible across organizations. Privat
 - No institution-approved PITR/offsite retention, RPO/RTO, independent key custody, monitoring/alert routing, or recurring restore drill has been verified.
 - The live Render service is on a free plan. The provider health-check path still needs to be reconciled with the checked-in Blueprint.
 
+## Latest hosted acceptance and CI follow-up
+
+At 16:23 UTC on 10 November 2026:
+
+- The isolated Render service deployed commit `b6a13be11341622dc7854de54efdc4a2d8443a60` successfully and served the synthetic cohort over PostgreSQL.
+- GitHub Actions staging-acceptance run [42853659255](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42853659255) passed. Its read-only API checks verified the expected commit, PostgreSQL backend, 600 synthetic donors, 3,000 variants, simulated-consent disclosure, anonymous authorization denials, public audit-chain verification, and source/dataset/chromosome catalogues. Browser acceptance passed in light and dark themes, all ten checked routes had no JavaScript errors, and responsive checks at 320, 375, and 414 px reported no horizontal overflow.
+- CI run [42853659273](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42853659273) on that same commit failed at lint only: `backend/app/service.py` retained an unused `os` import after startup no longer removed the migration URL from process state. The import was removed in commit `d215ae0ce2625e5b5016f6990b5288314783b71b`.
+- The exact latest commit `d215ae0ce2625e5b5016f6990b5288314783b71b` is being deployed to the isolated staging service. A fresh full CI run on that exact commit, including PostgreSQL integration, backup/restore, evaluations, and browser/accessibility checks, is still required. The successful staging acceptance above is for the immediately preceding commit, not a substitute for that exact-head run.
+
 ## Final hackathon submission gates
 
 1. Complete exact-head CI: PostgreSQL integration, encrypted backup/restore, audit verification, evaluation, demo, Python/JS checks, Playwright browser routes, responsive layouts, and axe accessibility.
