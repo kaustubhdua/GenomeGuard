@@ -49,7 +49,7 @@ The PostgreSQL adapter now accepts two distinct connection URLs:
 
 The migration connection is closed after migration and the privileged URL is removed from the process environment/settings. The runtime connection only sets its search_path and does not create schemas or run DDL. The provisioning script can open the runtime connection with migrations disabled.
 
-A restricted Neon role `gg_app_runtime` was created for the synthetic staging database and directly inspected: it is not superuser, does not have BYPASSRLS, cannot CREATE in either GenomeGuard schema, and can read the synthetic donor rows. The staging Render service has **not yet been switched** to this role; its environment must be updated only after the migration-aware code is deployed and staging acceptance is repeated. Production must create its own isolated database and role; do not reuse staging credentials.
+A restricted Neon role `genomeguard_runtime` was created for the synthetic staging database and directly inspected: it is not superuser, does not have BYPASSRLS, cannot CREATE in either GenomeGuard schema, and can read the synthetic donor rows. The staging Render service has **not yet been switched** to this role; its environment must be updated only after the migration-aware code is deployed and staging acceptance is repeated. Production must create its own isolated database and role; do not reuse staging credentials.
 
 ## 4. Signed participant consent and withdrawal events
 
