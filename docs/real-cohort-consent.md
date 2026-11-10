@@ -23,7 +23,7 @@ The production-controls branch supports externally signed Ed25519 events at `POS
 - `consent`: `use`, `disease`, `modifiers`, `population`, `consent_date`
 - `signature`: base64url Ed25519 signature over canonical JSON of all preceding fields
 
-The cohort database stores only a SHA-256 hash of the source sample identifier. The signed event is verified against `GG_CONSENT_AUTHORITY_PUBLIC_KEY` and `GG_CONSENT_AUTHORITY_ISSUER`, checked against the active dataset and exact sample mapping, and written to the append-only `consent_events` ledger. Duplicate event IDs are rejected. A restore event must carry a fresh complete consent record; previous consent is not silently reactivated. Dataset-policy records cannot be converted into participant consent.
+The cohort database stores only a dataset-keyed HMAC-SHA-256 of the source sample identifier. The signed event is verified against `GG_CONSENT_AUTHORITY_PUBLIC_KEY` and `GG_CONSENT_AUTHORITY_ISSUER`, checked against the active dataset and exact sample mapping, and written to the append-only `consent_events` ledger. Duplicate event IDs are rejected. A restore event must carry a fresh complete consent record; previous consent is not silently reactivated. Dataset-policy records cannot be converted into participant consent.
 
 This endpoint is intentionally unavailable until a trusted authority is configured. The institution must validate that the signing key is controlled by the actual data controller/consent source, the source-to-sample mapping is correct, and withdrawal timing is legally and operationally meaningful. A cryptographic signature does not prove legal authority or ethics approval.
 
