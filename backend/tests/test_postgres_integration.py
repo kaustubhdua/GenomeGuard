@@ -278,3 +278,38 @@ def test_postgres_consent_event_ledger_rejects_update_and_delete(pg_store):
                 "DELETE FROM consent_events WHERE event_id=?",
                 ("00000000-0000-4000-8000-000000000001",),
             )
+
+
+
+def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
+    from uuid import uuid4
+
+    role = "gg_test_runtime_" + uuid4().hex[:12]
+    pg_store.connection.execute(
+        f'CREATE ROLE "{role}" NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE'
+    )
+    pg_store.connection.execute(
+        f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+    )
+    pg_store.connection.commit()
+    try:
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
+        pg_store.assert_least_privilege_runtime()
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
+
+        pg_store.connection.execute(
+            f'GRANT TRUNCATE ON TABLE genomeguard_runtime.requests TO "{role}"'
+        )
+        pg_store.connection.commit()
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
+        with pytest.raises(RuntimeError, match="over-privileged"):
+            pg_store.assert_least_privilege_runtime()
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
+    finally:
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
+        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
