@@ -838,7 +838,9 @@ class GenomeGuardService:
             raise ServiceError(422, "invalid_consent_authority_event", str(exc)) from None
         if self.store.consent_event_exists(payload["event_id"]):
             raise ServiceError(409, "duplicate_consent_event", "this consent event was already applied")
-        row = self.store.donor_by_source_sample_id(payload["source_sample_id"])
+        row = self.store.donor_by_source_sample_id(
+            payload["source_sample_id"], self.master, self.dataset_id,
+        )
         if not row:
             raise ServiceError(404, "participant_not_found",
                                "source sample is not part of the active cohort")
