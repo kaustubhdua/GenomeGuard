@@ -48,7 +48,11 @@ BEGIN
         runtime_role
       );
       EXECUTE format(
-        'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings, genomeguard_runtime.donors TO %I',
+        'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings TO %I',
+        runtime_role
+      );
+      EXECUTE format(
+        'GRANT UPDATE ON TABLE genomeguard_runtime.donors TO %I',
         runtime_role
       );
       EXECUTE format(
