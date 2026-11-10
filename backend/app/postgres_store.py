@@ -523,6 +523,20 @@ class PostgresStore(Store):
             "AS requesters_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.identity_bindings','TRUNCATE') "
             "AS bindings_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','UPDATE') "
+            "AS audit_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','DELETE') "
+            "AS audit_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','TRUNCATE') "
+            "AS audit_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','INSERT') "
+            "AS migrations_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','UPDATE') "
+            "AS migrations_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','DELETE') "
+            "AS migrations_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','TRUNCATE') "
+            "AS migrations_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','UPDATE') "
             "AS consent_update, "
             "has_table_privilege(current_user,'genomeguard_runtime.consent_events','DELETE') "
@@ -540,6 +554,9 @@ class PostgresStore(Store):
             or row["variants_truncate"] or row["relationships_truncate"] or row["metadata_truncate"]
             or row["genotypes_truncate"] or row["ledger_truncate"] or row["alerts_truncate"]
             or row["consent_truncate"] or row["requesters_truncate"] or row["bindings_truncate"]
+            or row["audit_update"] or row["audit_delete"] or row["audit_truncate"]
+            or row["migrations_insert"] or row["migrations_update"]
+            or row["migrations_delete"] or row["migrations_truncate"]
             or row["consent_update"] or row["consent_delete"]
         )
         if unsafe:

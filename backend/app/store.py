@@ -242,11 +242,15 @@ class Store:
                        coords)
 
     # ------------------------------------------------------------------ requesters
-    def add_requester(self, name: str, role: str, level: str, institution: str,
-                      key_hash: str) -> int:
-        return self.x("INSERT INTO requesters(name,role,credential_level,institution,"
-                      "api_key_hash,created_at) VALUES(?,?,?,?,?,?)",
-                      (name, role, level, institution, key_hash, now_iso()))
+    def add_requester(
+        self, name: str, role: str, level: str, institution: str,
+        key_hash: str, organization_id: str | None = None,
+    ) -> int:
+        return self.x(
+            "INSERT INTO requesters(name,role,credential_level,institution,api_key_hash,created_at,"
+            "organization_id) VALUES(?,?,?,?,?,?,?)",
+            (name, role, level, institution, key_hash, now_iso(), organization_id),
+        )
 
     def requester_by_key(self, key_hash: str) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE api_key_hash=?", (key_hash,))

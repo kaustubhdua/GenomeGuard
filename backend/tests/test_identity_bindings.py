@@ -124,5 +124,35 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         json={"subject": "researcher-sub", "organization_id": "org-b"},
     ).status_code == 403
 
+    global_admin_id = svc.store.add_requester(
+        "Global Administrator", "admin", "controlled", "GenomeGuard Operations",
+        hash_key("unused-global-admin-key"),
+    )
+    svc.store.add_identity_binding(
+        global_admin_id, "https://id.example.edu", "global-admin-sub", "org-a",
+    )
+    global_admin_headers = {"Authorization": "Bearer global-admin-sub"}
+    provisioned = client.post(
+        "/admin/requesters",
+        headers=global_admin_headers,
+        json={
+            "name": "Tenant B Researcher", "institution": "Tenant B Institute",
+            "credential_level": "registered", "role": "researcher", "organization_id": "org-b",
+        },
+    )
+    assert provisioned.status_code == 201
+    provisioned_id = provisioned.json()["id"]
+    assert provisioned.json()["identity_binding_required"] is True
+    bound = client.post(
+        "/admin/oidc-bindings",
+        headers=global_admin_headers,
+        json={"requester_id": provisioned_id, "subject": "tenant-b-sub", "organization_id": "org-b"},
+    )
+    assert bound.status_code == 201
+    assert svc.store.requester_by_oidc(
+        "https://id.example.edu", "tenant-b-sub", "org-b",
+    )["id"] == provisioned_id
+    assert client.get("/audit", headers=global_admin_headers).status_code == 200
+
     svc.store.revoke_identity_binding("https://id.example.edu", "reviewer-sub", "org-a")
     assert client.get("/anomalies", headers=reviewer_headers).status_code == 403

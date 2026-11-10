@@ -145,9 +145,16 @@ class GenomeGuardService:
         return bool(key) and hmac.compare_digest(hash_key(key), self.admin_hash)
 
     @transactional
-    def create_requester(self, name: str, role: str, level: str, institution: str, key: str) -> int:
-        rid = self.store.add_requester(name, role, level, institution, hash_key(key))
-        self.audit.append("admin", "requester.created", {"requester_id": rid, "tier": level})
+    def create_requester(
+        self, name: str, role: str, level: str, institution: str, key: str,
+        *, organization_id: str | None = None,
+    ) -> int:
+        rid = self.store.add_requester(
+            name, role, level, institution, hash_key(key), organization_id=organization_id,
+        )
+        self.audit.append("admin", "requester.created", {
+            "requester_id": rid, "tier": level, "organization_id": organization_id,
+        })
         return rid
 
     # ================================================================== validation

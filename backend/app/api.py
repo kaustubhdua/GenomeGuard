@@ -277,12 +277,14 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if not principal or principal.get("role") not in {"reviewer", "steward", "admin"}:
                 raise ServiceError(403, "steward_identity_required",
                                    "a provisioned reviewer or steward identity is required")
+            is_global_admin = principal.get("role") == "admin"
             scoped_principal = {
                 "role": principal["role"],
-                "organization_id": identity.organization_id,
+                "organization_id": None if is_global_admin else identity.organization_id,
+                "auth_organization_id": identity.organization_id,
                 "issuer": identity.issuer,
                 "subject": identity.subject,
-                "global": False,
+                "global": is_global_admin,
             }
             path = request.url.path
             global_only = (
@@ -290,7 +292,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 or path.startswith("/reports/compliance")
                 or path in {"/admin/consent-events", "/admin/dataset-qc", "/admin/requesters"}
             )
-            if global_only:
+            if global_only and not is_global_admin:
                 raise ServiceError(
                     403, "global_steward_access_required",
                     "this operation requires the separately controlled global administrator credential",
@@ -541,6 +543,14 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         institution = body.get("institution")
         level = body.get("credential_level", "registered")
         role = body.get("role", "researcher")
+        organization_id = body.get("organization_id")
+        if settings.oidc_required and organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(
+                422, "organization_required",
+                "organization_id must identify an enabled organization when institutional OIDC is required",
+            )
+        if organization_id is not None and organization_id not in settings.oidc_allowed_organizations:
+            raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
         if not isinstance(name, str) or not 2 <= len(name.strip()) <= 120:
             raise ServiceError(422, "invalid_request", "name must contain 2 to 120 characters")
         if not isinstance(institution, str) or not 2 <= len(institution.strip()) <= 200:
@@ -552,9 +562,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(422, "invalid_request",
                                "role must be researcher, reviewer or steward")
         key = secrets.token_urlsafe(32)
-        requester_id = S().create_requester(name.strip(), role, level, institution.strip(), key)
+        requester_id = S().create_requester(
+            name.strip(), role, level, institution.strip(), key, organization_id=organization_id,
+        )
         result = {"id": requester_id, "name": name.strip(), "institution": institution.strip(),
-                  "role": role, "credential_level": level}
+                  "role": role, "credential_level": level, "organization_id": organization_id}
         if not settings.oidc_required:
             result.update(api_key=key, shown_once=True)
         else:

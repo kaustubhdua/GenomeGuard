@@ -17,6 +17,23 @@ def pg_store():
     url = os.environ.get("GG_TEST_DATABASE_URL")
     if not url:
         pytest.skip("GG_TEST_DATABASE_URL is not configured")
+    with psycopg.connect(url, autocommit=True) as admin:
+        admin.execute(
+            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "WHERE rolname='genomeguard_runtime') THEN "
+            "CREATE ROLE genomeguard_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
+            "NOCREATEDB NOCREATEROLE; END IF; END $"
+        )
+        admin.execute("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime")
+        admin.execute("GRANT USAGE ON SCHEMA genomeguard_runtime TO genomeguard_runtime")
+        admin.execute(
+            "ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA genomeguard_runtime "
+            "GRANT ALL ON TABLES TO genomeguard_runtime"
+        )
+        admin.execute(
+            "ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA genomeguard_runtime "
+            "GRANT ALL ON SEQUENCES TO genomeguard_runtime"
+        )
     store = PostgresStore(url)
     # This fixture must only ever point to a disposable test database.
     with store.lock, store.connection.transaction():
@@ -125,7 +142,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -137,6 +154,37 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
         "dataset_genotype_calls", "population_reference_manifest",
         "population_variant_frequency",
     } <= tables
+
+
+def test_postgres_audit_log_is_append_only(pg_store):
+    audit = AuditChain(AuditStore(pg_store))
+    audit.append("integration-test", "audit.appended", {"synthetic": True})
+    with pytest.raises(psycopg.Error, match="append-only"):
+        with pg_store.transaction():
+            pg_store.x("UPDATE audit_log SET action='rewritten' WHERE idx=1")
+    with pytest.raises(psycopg.Error, match="append-only"):
+        with pg_store.transaction():
+            pg_store.x("DELETE FROM audit_log WHERE idx=1")
+
+
+def test_postgres_runtime_role_cannot_mutate_audit_or_migration_ledgers(pg_store):
+    with pg_store.transaction():
+        pg_store.connection.execute("SET ROLE genomeguard_runtime")
+        pg_store.assert_least_privilege_runtime()
+        privileges = pg_store.q(
+            "SELECT "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','INSERT') AS audit_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','UPDATE') AS audit_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','DELETE') AS audit_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','TRUNCATE') AS audit_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','SELECT') AS migrations_select, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','INSERT') AS migrations_insert"
+        )[0]
+        assert privileges == {
+            "audit_insert": True, "audit_update": False, "audit_delete": False,
+            "audit_truncate": False, "migrations_select": True, "migrations_insert": False,
+        }
+        pg_store.connection.execute("RESET ROLE")
 
 
 def test_postgres_empty_population_reference_lookup_is_truthful(pg_store):
@@ -323,6 +371,19 @@ def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
 
         pg_store.connection.execute(
             f'GRANT TRUNCATE ON TABLE genomeguard_runtime.requests TO "{role}"'
+        )
+        pg_store.connection.commit()
+        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.commit()
+        with pytest.raises(RuntimeError, match="over-privileged"):
+            pg_store.assert_least_privilege_runtime()
+        pg_store.connection.execute("RESET ROLE")
+        pg_store.connection.commit()
+        pg_store.connection.execute(
+            f'REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM "{role}"'
+        )
+        pg_store.connection.execute(
+            f'GRANT UPDATE ON TABLE genomeguard_runtime.audit_log TO "{role}"'
         )
         pg_store.connection.commit()
         pg_store.connection.execute(f'SET ROLE "{role}"')
