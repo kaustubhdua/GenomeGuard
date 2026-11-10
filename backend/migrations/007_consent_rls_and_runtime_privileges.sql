@@ -77,7 +77,8 @@ BEGIN
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_runtime';
     EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO genomeguard_runtime';
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard TO genomeguard_runtime';
-    EXECUTE 'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings, genomeguard_runtime.donors TO genomeguard_runtime';
+    EXECUTE 'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings TO genomeguard_runtime;
+    EXECUTE 'GRANT UPDATE ON TABLE genomeguard_runtime.donors TO genomeguard_runtime'';
     EXECUTE 'GRANT INSERT ON TABLE genomeguard_runtime.alerts, genomeguard_runtime.donor_access, genomeguard_runtime.audit_log, genomeguard_runtime.consent_events TO genomeguard_runtime';
     EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.schema_migrations FROM genomeguard_runtime';
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.audit_log, genomeguard_runtime.consent_events FROM genomeguard_runtime';
@@ -100,7 +101,8 @@ BEGIN
       EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_app_runtime';
       EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO genomeguard_app_runtime';
       EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard TO genomeguard_app_runtime';
-      EXECUTE 'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings, genomeguard_runtime.donors TO genomeguard_app_runtime';
+      EXECUTE 'GRANT INSERT, UPDATE ON TABLE genomeguard_runtime.requesters, genomeguard_runtime.requests, genomeguard_runtime.decisions, genomeguard_runtime.epsilon_ledger, genomeguard_runtime.identity_bindings TO genomeguard_app_runtime;
+      EXECUTE 'GRANT UPDATE ON TABLE genomeguard_runtime.donors TO genomeguard_app_runtime'';
       EXECUTE 'GRANT INSERT ON TABLE genomeguard_runtime.alerts, genomeguard_runtime.donor_access, genomeguard_runtime.audit_log, genomeguard_runtime.consent_events TO genomeguard_app_runtime';
       EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.schema_migrations FROM genomeguard_app_runtime';
       EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON TABLE genomeguard_runtime.audit_log, genomeguard_runtime.consent_events FROM genomeguard_app_runtime';
