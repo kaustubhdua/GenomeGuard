@@ -6,7 +6,7 @@ Updated: 10 November 2026
 
 GenomeGuard is a first-party Python/Starlette research application with a browser workbench, synthetic/public-data workflow, PostgreSQL persistence, institutional-control foundations, and evaluation/interoperability tooling.
 
-The repository is **not yet verified as a final submission build**. PR #113 has been merged into `main` at `088eaa9adde25cf95b748c31bad365880fe95343`, but exact-head CI on that merge commit and the current feature head is still running. The staging acceptance workflow is waiting for the feature head `2866b967de21cf35d5d5881f62371aedefb73189`; Render still serves `3e46060327446f265b48156b6952480687133a3a`. The old staging deployment is healthy, but it is not evidence for the new commit.
+The repository is **not yet verified as a final submission build**. PR #113 has been merged into `main` at `088eaa9adde25cf95b748c31bad365880fe95343`, but exact-head CI on that merge commit and the current feature head is still running. The staging acceptance workflow is waiting for the feature head `a7a26d6c6be61afd1ddcf530e654e8f5ef3e0d8b`; Render still serves `3e46060327446f265b48156b6952480687133a3a`. The old staging deployment is healthy, but it is not evidence for the new commit.
 
 This is **not production-ready for controlled participant genomic data or clinical use**. The hosted demo uses synthetic data and simulated consent. Private institutional cohort ingestion, real institutional OIDC, authoritative consent, external audit anchoring, provider-grade recovery, monitoring, and governance approvals remain incomplete or external dependencies.
 
@@ -15,8 +15,8 @@ This is **not production-ready for controlled participant genomic data or clinic
 - PR #111 (Supabase-free runtime) and PR #113 (institutional controls) are merged into `main`. PR #113 merge commit: `088eaa9adde25cf95b748c31bad365880fe95343`.
 - PR #112 was merged into the intermediate `feat/remove-supabase-runtime` branch; its follow-up work was carried into the PR #113 integration branch.
 - PRs #116, #117 and #118 were merged into the feature branch before PR #113 merged and are included in main.
-- PR #119 was merged into `feat/institutional-production-controls` after PR #113 merged. It adds 49 lines to `backend/tests/test_identity_bindings.py` for the approval/separate-release safety boundary and is not yet included in main.
-- Current feature head: `2866b967de21cf35d5d5881f62371aedefb73189`. Compared with main, the file-level delta is the PR #119 test addition; the ahead/behind count also reflects merge ancestry.
+- PR #119 was merged into `feat/institutional-production-controls` after PR #113 merged. It adds 49 lines to `backend/tests/test_identity_bindings.py` for the approval/separate-release safety boundary and is not yet included in main. The latest feature commit adds `test_postgres_tenant_scoped_researcher_to_steward_workflow` to exercise that lifecycle under the restricted PostgreSQL runtime role, and removes an unused raw-HTML helper path from `frontend/src/ui.js`.
+- Current feature head: `a7a26d6c6be61afd1ddcf530e654e8f5ef3e0d8b`. Compared with main, the file-level delta is the PR #119 test addition; the ahead/behind count also reflects merge ancestry.
 - GitHub reports `main` as unprotected (`protected: false`). Branch protection and required status checks remain unconfigured/unverified.
 - Do not merge another change or declare a release until exact-head CI and staging acceptance are green. Production is to remain untouched.
 
@@ -77,7 +77,7 @@ The previous staging service on `feat/remove-supabase-runtime` remains separate 
 
 ## CI and delivery status
 
-- Current main CI run [42870532217](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42870532217) targets merge commit `088eaa9...`; current feature CI run [42870551577](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42870551577) targets `2866b967...`. At the 18:06 UTC audit snapshot, both had passed setup, lint and seed; PostgreSQL integration tests were still running and later steps were pending.
+- Current main CI run [42870532217](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42870532217) targets merge commit `088eaa9...`; current feature CI run [42870551577](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42870551577) targets `2866b967...`. At the 18:15 UTC audit snapshot, the feature run had passed lint/seed and was running PostgreSQL integration tests; staging acceptance was checking the currently deployed synthetic service. Security verification on this feature SHA passed secret scanning, CodeQL Python/JavaScript, and dependency audit. The main CI run remains in progress.
 - Staging acceptance run [42870552058](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42870552058) targets `2866b967...` and was polling the hosted API for that exact deployment. It had not yet reached browser/mobile acceptance because the live Render commit remained `3e460603...`.
 - Earlier workflows for security verification, dependency audit, FHIR R4 Consent, GA4GH Beacon v2, deployment configuration and image build passed on previous commits. They do not automatically validate `088eaa9...` or `2866b967...`.
 - PR #119's Vercel bot preview reported the daily deployment quota was exhausted. This is a provider quota failure, not a successful preview or a code-level CI failure.
