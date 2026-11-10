@@ -890,13 +890,21 @@ class GenomeGuardService:
             "consent_event_id": payload["event_id"],
         }
         event_type = payload["event_type"]
-        withdrawn = event_type == "withdrawn"
-        if event_type == "restored":
+        # A routine consent update must never silently reverse a prior withdrawal.
+        withdrawn = donor.withdrawn
+        if event_type == "withdrawn":
+            withdrawn = True
+        elif event_type == "restored":
             # A restore is accepted only with a newly signed, complete consent payload above.
             withdrawn = False
         self.ds.donors[donor_id - 1] = replace(donor, consent=consent, withdrawn=withdrawn)
         self.store.set_donor_consent(donor_id, consent)
-        self.store.set_donor_withdrawn(donor_id, payload["effective_at"] if withdrawn else None)
+        withdrawn_at = (
+            payload["effective_at"] if event_type == "withdrawn"
+            else None if event_type == "restored"
+            else row.get("withdrawn_at")
+        )
+        self.store.set_donor_withdrawn(donor_id, withdrawn_at)
         consent_blob = crypto.encrypt(
             self.master, self.dataset_id, donor_id,
             json.dumps(consent, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8"),
