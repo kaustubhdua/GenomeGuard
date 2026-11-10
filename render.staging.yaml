@@ -1,13 +1,12 @@
-# Separate, synthetic-only staging service for the Supabase-free PR branch.
-# Apply this Blueprint only after reviewing its plan. It does not adopt or modify production.
+# Dedicated synthetic-only PR staging service. Production is not managed here.
 services:
   - type: web
-    name: genomeguard-staging
+    name: genomeguard-staging-pr113
     runtime: docker
     plan: free
     region: singapore
-    branch: feat/remove-supabase-runtime
-    autoDeploy: false
+    branch: feat/institutional-production-controls
+    autoDeploy: true
     dockerfilePath: ./Dockerfile.staging
     dockerContext: .
     healthCheckPath: /health/live
@@ -15,16 +14,16 @@ services:
       - key: GG_DEMO_MODE
         value: "true"
       - key: GG_EXPOSE_DEMO_ADMIN_KEY
-        value: "false"  # never expose an administrator credential through a public demo endpoint
+        value: "false"
       - key: GG_ALLOW_TAMPER_DEMO
         value: "false"
-      - key: GG_REAL_COHORT_FILE
-        value: ""
       - key: GG_DATASET_ID
         value: synthetic-cohort-1
       - key: GG_DATABASE_URL
-        sync: false
+        sync: false # Neon genomeguard_runtime role; never expose to browser
+      - key: GG_MIGRATION_DATABASE_URL
+        sync: false # distinct Neon genomeguard_owner role
       - key: GG_MASTER_KEY
-        sync: false
+        sync: false # unique 32-byte base64 key for synthetic staging
       - key: GG_ADMIN_API_KEY
         generateValue: true

@@ -8,10 +8,13 @@ does, once at start-up, to build the in-memory Dataset.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import io
 import json
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -30,7 +33,7 @@ class CatalogueUnavailableError(RuntimeError):
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cohort_metadata(id INTEGER PRIMARY KEY CHECK(id=1), dataset_id TEXT NOT NULL, metadata_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS donors(id INTEGER PRIMARY KEY, cohort_id TEXT, population TEXT,
-  consent_json TEXT, family_id INTEGER, withdrawn_at TEXT);
+  consent_json TEXT, family_id INTEGER, withdrawn_at TEXT, source_sample_id_hash TEXT);
 CREATE TABLE IF NOT EXISTS genotypes(donor_id INTEGER PRIMARY KEY, genotype_blob BLOB);
 CREATE TABLE IF NOT EXISTS variants(id INTEGER PRIMARY KEY, chrom TEXT, pos INTEGER, ref TEXT,
   alt TEXT, maf REAL, is_rare INTEGER, planted INTEGER);
@@ -38,9 +41,15 @@ CREATE TABLE IF NOT EXISTS relationships(id INTEGER PRIMARY KEY AUTOINCREMENT, d
   donor_b INTEGER, relation TEXT, meioses INTEGER, shared_fraction REAL);
 CREATE TABLE IF NOT EXISTS requesters(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, role TEXT,
   credential_level TEXT, institution TEXT, api_key_hash TEXT UNIQUE, created_at TEXT,
-  frozen_at TEXT);
+  frozen_at TEXT, organization_id TEXT);
+CREATE TABLE IF NOT EXISTS identity_bindings(
+  issuer TEXT NOT NULL, subject TEXT NOT NULL, organization_id TEXT NOT NULL,
+  requester_id INTEGER NOT NULL REFERENCES requesters(id), active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, revoked_at TEXT,
+  PRIMARY KEY(issuer, subject, organization_id));
+CREATE INDEX IF NOT EXISTS identity_bindings_requester ON identity_bindings(requester_id, active);
 CREATE TABLE IF NOT EXISTS requests(id INTEGER PRIMARY KEY AUTOINCREMENT, requester_id INTEGER,
-  ts TEXT, purpose TEXT, disease TEXT, is_commercial INTEGER, data_level TEXT,
+  organization_id TEXT, ts TEXT, purpose TEXT, disease TEXT, is_commercial INTEGER, data_level TEXT,
   cohort_filter_json TEXT, variant_filter_json TEXT, status TEXT);
 CREATE TABLE IF NOT EXISTS decisions(id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER
   UNIQUE, outcome TEXT, reasons_json TEXT, risk_json TEXT, transform_json TEXT,
@@ -52,6 +61,12 @@ CREATE TABLE IF NOT EXISTS audit_log(idx INTEGER PRIMARY KEY, ts TEXT, actor TEX
   payload_json TEXT, prev_hash TEXT, hash TEXT);
 CREATE TABLE IF NOT EXISTS donor_access(id INTEGER PRIMARY KEY AUTOINCREMENT, donor_id INTEGER,
   request_id INTEGER, ts TEXT, purpose TEXT, disease TEXT, level TEXT, institution TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_hash_unique
+  ON donors(source_sample_id_hash) WHERE source_sample_id_hash IS NOT NULL;
+CREATE TABLE IF NOT EXISTS consent_events(
+  event_id TEXT PRIMARY KEY, donor_id INTEGER NOT NULL, dataset_id TEXT NOT NULL,
+  event_type TEXT NOT NULL, consent_blob BLOB NOT NULL, source_issuer TEXT NOT NULL,
+  source_record_sha256 TEXT NOT NULL, effective_at TEXT NOT NULL, received_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS donor_access_donor ON donor_access(donor_id);
 CREATE TABLE IF NOT EXISTS alerts(id INTEGER PRIMARY KEY AUTOINCREMENT, requester_id INTEGER,
   ts TEXT, kind TEXT, score REAL, details_json TEXT, action_taken TEXT);
@@ -72,10 +87,29 @@ class Store:
     def __init__(self, path: str = ":memory:") -> None:
         self.path = path
         self.lock = threading.RLock()
+        self._transaction_depth = 0
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         with self.lock:
             self.db.executescript(SCHEMA)
+            # Upgrade databases created before organization-scoped identities were introduced.
+            requester_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(requesters)")}
+            if "organization_id" not in requester_columns:
+                self.db.execute("ALTER TABLE requesters ADD COLUMN organization_id TEXT")
+            donor_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(donors)")}
+            if "source_sample_id" in donor_columns:
+                # Older local databases stored raw source IDs. Retire those values during
+                # upgrade; new imports store only a dataset-keyed HMAC.
+                self.db.execute("UPDATE donors SET source_sample_id=NULL")
+            if "source_sample_id_hash" not in donor_columns:
+                self.db.execute("ALTER TABLE donors ADD COLUMN source_sample_id_hash TEXT")
+            self.db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_hash_unique "
+                "ON donors(source_sample_id_hash) WHERE source_sample_id_hash IS NOT NULL"
+            )
+            request_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(requests)")}
+            if "organization_id" not in request_columns:
+                self.db.execute("ALTER TABLE requests ADD COLUMN organization_id TEXT")
             self.db.commit()
 
     # ------------------------------------------------------------------ helpers
@@ -90,8 +124,39 @@ class Store:
     def x(self, sql: str, args: tuple = ()) -> int:
         with self.lock:
             cur = self.db.execute(sql, args)
-            self.db.commit()
+            if self._transaction_depth == 0:
+                self.db.commit()
             return cur.lastrowid or 0
+
+    @contextmanager
+    def transaction(self):
+        """Serialize a complete service mutation and roll back nested failures atomically."""
+        with self.lock:
+            outermost = self._transaction_depth == 0
+            self._transaction_depth += 1
+            if outermost:
+                self.db.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+            except Exception:
+                if outermost:
+                    self.db.rollback()
+                raise
+            else:
+                if outermost:
+                    self.db.commit()
+            finally:
+                self._transaction_depth -= 1
+
+    def set_tenant(self, organization_id: str) -> None:
+        """SQLite demo adapter has no database-level tenant policy."""
+        return None
+
+    def set_admin_access(self) -> None:
+        return None
+
+    def set_allow_unscoped_demo(self) -> None:
+        return None
 
     # ------------------------------------------------------------------ dataset
     def has_dataset(self) -> bool:
@@ -111,13 +176,18 @@ class Store:
         """Return no imported coverage unless a normalized manifest backs the rows."""
         return []
 
-    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None) -> None:
+    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None, *, _db=None) -> None:
         """Write a cohort and its provenance. Genotypes are encrypted before database storage."""
         v = cohort.variants
         planted = set(cohort.planted)
         with self.lock:
-            d = self.db
-            for t in ("genotypes", "donor_access", "donors", "variants", "relationships"):
+            d = _db or self.db
+            if d.execute("SELECT event_id FROM consent_events LIMIT 1").fetchone():
+                raise RuntimeError(
+                    "cohort replacement is blocked while participant consent events exist; "
+                    "use a reviewed dataset-version migration"
+                )
+            for t in ("genotypes", "donor_access", "consent_events", "donors", "variants", "relationships"):
                 d.execute(f"DELETE FROM {t}")
             d.execute("DELETE FROM cohort_metadata")
             d.execute("INSERT INTO cohort_metadata(id,dataset_id,metadata_json) VALUES(1,?,?)",
@@ -126,17 +196,24 @@ class Store:
                           "source": "legacy-unspecified"
                       }))))
             d.executemany(
-                "INSERT INTO variants VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO variants(id,chrom,pos,ref,alt,maf,is_rare,planted) VALUES(?,?,?,?,?,?,?,?)",
                 [(i + 1, str(v["chrom"][i]), int(v["pos"][i]), str(v["ref"][i]), str(v["alt"][i]),
                   float(v["maf"][i]), int(v["is_rare"][i]), int(i in planted))
                  for i in range(len(v["pos"]))])
             for dn in cohort.donors:
-                d.execute("INSERT INTO donors VALUES(?,?,?,?,?,?)",
-                          (dn["id"], dn["cohort_id"], dn["population"], json.dumps(dn["consent"]),
-                           dn["family_id"], "2026-01-01T00:00:00" if dn["withdrawn"] else None))
+                d.execute(
+                    "INSERT INTO donors(id,cohort_id,population,consent_json,family_id,withdrawn_at,source_sample_id_hash) "
+                    "VALUES(?,?,?,?,?,?,?)",
+                    (dn["id"], dn["cohort_id"], dn["population"], json.dumps(dn["consent"]),
+                     dn["family_id"], "2026-01-01T00:00:00" if dn["withdrawn"] else None,
+                     hmac.new(
+                         master, dataset_id.encode("utf-8") + b"\\0"
+                         + dn["source_sample_id"].encode("utf-8"), hashlib.sha256,
+                     ).hexdigest() if dn.get("source_sample_id") else None),
+                )
                 blob = crypto.encrypt(master, dataset_id, dn["id"],
                                       _blob(cohort.genotypes[dn["id"] - 1]))
-                d.execute("INSERT INTO genotypes VALUES(?,?)", (dn["id"], blob))
+                d.execute("INSERT INTO genotypes(donor_id,genotype_blob) VALUES(?,?)", (dn["id"], blob))
             d.executemany(
                 "INSERT INTO relationships(donor_a,donor_b,relation,meioses,shared_fraction) "
                 "VALUES(?,?,?,?,?)",
@@ -165,14 +242,66 @@ class Store:
                        coords)
 
     # ------------------------------------------------------------------ requesters
-    def add_requester(self, name: str, role: str, level: str, institution: str,
-                      key_hash: str) -> int:
-        return self.x("INSERT INTO requesters(name,role,credential_level,institution,"
-                      "api_key_hash,created_at) VALUES(?,?,?,?,?,?)",
-                      (name, role, level, institution, key_hash, now_iso()))
+    def add_requester(
+        self, name: str, role: str, level: str, institution: str,
+        key_hash: str, organization_id: str | None = None,
+    ) -> int:
+        return self.x(
+            "INSERT INTO requesters(name,role,credential_level,institution,api_key_hash,created_at,"
+            "organization_id) VALUES(?,?,?,?,?,?,?)",
+            (name, role, level, institution, key_hash, now_iso(), organization_id),
+        )
 
     def requester_by_key(self, key_hash: str) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE api_key_hash=?", (key_hash,))
+
+    def add_identity_binding(
+        self, requester_id: int, issuer: str, subject: str, organization_id: str,
+    ) -> None:
+        """Bind a verified external subject to one provisioned requester and tenant."""
+        with self.lock:
+            existing = self.one("SELECT organization_id FROM requesters WHERE id=?", (requester_id,))
+            if not existing:
+                raise ValueError("requester does not exist")
+            current_org = existing.get("organization_id")
+            if current_org and current_org != organization_id:
+                raise ValueError("requester is already bound to a different organization")
+            binding = self.one(
+                "SELECT requester_id, active FROM identity_bindings "
+                "WHERE issuer=? AND subject=? AND organization_id=?",
+                (issuer, subject, organization_id),
+            )
+            if binding:
+                if binding["requester_id"] == requester_id and binding["active"]:
+                    return
+                raise ValueError(
+                    "this institutional subject is already bound; revoke the existing binding "
+                    "before attempting a new assignment"
+                )
+            self.x(
+                "INSERT INTO identity_bindings(issuer,subject,organization_id,requester_id,active,created_at) "
+                "VALUES(?,?,?,?,TRUE,?)",
+                (issuer, subject, organization_id, requester_id, now_iso()),
+            )
+            self.x(
+                "UPDATE requesters SET organization_id=? WHERE id=?",
+                (organization_id, requester_id),
+            )
+
+    def requester_by_oidc(self, issuer: str, subject: str, organization_id: str) -> dict | None:
+        return self.one(
+            "SELECT r.* FROM requesters AS r JOIN identity_bindings AS b "
+            "ON b.requester_id=r.id WHERE b.issuer=? AND b.subject=? AND b.organization_id=? "
+            "AND b.active=TRUE AND r.organization_id=? AND r.frozen_at IS NULL",
+            (issuer, subject, organization_id, organization_id),
+        )
+
+    def revoke_identity_binding(self, issuer: str, subject: str, organization_id: str) -> None:
+        self.x(
+            "UPDATE identity_bindings SET active=FALSE, revoked_at=? "
+            "WHERE issuer=? AND subject=? AND organization_id=?",
+            (now_iso(), issuer, subject, organization_id),
+        )
 
     # ------------------------------------------------------------------ donor ledger
     def add_donor_access(self, rows: list[tuple]) -> None:
@@ -194,6 +323,33 @@ class Store:
     def set_donor_consent(self, donor_id: int, consent: dict) -> None:
         self.x("UPDATE donors SET consent_json=? WHERE id=?", (json.dumps(consent), donor_id))
 
+    def donor_by_source_sample_id(
+        self, source_sample_id: str, master: bytes, dataset_id: str,
+    ) -> dict | None:
+        digest = hmac.new(
+            master, dataset_id.encode("utf-8") + b"\\0" + source_sample_id.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return self.one(
+            "SELECT id, consent_json, withdrawn_at FROM donors WHERE source_sample_id_hash=?",
+            (digest,),
+        )
+
+    def consent_event_exists(self, event_id: str) -> bool:
+        return bool(self.one("SELECT 1 AS present FROM consent_events WHERE event_id=?", (event_id,)))
+
+    def record_consent_event(
+        self, event_id: str, donor_id: int, dataset_id: str, event_type: str,
+        consent_blob: bytes, source_issuer: str, source_record_sha256: str, effective_at: str,
+    ) -> None:
+        self.x(
+            "INSERT INTO consent_events(event_id,donor_id,dataset_id,event_type,consent_blob,"
+            "source_issuer,source_record_sha256,effective_at,received_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (event_id, donor_id, dataset_id, event_type, consent_blob,
+             source_issuer, source_record_sha256, effective_at, now_iso()),
+        )
+
     def requester(self, rid: int) -> dict | None:
         return self.one("SELECT * FROM requesters WHERE id=?", (rid,))
 
@@ -206,12 +362,16 @@ class Store:
 
     # ------------------------------------------------------------------ requests/decisions
     def add_request(self, rid: int, ts: str, req: dict) -> int:
+        requester = self.requester(rid)
+        if not requester:
+            raise ValueError("requester does not exist")
         return self.x(
-            "INSERT INTO requests(requester_id,ts,purpose,disease,is_commercial,data_level,"
-            "cohort_filter_json,variant_filter_json,status) VALUES(?,?,?,?,?,?,?,?,?)",
-            (rid, ts, req["purpose"], req.get("disease"), int(req.get("is_commercial", False)),
-             req.get("data_level", "frequency"), json.dumps(req.get("cohort_filter") or {}),
-             json.dumps(req.get("variant_filter") or {}), "pending"))
+            "INSERT INTO requests(requester_id,organization_id,ts,purpose,disease,is_commercial,data_level,"
+            "cohort_filter_json,variant_filter_json,status) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (rid, requester.get("organization_id"), ts, req["purpose"], req.get("disease"),
+             int(req.get("is_commercial", False)), req.get("data_level", "frequency"),
+             json.dumps(req.get("cohort_filter") or {}), json.dumps(req.get("variant_filter") or {}),
+             "pending"))
 
     def set_request_status(self, req_id: int, status: str) -> None:
         self.x("UPDATE requests SET status=? WHERE id=?", (status, req_id))

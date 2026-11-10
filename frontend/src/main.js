@@ -1,4 +1,4 @@
-import { api, boot, state, setWho, isSteward } from "./api.js";
+import { api, boot, state, setWho, isSteward, signInWithInstitution, signOutInstitution } from "./api.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
 
@@ -114,6 +114,7 @@ function drawWho() {
   const note = $("who-note");
   // Account-free guest mode: only synthetic demo personas are selectable.
   if (state.demo) {
+    $("auth-controls").replaceChildren();
     label.hidden = false;
     selector.hidden = false;
     if (!state.demo.admin_key && isSteward()) setWho(state.demo.requesters?.[0]?.api_key || "");
@@ -134,7 +135,39 @@ function drawWho() {
   } else {
     label.hidden = true;
     selector.hidden = true;
-    note.textContent = "Guest access · account creation and sign-in are disabled. Only public demo features are available.";
+    const controls = $("auth-controls");
+    controls.replaceChildren();
+    if (state.oidc?.enabled) {
+      if (state.me) {
+        controls.append(
+          h("p", { class: "fine" }, "Signed in: " + (state.me.name || "Institutional user")
+            + " · " + state.me.role),
+          h("button", { type: "button", class: "btn ghost", onclick: () => {
+            signOutInstitution();
+            drawWho();
+            drawNav("");
+            render();
+          } }, "Sign out of GenomeGuard")
+        );
+        note.textContent = "Institutional identity · " + (state.me.institution || "verified organization");
+      } else {
+        controls.append(h("button", {
+          type: "button", class: "btn", onclick: async (event) => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            button.textContent = "Connecting…";
+            try {
+              await signInWithInstitution();
+            } catch {
+              drawWho();
+            }
+          },
+        }, "Sign in with your institution"));
+        note.textContent = state.oidcError || "Access is limited to provisioned institutional identities.";
+      }
+    } else {
+      note.textContent = "Institutional sign-in is not configured. Production research access remains disabled.";
+    }
   }
 }
 

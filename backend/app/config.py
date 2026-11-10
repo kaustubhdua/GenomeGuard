@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from app.core.params import BANDS, CREDENTIAL_LEVELS, DATA_LEVELS, OUTCOMES, Params  # noqa: F401
 from app.core.params import DEFAULT as params  # noqa: F401
@@ -21,6 +22,41 @@ def _env(name: str, default, cast=str):
 class Settings:
     # PostgreSQL is selected when GG_DATABASE_URL is set; SQLite remains for local demo/testing.
     database_url: str = field(default_factory=lambda: _env("database_url", ""))
+    # Privileged URL used only for schema migrations; application queries use database_url.
+    migration_database_url: str = field(default_factory=lambda: _env("migration_database_url", ""))
+    oidc_required: bool = field(default_factory=lambda: _env("oidc_required", False, bool))
+    oidc_admin_required: bool = field(
+        default_factory=lambda: _env("oidc_admin_required", False, bool)
+    )
+    tenant_isolation_required: bool = field(
+        default_factory=lambda: _env("tenant_isolation_required", False, bool)
+    )
+    oidc_issuer: str = field(default_factory=lambda: _env("oidc_issuer", ""))
+    oidc_audience: str = field(default_factory=lambda: _env("oidc_audience", ""))
+    oidc_client_id: str = field(default_factory=lambda: _env("oidc_client_id", ""))
+    oidc_redirect_uri: str = field(default_factory=lambda: _env("oidc_redirect_uri", ""))
+    oidc_scopes: str = field(
+        default_factory=lambda: _env("oidc_scopes", "openid profile email")
+    )
+    oidc_jwks_url: str = field(default_factory=lambda: _env("oidc_jwks_url", ""))
+    oidc_organization_claim: str = field(
+        default_factory=lambda: _env("oidc_organization_claim", "organization_id")
+    )
+    oidc_allowed_organizations: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            item.strip() for item in _env("oidc_allowed_organizations", "").split(",")
+            if item.strip()
+        )
+    )
+    consent_authority_required: bool = field(
+        default_factory=lambda: _env("consent_authority_required", False, bool)
+    )
+    consent_authority_issuer: str = field(
+        default_factory=lambda: _env("consent_authority_issuer", "")
+    )
+    consent_authority_public_key: str = field(
+        default_factory=lambda: _env("consent_authority_public_key", "")
+    )
     db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
@@ -52,10 +88,48 @@ def validate_settings(s: Settings) -> None:
         return
 
     problems: list[str] = []
+    if not s.oidc_required:
+        problems.append("GG_OIDC_REQUIRED must be true for non-demo deployments")
+    if not s.oidc_admin_required:
+        problems.append("GG_OIDC_ADMIN_REQUIRED must be true for non-demo deployments")
+    if not s.tenant_isolation_required:
+        problems.append("GG_TENANT_ISOLATION_REQUIRED must be true for non-demo deployments")
     # A production-looking configuration must never silently fall back to local SQLite.
     # SQLite on an ephemeral hosting filesystem cannot satisfy the persistence contract.
     if not s.database_url.strip().startswith(("postgres://", "postgresql://")):
-        problems.append("GG_DATABASE_URL must be a PostgreSQL connection URL in non-demo mode")
+        problems.append("GG_DATABASE_URL must be a PostgreSQL runtime connection URL in non-demo mode")
+    if not s.migration_database_url.strip().startswith(("postgres://", "postgresql://")):
+        problems.append("GG_MIGRATION_DATABASE_URL must be a separate privileged PostgreSQL migration URL")
+    if s.database_url.strip() == s.migration_database_url.strip():
+        problems.append("GG_DATABASE_URL and GG_MIGRATION_DATABASE_URL must use distinct database roles")
+    if s.tenant_isolation_required and not s.oidc_required:
+        problems.append("GG_TENANT_ISOLATION_REQUIRED requires GG_OIDC_REQUIRED=true")
+    if s.oidc_admin_required and not s.oidc_required:
+        problems.append("GG_OIDC_ADMIN_REQUIRED requires GG_OIDC_REQUIRED=true")
+    if s.oidc_required:
+        if not s.oidc_issuer.startswith("https://"):
+            problems.append("GG_OIDC_ISSUER must be an HTTPS issuer URL when OIDC is required")
+        if not s.oidc_audience.strip():
+            problems.append("GG_OIDC_AUDIENCE must identify the registered API audience")
+        if not s.oidc_client_id.strip():
+            problems.append("GG_OIDC_CLIENT_ID must identify the registered public OIDC client")
+        redirect = urlsplit(s.oidc_redirect_uri)
+        if redirect.scheme != "https" or not redirect.netloc or redirect.fragment:
+            problems.append("GG_OIDC_REDIRECT_URI must be the exact registered HTTPS callback URL without a fragment")
+        if not s.oidc_jwks_url.startswith("https://"):
+            problems.append("GG_OIDC_JWKS_URL must be an HTTPS JWKS endpoint")
+        if not s.oidc_organization_claim.strip() or not s.oidc_allowed_organizations:
+            problems.append("GG_OIDC_ORGANIZATION_CLAIM and GG_OIDC_ALLOWED_ORGANIZATIONS are required")
+    if s.consent_authority_required:
+        import base64
+        try:
+            consent_key = base64.b64decode(s.consent_authority_public_key, validate=True)
+        except (ValueError, base64.binascii.Error):
+            consent_key = b""
+        if not s.consent_authority_issuer.startswith("https://"):
+            problems.append("GG_CONSENT_AUTHORITY_ISSUER must be an HTTPS issuer")
+        if len(consent_key) != 32:
+            problems.append("GG_CONSENT_AUTHORITY_PUBLIC_KEY must be base64 for a 32-byte Ed25519 key")
     if s.admin_api_key == "demo-admin-key" or len(s.admin_api_key.strip()) < 32:
         problems.append("GG_ADMIN_API_KEY must be a unique secret of at least 32 characters")
     if s.allow_tamper_demo:

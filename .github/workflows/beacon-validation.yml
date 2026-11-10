@@ -10,7 +10,7 @@ on:
       - "pyproject.toml"
       - ".github/workflows/beacon-validation.yml"
   pull_request:
-    branches: [main]
+    branches: [main, feat/remove-supabase-runtime]
     paths:
       - "backend/app/api.py"
       - "backend/tests/test_beacon.py"

@@ -27,7 +27,21 @@ def get_json(base: str, path: str, timeout: int) -> tuple[int, dict]:
         raw = response.read(2_000_001)
         if len(raw) > 2_000_000:
             raise ValueError(f"{path} response exceeded the smoke-test limit")
-        return response.status, json.loads(raw.decode("utf-8"))
+        content_type = response.headers.get("Content-Type", "unknown")
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            reason = getattr(exc, "msg", "response is not valid UTF-8 JSON")
+            raise ValueError(
+                f"{path} returned non-JSON HTTP {response.status} "
+                f"(content-type={content_type}, bytes={len(raw)}): {reason}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"{path} returned a non-object JSON payload "
+                f"(HTTP {response.status}, content-type={content_type})"
+            )
+        return response.status, payload
 
 
 def main() -> int:

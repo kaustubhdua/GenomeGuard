@@ -74,6 +74,85 @@ def _translate(sql: str) -> str:
     return statement.replace("?", "%s")
 
 
+
+def _ensure_runtime_schema_exists(connection: psycopg.Connection) -> None:
+    """Avoid requiring database CREATE privilege when the schema is already provisioned.
+
+    The migration principal is intentionally not CREATEDB. CREATE SCHEMA IF NOT EXISTS
+    still requires CREATE on the database even when the schema exists, so check first.
+    A fresh database must be provisioned with the schema or grant this narrowly scoped
+    database privilege to the migration principal during bootstrap.
+    """
+    present = connection.execute(
+        "SELECT EXISTS (SELECT 1 FROM pg_namespace "
+        "WHERE nspname='genomeguard_runtime') AS present"
+    ).fetchone()["present"]
+    if present:
+        return
+    try:
+        connection.execute("CREATE SCHEMA genomeguard_runtime")
+    except psycopg.errors.InsufficientPrivilege as exc:
+        raise RuntimeError(
+            "PostgreSQL migration principal cannot create the initial genomeguard_runtime "
+            "schema; provision the schema or grant CREATE ON DATABASE for initial bootstrap"
+        ) from exc
+
+
+def _ensure_migration_schema_access(connection: psycopg.Connection) -> None:
+    """Let the migration owner create objects in a legacy runtime-owned schema.
+
+    Older staging databases may have been bootstrapped with genomeguard_runtime as
+    the schema owner. The migration principal is deliberately not a member with
+    inherited runtime privileges, but may have SET ROLE permission. In that
+    narrowly scoped case, ask the current schema owner to grant CREATE to the
+    migration principal; migration 007 later transfers ownership and revokes
+    runtime CREATE. Fresh schemas already owned by the migration principal need
+    no special handling.
+    """
+    with connection.transaction():
+        row = connection.execute(
+            "SELECT current_user AS migration_role, "
+            "n.nspowner::regrole::text AS schema_owner, "
+            "has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS can_create, "
+            "pg_has_role(current_user,'genomeguard_runtime','SET') AS can_set_runtime "
+            "FROM pg_namespace n WHERE n.nspname='genomeguard_runtime'"
+        ).fetchone()
+        if not row:
+            raise RuntimeError("GenomeGuard PostgreSQL runtime schema is missing")
+        if row["can_create"]:
+            return
+        if (
+            row["schema_owner"] == "genomeguard_runtime"
+            and row["migration_role"] == "genomeguard_owner"
+            and row["can_set_runtime"]
+        ):
+            connection.execute("SET ROLE genomeguard_runtime")
+            try:
+                connection.execute(
+                    "GRANT CREATE ON SCHEMA genomeguard_runtime TO genomeguard_owner"
+                )
+            finally:
+                connection.execute("RESET ROLE")
+            granted = connection.execute(
+                "SELECT has_schema_privilege('genomeguard_owner',"
+                "'genomeguard_runtime','CREATE') AS can_create"
+            ).fetchone()["can_create"]
+            if granted:
+                return
+        raise RuntimeError(
+            "PostgreSQL migration principal cannot CREATE in genomeguard_runtime; "
+            "make it the schema owner or grant it migration-only CREATE before startup "
+            f"(role={row['migration_role']!r}, schema_owner={row['schema_owner']!r}, "
+            f"can_create={row['can_create']}, can_set_runtime={row['can_set_runtime']})"
+        )
+
+
+class _StandaloneCommitContext:
+    """Commit adapter for the one-off owner-only synthetic cohort seed connection."""
+    _transaction_depth = 0
+
+
+
 class _ConnectionCompat:
     """Minimal connection facade for the existing Store methods; SQL remains parameterized."""
     def __init__(self, connection: psycopg.Connection, store) -> None:
@@ -97,40 +176,101 @@ class PostgresStore(Store):
     backend = "postgresql"
     durable = True  # means PostgreSQL is configured, not that provider backups are verified
 
-    def __init__(self, database_url: str, *, connect_timeout: int = 10) -> None:
+    def __init__(
+        self, database_url: str, *, migration_database_url: str | None = None,
+        connect_timeout: int = 10, run_migrations: bool = True,
+    ) -> None:
         if not database_url or not database_url.startswith(("postgres://", "postgresql://")):
-            raise ValueError("GG_DATABASE_URL must be a PostgreSQL connection URL")
+            raise ValueError("GG_DATABASE_URL must be a PostgreSQL runtime connection URL")
+        if migration_database_url and (
+            not migration_database_url.startswith(("postgres://", "postgresql://"))
+            or migration_database_url == database_url
+        ):
+            raise ValueError("GG_MIGRATION_DATABASE_URL must be a distinct PostgreSQL owner URL")
         self.path = "postgresql"
         self.database_url = database_url
+        self.migration_database_url = migration_database_url
         self.connect_timeout = connect_timeout
         self.lock = threading.RLock()
         self._transaction_depth = 0
         self.connection = psycopg.connect(
             database_url, connect_timeout=connect_timeout, row_factory=dict_row,
-            application_name="GenomeGuard",
+            application_name="GenomeGuard-runtime",
         )
-        # Keep runtime tables isolated from normalized genomic reference tables.
-        # The database URL is a server-side secret; never put it in frontend/Vercel public env vars.
+        self.migration_connection = (
+            psycopg.connect(
+                migration_database_url, connect_timeout=connect_timeout, row_factory=dict_row,
+                application_name="GenomeGuard-migrations",
+            ) if run_migrations and migration_database_url else (
+                self.connection if run_migrations else None
+            )
+        )
         try:
-            with self.connection.transaction():
-                # Legacy service tables and normalized public references have separate
-                # schemas because they intentionally use different data contracts.
-                schema_exists = self.connection.execute(
-                    "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'genomeguard_runtime') AS present"
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
+                runtime_role = self.connection.execute(
+                    "SELECT current_user AS role"
+                ).fetchone()["role"]
+                migration_role = self.migration_connection.execute(
+                    "SELECT current_user AS role"
+                ).fetchone()["role"]
+                if runtime_role == migration_role:
+                    raise ValueError(
+                        "GG_DATABASE_URL and GG_MIGRATION_DATABASE_URL must authenticate "
+                        "as different PostgreSQL roles"
+                    )
+            if run_migrations:
+                # Only the migration principal may create schemas or run DDL. The ordinary
+                # application connection receives a search_path after the owner creates it.
+                with self.migration_connection.transaction():
+                    _ensure_runtime_schema_exists(self.migration_connection)
+                    self.migration_connection.execute(
+                        "SET search_path TO genomeguard_runtime, public"
+                    )
+            else:
+                # Operator tools that only provision records must never run schema DDL.
+                present = self.connection.execute(
+                    "SELECT EXISTS (SELECT 1 FROM pg_namespace "
+                    "WHERE nspname='genomeguard_runtime') AS present"
                 ).fetchone()["present"]
-                if not schema_exists:
-                    self.connection.execute("CREATE SCHEMA genomeguard_runtime")
+                if not present:
+                    raise RuntimeError("GenomeGuard PostgreSQL schema is not migrated")
+            with self.connection.transaction():
                 self.connection.execute("SET search_path TO genomeguard_runtime, public")
+            self.db = _ConnectionCompat(self.connection, self)
+            if run_migrations:
+                self._migrate()
         except Exception:
             self.connection.close()
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
+                self.migration_connection.close()
             raise
-        self.db = _ConnectionCompat(self.connection, self)
-        try:
-            self._migrate()
-        except Exception:
-            self.connection.close()
-            raise
+        finally:
+            if self.migration_connection is not None and self.migration_connection is not self.connection:
+                self.migration_connection.close()
+                self.migration_connection = None
 
+
+    def save_cohort(self, cohort, master: bytes, dataset_id: str, metadata: dict | None = None, *, _db=None) -> None:
+        """Seed/replace a demo cohort through the separate owner connection, never web DML."""
+        if _db is not None or not self.migration_database_url:
+            return super().save_cohort(cohort, master, dataset_id, metadata, _db=_db)
+        with self.lock:
+            owner = psycopg.connect(
+                self.migration_database_url, connect_timeout=self.connect_timeout,
+                row_factory=dict_row, application_name="GenomeGuard-demo-seed",
+            )
+            try:
+                role = owner.execute("SELECT current_user AS role").fetchone()["role"]
+                if role != "genomeguard_owner":
+                    raise RuntimeError(
+                        "GG_MIGRATION_DATABASE_URL must authenticate as genomeguard_owner "
+                        "for the one-time synthetic cohort seed"
+                    )
+                owner.execute("SET search_path TO genomeguard_runtime, public")
+                owner_db = _ConnectionCompat(owner, _StandaloneCommitContext())
+                super().save_cohort(cohort, master, dataset_id, metadata, _db=owner_db)
+            finally:
+                owner.close()
 
     def _ensure_connection(self) -> None:
         """Reconnect after provider restarts without retrying an interrupted transaction.
@@ -158,7 +298,7 @@ class PostgresStore(Store):
         self.db.connection = connection
 
     def _migrate(self) -> None:
-        """Apply each numbered native PostgreSQL migration exactly once."""
+        """Apply numbered migrations using the privileged migration-only connection."""
         if not _MIGRATIONS.is_dir():
             raise RuntimeError(f"PostgreSQL migrations directory is missing: {_MIGRATIONS}")
         migrations = []
@@ -168,26 +308,34 @@ class PostgresStore(Store):
                 migrations.append((int(prefix), path))
         if not migrations or migrations[0][0] != 1:
             raise RuntimeError("PostgreSQL migration 001_initial_postgres.sql is required")
+
+        # Production must execute DDL through the separate owner credential. The runtime
+        # connection is deliberately never used for schema creation or migrations.
+        connection = self.migration_connection or self.connection
         with self.lock:
+            _ensure_migration_schema_access(connection)
             for version, migration in migrations:
-                with self.connection.transaction():
-                    self.connection.execute(
+                with connection.transaction():
+                    connection.execute(
+                        "SET search_path TO genomeguard_runtime, public"
+                    )
+                    connection.execute(
                         "CREATE TABLE IF NOT EXISTS schema_migrations "
                         "(version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
                     )
-                    applied = self.connection.execute(
+                    applied = connection.execute(
                         "SELECT version FROM schema_migrations WHERE version=%s", (version,)
                     ).fetchone()
                     if applied:
                         continue
-                    sql = "\n".join(
+                    sql = "\\n".join(
                         line for line in migration.read_text(encoding="utf-8").splitlines()
                         if not line.lstrip().startswith("--")
                     )
-                    for statement in sql.split(";"):
-                        if statement.strip():
-                            self.connection.execute(statement)
-                    self.connection.execute(
+                    # Psycopg's simple-query protocol accepts the full migration script,
+                    # preserving semicolons inside PL/pgSQL dollar-quoted function bodies.
+                    connection.execute(sql, prepare=False)
+                    connection.execute(
                         "INSERT INTO schema_migrations(version) VALUES (%s)", (version,)
                     )
 
@@ -398,16 +546,40 @@ class PostgresStore(Store):
 
     @contextmanager
     def transaction(self):
-        """Atomic unit of work; nested store calls use savepoints and do not commit early."""
+        """Atomic unit of work; nested store calls use savepoints and do not commit early.
+
+        A provider can close an idle SSL session after _ensure_connection() checks it but
+        before psycopg starts the transaction. Retry that pre-yield setup failure once on a
+        fresh connection. Never replay a transaction after yielding to application code:
+        the caller may already have performed writes whose commit outcome is unknown.
+        """
         with self.lock:
             self._ensure_connection()
+            outermost = self._transaction_depth == 0
             self._transaction_depth += 1
+            yielded = False
             try:
-                with self.connection.transaction():
-                    # Serialize mutation units across instances. This conservative lock prevents
-                    # concurrent requests from racing the privacy-budget read/charge sequence.
-                    self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
-                    yield
+                try:
+                    with self.connection.transaction():
+                        # Serialize mutation units across instances. This conservative lock prevents
+                        # concurrent requests from racing the privacy-budget read/charge sequence.
+                        self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
+                        yielded = True
+                        yield
+                except psycopg.OperationalError:
+                    # The failure happened before application code ran, so no caller writes
+                    # could have been partially applied. Retry only at the outermost boundary.
+                    if yielded or not outermost:
+                        raise
+                    self._transaction_depth -= 1
+                    try:
+                        self.connection.close()
+                        self._ensure_connection()
+                    finally:
+                        self._transaction_depth += 1
+                    with self.connection.transaction():
+                        self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
+                        yield
             finally:
                 self._transaction_depth -= 1
 
@@ -438,6 +610,168 @@ class PostgresStore(Store):
                     (idx, stamp, actor, action, json.dumps(safe_payload), previous, entry["hash"]),
                 )
                 return entry
+
+    def assert_least_privilege_runtime(self) -> None:
+        """Fail closed if the connected application principal can bypass tenant controls."""
+        row = self.connection.execute(
+            "SELECT current_user AS role, r.rolsuper, r.rolbypassrls, r.rolcreatedb, "
+            "r.rolcreaterole, "
+            "has_database_privilege(current_user,current_database(),'CREATE') AS database_create, "
+            "has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS runtime_create, "
+            "has_schema_privilege(current_user,'genomeguard','CREATE') AS reference_create, "
+            "EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "WHERE n.nspname IN ('genomeguard_runtime','genomeguard') "
+            "AND c.relkind IN ('r','p') AND c.relowner=(SELECT oid FROM pg_roles "
+            "WHERE rolname=current_user)) AS owns_application_tables, "
+            "COALESCE((SELECT pg_has_role(current_user, oid, 'MEMBER') FROM pg_roles "
+            "WHERE rolname='genomeguard_owner'), false) AS owner_member, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requests','TRUNCATE') "
+            "AS requests_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.decisions','TRUNCATE') "
+            "AS decisions_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','TRUNCATE') "
+            "AS donors_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','TRUNCATE') "
+            "AS variants_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','TRUNCATE') "
+            "AS relationships_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','TRUNCATE') "
+            "AS metadata_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','TRUNCATE') "
+            "AS genotypes_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.epsilon_ledger','TRUNCATE') "
+            "AS ledger_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','TRUNCATE') "
+            "AS alerts_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') "
+            "AS consent_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requesters','TRUNCATE') "
+            "AS requesters_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.identity_bindings','TRUNCATE') "
+            "AS bindings_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','UPDATE') "
+            "AS audit_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','DELETE') "
+            "AS audit_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.audit_log','TRUNCATE') "
+            "AS audit_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','INSERT') "
+            "AS migrations_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','UPDATE') "
+            "AS migrations_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','DELETE') "
+            "AS migrations_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','TRUNCATE') "
+            "AS migrations_truncate, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','UPDATE') "
+            "AS consent_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','DELETE') "
+            "AS consent_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','INSERT') AS donors_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','UPDATE') AS donors_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donors','DELETE') AS donors_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donor_access','UPDATE') AS donor_access_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.donor_access','DELETE') AS donor_access_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','INSERT') AS variants_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','UPDATE') AS variants_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.variants','DELETE') AS variants_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','INSERT') AS genotypes_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','UPDATE') AS genotypes_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.genotypes','DELETE') AS genotypes_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','INSERT') AS relationships_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','UPDATE') AS relationships_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.relationships','DELETE') AS relationships_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','INSERT') AS metadata_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','UPDATE') AS metadata_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.cohort_metadata','DELETE') AS metadata_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','UPDATE') AS alerts_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.alerts','DELETE') AS alerts_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requesters','DELETE') AS requesters_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.requests','DELETE') AS requests_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.decisions','DELETE') AS decisions_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.epsilon_ledger','DELETE') AS ledger_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.identity_bindings','DELETE') AS bindings_delete, "
+            "COALESCE((SELECT c.relrowsecurity AND c.relforcerowsecurity FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='genomeguard_runtime' "
+            "AND c.relname='donors'), false) AS donors_rls_forced, "
+            "EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='genomeguard_runtime' "
+            "AND tablename='donors' AND policyname='donors_admin_update' AND cmd='UPDATE') "
+            "AS donors_admin_policy, "
+            "COALESCE((SELECT c.relrowsecurity AND c.relforcerowsecurity FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='genomeguard_runtime' "
+            "AND c.relname='donor_access'), false) AS donor_access_rls_forced, "
+            "EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='genomeguard_runtime' "
+            "AND tablename='donor_access' AND policyname='donor_access_scoped_insert' AND cmd='INSERT') "
+            "AS donor_access_insert_policy, "
+            "COALESCE((SELECT count(*)=4 FROM pg_class c JOIN pg_namespace n "
+            "ON n.oid=c.relnamespace WHERE n.nspname='genomeguard_runtime' "
+            "AND c.relname IN ('genotypes','variants','relationships','cohort_metadata') "
+            "AND c.relrowsecurity AND c.relforcerowsecurity), false) AS cohort_rls_forced, "
+            "COALESCE((SELECT count(*)=6 FROM information_schema.columns "
+            "WHERE table_schema='genomeguard_runtime' AND table_name IN "
+            "('donors','genotypes','variants','relationships','cohort_metadata','donor_access') "
+            "AND column_name='organization_id'), false) AS cohort_org_columns, "
+            "COALESCE((SELECT count(*)=4 FROM pg_policies WHERE schemaname='genomeguard_runtime' "
+            "AND policyname IN ('genotypes_organization_read','variants_organization_read',"
+            "'relationships_organization_read','cohort_metadata_organization_read') "
+            "AND cmd='SELECT'), false) AS cohort_read_policies "
+            "FROM pg_roles r WHERE r.rolname=current_user"
+        ).fetchone()
+        if not row:
+            raise RuntimeError("could not inspect the PostgreSQL runtime principal")
+        unsafe = (
+            row["role"] == "genomeguard_owner" or row["rolsuper"] or row["rolbypassrls"]
+            or row["rolcreatedb"] or row["rolcreaterole"] or row["database_create"]
+            or row["runtime_create"] or row["reference_create"] or row["owns_application_tables"]
+            or row["owner_member"]
+            or row["requests_truncate"] or row["decisions_truncate"] or row["donors_truncate"]
+            or row["variants_truncate"] or row["relationships_truncate"] or row["metadata_truncate"]
+            or row["genotypes_truncate"] or row["ledger_truncate"] or row["alerts_truncate"]
+            or row["consent_truncate"] or row["requesters_truncate"] or row["bindings_truncate"]
+            or row["audit_update"] or row["audit_delete"] or row["audit_truncate"]
+            or row["migrations_insert"] or row["migrations_update"]
+            or row["migrations_delete"] or row["migrations_truncate"]
+            or row["consent_update"] or row["consent_delete"]
+            or row["donors_insert"] or row["donors_delete"]
+            or row["donor_access_update"] or row["donor_access_delete"]
+            or row["variants_insert"] or row["variants_update"] or row["variants_delete"]
+            or row["genotypes_insert"] or row["genotypes_update"] or row["genotypes_delete"]
+            or row["relationships_insert"] or row["relationships_update"] or row["relationships_delete"]
+            or row["metadata_insert"] or row["metadata_update"] or row["metadata_delete"]
+            or row["alerts_update"] or row["alerts_delete"]
+            or row["requesters_delete"] or row["requests_delete"] or row["decisions_delete"]
+            or row["ledger_delete"] or row["bindings_delete"]
+            or not row["donors_rls_forced"] or not row["donors_admin_policy"]
+            or not row["donor_access_rls_forced"] or not row["donor_access_insert_policy"]
+            or not row["cohort_rls_forced"] or not row["cohort_org_columns"]
+            or not row["cohort_read_policies"]
+        )
+        if unsafe:
+            raise RuntimeError(
+                "PostgreSQL runtime principal is over-privileged; use genomeguard_runtime "
+                "with no BYPASSRLS, schema CREATE, table TRUNCATE, audit mutation, "
+                "or migration-ledger write privileges"
+            )
+
+    def set_tenant(self, organization_id: str) -> None:
+        """Set transaction-local tenant context after OIDC binding validation."""
+        if not organization_id or self._transaction_depth < 1:
+            raise RuntimeError("tenant context requires an active transaction and organization ID")
+        self.connection.execute(
+            "SELECT set_config('gg.organization_id', %s, true)", (organization_id,),
+        )
+
+    def set_admin_access(self) -> None:
+        """Enable cross-tenant RLS access only inside an already-authenticated admin request."""
+        if self._transaction_depth < 1:
+            raise RuntimeError("admin context requires an active transaction")
+        self.connection.execute("SELECT set_config('gg.admin_access', 'on', true)")
+
+    def set_allow_unscoped_demo(self) -> None:
+        """Allow unscoped legacy API keys only in the synthetic demo transaction."""
+        if self._transaction_depth < 1:
+            raise RuntimeError("demo context requires an active transaction")
+        self.connection.execute("SELECT set_config('gg.allow_unscoped_demo', 'on', true)")
 
     def close(self) -> None:
         with self.lock:

@@ -1,11 +1,16 @@
 // Tiny API client. Credentials are deliberately kept in tab memory only.
 // Never read or write API keys to localStorage, sessionStorage, URLs, or logs.
 // Donors use their own X-Donor-Key and are also kept in memory only.
+import { beginOidcLogin, completeOidcCallback } from "./oidc.js";
 
 // Defer any remembered identity until the server confirms demo mode.
-export const state = { who: "", adminKey: "", demo: null, health: null, readiness: null, bootError: "", me: null, donors: [], donor: null };
+export const state = {
+  who: "", adminKey: "", demo: null, health: null, readiness: null, bootError: "",
+  me: null, donors: [], donor: null, oidc: null, oidcError: "", accessToken: "",
+};
 
-export const isSteward = () => state.who === "steward";
+export const isSteward = () => state.who === "steward"
+  || ["reviewer", "steward", "admin"].includes(state.me?.role);
 
 export function setWho(v) {
   state.who = v;
@@ -55,6 +60,7 @@ async function call(path, {
 }
 
 function authHeaders() {
+  if (state.accessToken) return { Authorization: "Bearer " + state.accessToken };
   if (isSteward()) {
     if (state.demo?.admin_key) return { "X-Admin-Key": state.demo.admin_key };
     if (state.adminKey) return { "X-Admin-Key": state.adminKey };
@@ -86,7 +92,8 @@ export function uploadVcfQc(file, assembly, expectedSha256, signal) {
 
 // steward-level call regardless of who the app is acting as (admin key from the demo accounts)
 export function stewardApi(path, opts = {}) {
-  const headers = state.demo?.admin_key ? { "X-Admin-Key": state.demo.admin_key } :
+  const headers = state.accessToken ? { Authorization: "Bearer " + state.accessToken } :
+    state.demo?.admin_key ? { "X-Admin-Key": state.demo.admin_key } :
     state.adminKey ? { "X-Admin-Key": state.adminKey } : {};
   return call(path, { ...opts, headers });
 }
@@ -114,6 +121,25 @@ export async function connectKey(kind, key) {
 
 export function disconnectKey() {
   state.adminKey = "";
+  state.accessToken = "";
+  state.me = null;
+  setWho("");
+}
+
+export async function signInWithInstitution() {
+  state.oidcError = "";
+  try {
+    await beginOidcLogin(state.oidc);
+  } catch (error) {
+    state.oidcError = error?.message || "Institutional sign-in could not start.";
+    throw error;
+  }
+}
+
+export function signOutInstitution() {
+  state.accessToken = "";
+  state.me = null;
+  state.oidcError = "";
   setWho("");
 }
 
@@ -130,14 +156,47 @@ export async function boot() {
   state.readiness = ready.data || h.data?.readiness || { ready: false, checks: {} };
   state.demo = null;
   state.donors = [];
-  if (!h.ok || !h.data?.demo_mode) {
-    // Never call demo-only endpoints or reuse a demo key in real-data mode.
+  if (!h.ok) return;
+  if (!h.data?.demo_mode) {
+    // Production uses institutional OIDC; demo personas and API keys are never reused.
     state.who = "";
     state.adminKey = "";
-    try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
     state.donor = null;
+    try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
+    const config = await call("/auth/oidc");
+    state.oidc = config.ok ? config.data : null;
+    if (!state.oidc?.enabled) {
+      state.accessToken = "";
+      state.me = null;
+      return;
+    }
+    try {
+      const token = await completeOidcCallback(state.oidc);
+      if (token) state.accessToken = token;
+      if (state.accessToken) {
+        const profile = await call("/me", {
+          headers: { Authorization: "Bearer " + state.accessToken },
+        });
+        if (profile.ok) {
+          state.me = profile.data;
+          state.oidcError = "";
+        } else {
+          state.accessToken = "";
+          state.me = null;
+          state.oidcError = profile.data?.message || "Your institutional session is not authorized.";
+        }
+      }
+    } catch (error) {
+      state.accessToken = "";
+      state.me = null;
+      state.oidcError = error?.message || "Institutional sign-in failed.";
+    }
     return;
   }
+  state.oidc = null;
+  state.oidcError = "";
+  state.accessToken = "";
+  state.me = null;
   const [d, dn] = await Promise.all([call("/demo/requesters"), call("/demo/donors")]);
   state.demo = d.ok ? d.data : null;
   state.donors = dn.ok ? dn.data.donors : [];

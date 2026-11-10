@@ -19,6 +19,7 @@ What it does NOT give you (say this plainly):
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -189,6 +190,80 @@ class AuditChain:
         digest = hashlib.sha256(canonical_json(body).encode("ascii")).hexdigest()
         body["checkpoint_digest"] = digest
         return body
+
+    def signed_checkpoint(self, private_key: bytes, key_id: str) -> dict:
+        """Sign the audit head with an externally held Ed25519 key.
+
+        Callers should obtain the private key from an HSM/KMS or offline signing host. This
+        method never persists private key material and does not make an in-process key a
+        substitute for independent custody.
+        """
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        if not isinstance(private_key, bytes) or len(private_key) != 32:
+            raise ValueError("Ed25519 private key must be exactly 32 raw bytes")
+        if not isinstance(key_id, str) or not key_id.strip() or len(key_id) > 128:
+            raise ValueError("key_id must contain 1 to 128 characters")
+        head = self.head()
+        body = {
+            "version": "2.0",
+            "length": head["length"],
+            "head_hash": head["head_hash"],
+            "timestamp": datetime.now(UTC).isoformat(timespec="microseconds"),
+            "key_id": key_id,
+            "signature_algorithm": "Ed25519",
+        }
+        signature = Ed25519PrivateKey.from_private_bytes(private_key).sign(
+            canonical_json(body).encode("ascii")
+        )
+        return {
+            **body,
+            "signature": base64.urlsafe_b64encode(signature).decode("ascii").rstrip("="),
+        }
+
+    def verify_signed_checkpoint(self, checkpoint: dict, public_key: bytes) -> dict:
+        """Verify an Ed25519 signature and the signed audit prefix."""
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        if not isinstance(public_key, bytes) or len(public_key) != 32:
+            return {"valid": False, "reason": "invalid_public_key"}
+        if not isinstance(checkpoint, dict):
+            return {"valid": False, "reason": "malformed_checkpoint"}
+        try:
+            signature_text = checkpoint["signature"]
+            body = {k: v for k, v in checkpoint.items() if k != "signature"}
+            if (
+                body.get("version") != "2.0"
+                or body.get("signature_algorithm") != "Ed25519"
+                or not isinstance(body.get("key_id"), str)
+                or not body["key_id"]
+                or isinstance(body.get("length"), bool)
+                or not isinstance(body.get("length"), int)
+                or body["length"] < 0
+                or not isinstance(body.get("head_hash"), str)
+                or len(body["head_hash"]) != 64
+                or not isinstance(body.get("timestamp"), str)
+                or not isinstance(signature_text, str)
+            ):
+                return {"valid": False, "reason": "malformed_checkpoint"}
+            signature = base64.urlsafe_b64decode(
+                signature_text + "=" * (-len(signature_text) % 4)
+            )
+            Ed25519PublicKey.from_public_bytes(public_key).verify(
+                signature, canonical_json(body).encode("ascii")
+            )
+        except (KeyError, TypeError, ValueError, InvalidSignature):
+            return {"valid": False, "reason": "signature_invalid"}
+        chain = self.verify(anchor={
+            "length": body["length"], "head_hash": body["head_hash"],
+        })
+        return {
+            "valid": chain["ok"],
+            "key_id": body["key_id"],
+            "checkpoint": checkpoint,
+            "chain_verification": chain,
+        }
 
     def verify_checkpoint(self, checkpoint: dict) -> dict:
         """Verify checkpoint structure, its unkeyed digest, and the anchored audit prefix."""

@@ -242,3 +242,40 @@ def test_checkpoint_is_an_unsigned_integrity_envelope_not_a_signature():
     assert "signature" not in checkpoint
     assert "signature_algorithm" not in checkpoint
     assert chain.verify_checkpoint(checkpoint)["valid"] is True
+
+
+
+def test_ed25519_checkpoint_signature_authenticates_external_audit_head():
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    chain = make_chain(4)
+    private = Ed25519PrivateKey.generate()
+    private_bytes = private.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_bytes = private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+
+    checkpoint = chain.signed_checkpoint(private_bytes, "offline-audit-key-2026")
+    verified = chain.verify_signed_checkpoint(checkpoint, public_bytes)
+    assert verified["valid"] is True
+    assert verified["key_id"] == "offline-audit-key-2026"
+
+    tampered = dict(checkpoint, head_hash="f" * 64)
+    assert chain.verify_signed_checkpoint(tampered, public_bytes)["reason"] == "signature_invalid"
+    assert chain.verify_signed_checkpoint(checkpoint, b"x" * 32)["valid"] is False
+
+
+def test_ed25519_checkpoint_rejects_invalid_private_key_and_key_id():
+    chain = make_chain(1)
+    import pytest
+
+    with pytest.raises(ValueError, match="32 raw bytes"):
+        chain.signed_checkpoint(b"short", "audit-key")
+    with pytest.raises(ValueError, match="key_id"):
+        chain.signed_checkpoint(b"x" * 32, "")

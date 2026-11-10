@@ -2,12 +2,12 @@ name: Dependency security audit
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/institutional-production-controls]
     paths:
       - "pyproject.toml"
       - ".github/workflows/security-audit.yml"
   pull_request:
-    branches: [main]
+    branches: [main, feat/remove-supabase-runtime]
     paths:
       - "pyproject.toml"
       - ".github/workflows/security-audit.yml"

@@ -2,126 +2,61 @@
 
 ## Scope and safety boundary
 
-GenomeGuard now has an opt-in PostgreSQL storage adapter. Set `GG_DATABASE_URL` to select it;
-when unset, local demo/test environments continue to use SQLite. The adapter runs the versioned
-schema in `backend/migrations/001_initial_postgres.sql`, parameterizes SQL, uses database
-constraints for request/decision relationships, and serializes audit sequence allocation with a
-transaction-scoped PostgreSQL advisory lock.
+Non-demo deployments use a dedicated PostgreSQL database. The production-controls branch separates the ordinary application role from the migration owner:
 
-**This code change does not provision a database, change the Render plan, prove backups are enabled,
-or make the public service production-ready.** Do not point it at another application's database.
-Use a dedicated database and least-privilege credentials. Never commit the connection URL.
+- `GG_DATABASE_URL`: restricted runtime URL. It must not own application tables, be superuser, have BYPASSRLS, or have CREATE on GenomeGuard schemas.
+- `GG_MIGRATION_DATABASE_URL`: separate owner URL used only while applying numbered migrations. The migration connection is closed and the variable is removed from process configuration after successful startup migration.
+
+Never expose either URL to a browser, commit either secret, or reuse another application's database. See [institutional production controls](institutional-production-controls.md) for OIDC, tenant RLS, consent and audit requirements.
 
 ## Configure a dedicated database
 
-1. Create a dedicated PostgreSQL database in the hosting provider's dashboard, in the same region
-   as the application where possible. Choose a plan with supported backups and recovery; do not use
-   Render's expiring Free Postgres for durable production data.
-2. Configure `GG_DATABASE_URL` as a secret environment variable for the GenomeGuard service.
-   Prefer the provider's private connection string. Require TLS when connecting across an untrusted
-   network.
-3. Deploy to an isolated staging service first. Confirm the application logs show successful
-   migration and that `GET /health` succeeds.
-4. Submit a request using a provisioned test identity, read it back, restart/redeploy staging, and
-   verify request, decision, privacy-ledger, requester, and audit rows remain present.
-5. Keep `/health/ready` fail-closed until identity, authorization, external audit anchoring,
-   backup/restore and the other production gates are independently verified.
+1. Provision a dedicated managed PostgreSQL project with an approved retention, backup and recovery plan.
+2. Create a database owner/migration principal and a separate runtime principal with only required DML on the GenomeGuard schemas. The runtime principal must not have BYPASSRLS, superuser, schema CREATE or ownership privileges.
+3. Configure the two URLs as separate server-side secrets.
+4. Deploy to isolated synthetic staging. Verify migrations, RLS, cross-tenant denial, concurrent writes, audit ordering, consent-ledger immutability, restart persistence and API/UI behavior against the exact deployed SHA.
+5. Keep readiness fail-closed until identity, consent, audit anchoring, recovery and other production gates are independently verified.
 
-The initial migration is applied once and recorded in `schema_migrations`. Back up before future
-schema changes. Schema migrations should be additive where practical and must be reviewed against
-the current database before deployment.
+The numbered migrations are applied once and recorded in `schema_migrations`. The migration runner executes complete SQL scripts with PostgreSQL's simple-query protocol so dollar-quoted trigger/function bodies are not corrupted by semicolon splitting.
 
+## Tenant RLS
+
+Migrations 003 and 005 add OIDC identity bindings, organization IDs and forced RLS on requests, decisions, epsilon-ledger and alerts. The API sets transaction-local organization scope only after verifying an OIDC token and resolving the exact active binding. Admin routes use a separate context after authenticating a reviewer/steward. A missing context sees no tenant rows. The synthetic demo compatibility scope is permitted only when demo mode is enabled.
+
+The Render staging service has **not yet been switched** to the new credentials. The intended provider-managed principals are `genomeguard_app_runtime` for application traffic and `genomeguard_owner` for migrations. Migration 007 transfers schema and application-object ownership to the migration principal, verifies the application role is not privileged or a member of the owner role, grants only required DML/sequence access, and revokes schema CREATE and TRUNCATE. Migration 009 removes audit-log mutation privileges. The application role must pass `PostgresStore.assert_least_privilege_runtime` before deployment is accepted.
 
 ## Migrating existing SQLite records
 
-Use this only for an offline migration to a dedicated empty PostgreSQL database. Stop the app first,
-make a consistent copy of the SQLite file, and preserve the exact existing `GG_MASTER_KEY`. The
-migration copies cohort metadata, encrypted genotype blobs, requesters, requests, decisions,
-privacy-budget ledger, audit events, donor-access ledger, alerts, and relationship/variant records.
-It refuses a source with an invalid audit chain and a target with any application rows.
+Use only for an offline migration to a dedicated empty PostgreSQL database. Stop the app, make a consistent copy of SQLite, preserve the exact existing `GG_MASTER_KEY`, and verify the audit chain before cutover.
 
 ```bash
 PYTHONPATH=backend python scripts/migrate_sqlite_to_postgres.py \
   --sqlite /path/to/stopped-service-snapshot.sqlite3
 ```
 
-The script reads `GG_DATABASE_URL` from the environment unless `--database-url` is passed. Do not
-perform the cutover until the row counts, audit verification, restored service behavior, and a
-backup/restore drill have been independently reviewed. This is a one-time copy, not ongoing
-replication or a zero-downtime migration.
+The script refuses an invalid source audit chain or a non-empty target. This is a one-time copy, not ongoing replication or zero-downtime migration.
 
-## Backup and restore policy
+## Backups, PITR and recovery
 
-Recommended starting policy for a dedicated production deployment:
+Recommended production baseline, subject to institutional retention policy:
+- Daily encrypted logical backup to separately controlled storage.
+- 35-day daily and 12-month monthly recovery points, unless the approved retention schedule requires otherwise.
+- Provider PITR with a documented retention window and RPO/RTO targets, verified by recurring restore drills.
+- Backup encryption keys and deletion permissions held separately from application credentials.
+- Recovery drills on isolated databases with authorized synthetic/test fixtures only.
 
-- Daily encrypted logical backup to a separately controlled storage account.
-- Retain daily backups for 35 days and monthly recovery points for 12 months, subject to approved
-  legal, privacy, data-subject, and institutional retention requirements.
-- Enable provider point-in-time recovery where available; target a recovery point objective (RPO)
-  of 24 hours or better and a recovery time objective (RTO) of 4 hours or better, then validate
-  these targets with drills.
-- Restrict backup access separately from application credentials. Encrypt backup objects, audit
-  reads/deletions, and test key recovery.
-- Never include private genomic records in issue reports or CI artifacts. Use an isolated database
-  containing authorized test fixtures for restore drills.
+A provider restore drill was completed on the synthetic staging project: a manual snapshot was restored into a separate Neon branch; donor, variant, genotype, audit-row counts and hash-link continuity were checked. The restore branch is retained as evidence. This is not a production recovery drill.
 
-No retention schedule or backup job is automatically enabled by this repository. Operators must
-configure, monitor, and evidence it. The script
-`scripts/postgres_backup_restore_check.sh` streams a custom-format logical backup through `age`
-so plaintext is not written to disk, then restores it into a separately provisioned **empty**
-verification database. It compares the resolved server/database identity (not only URL strings),
-refuses a non-empty target before restoring, and checks the `genomeguard_runtime` schema actually
-used by `PostgresStore`.
+The staging Neon project is on Free v3: history retention is 6 hours and no scheduled snapshot policy is configured. Neon documents that Free projects default to 6-hour history and scheduled snapshots require an eligible paid plan. Do not claim a 30-day PITR window or automated snapshots for this project. Production needs an approved plan and configured recovery policy.
 
-## Manual verification
+The CI backup/restore test uses a disposable PostgreSQL database and encrypted temporary dump; it does not prove provider-level backups, offsite retention, key custody, PITR or production RPO/RTO.
 
-Install PostgreSQL client tools compatible with the server version, then set these secret values in
-your shell (do not paste them into tickets or commit them):
+## Manual encrypted logical backup verification
 
-- `GG_DATABASE_URL`: source database connection URL.
-- `GG_RESTORE_TEST_URL`: connection URL for a dedicated empty restore-test database.
-- `GG_BACKUP_AGE_RECIPIENT`: age public recipient used to encrypt the temporary backup.
-- `GG_BACKUP_AGE_IDENTITY_FILE`: readable path to the matching age identity file.
-
-Run:
+Set `GG_DATABASE_URL`, `GG_RESTORE_TEST_URL`, `GG_BACKUP_AGE_RECIPIENT`, and `GG_BACKUP_AGE_IDENTITY_FILE` in a trusted operator shell, then run:
 
 ```bash
 bash scripts/postgres_backup_restore_check.sh
 ```
 
-The script verifies the restored runtime schema, native migration version, core row counts, and
-audit index continuity. Its temporary backup is encrypted at rest with `age`, but the drill does
-not certify offsite retention, provider PITR, key escrow, or that the full application audit hash
-chain verifies. Run the application audit verifier against the restored database as a separate
-recovery acceptance step. The script's target database must be disposable and empty. Run the application audit verifier against
-the restored database as a separate recovery acceptance step.
-
-## Concurrency and audit semantics
-
-The PostgreSQL audit append path takes a transaction-scoped advisory lock before allocating the
-next sequence number and inserts the hash-linked entry in the same transaction. The primary key on
-`audit_log.idx` is a second guard against duplicate sequence numbers. A failed audit insert must
-surface as a failed operation; it must not be swallowed and reported as a successful decision.
-
-The service now wraps request submission, review, requester provisioning, consent changes, withdrawal,
-and account freeze/unfreeze in a PostgreSQL unit of work. The adapter uses a transaction-scoped
-advisory lock to serialize these mutation units across instances; this is deliberately conservative
-and may limit write throughput. Integration tests exercise transaction rollback. The exact deployed
-release must pass the full PostgreSQL integration suite before this can be treated as verified.
-External audit anchoring and production restore drills remain separate release gates.
-
-## Still required before private/controlled genomic data
-
-- Institution-selected OIDC issuer, client registration, redirect URI, claim mapping, MFA and
-  account deprovisioning policy; use Authorization Code flow with PKCE and server-side sessions.
-- Tenant/institution membership and server-enforced role/ownership policies, with database-level
-  isolation where appropriate.
-- Authorized, source-matched consent data and revocation handling; public-release dataset terms are
-  not individual consent.
-- Independently controlled audit anchoring and alerting.
-- Verified production backup schedule, offsite retention, clean restore drill and restart/deploy test.
-- Human screen-reader review, threat-model review and independent security/privacy assessment.
-
-See [Render's backup and recovery documentation](https://render.com/docs/postgresql-backups),
-[Render's free service limitations](https://render.com/docs/free), [Keycloak OIDC guidance](https://www.keycloak.org/securing-apps/oidc-layers),
-and [OWASP ASVS 5.0.0](https://asvs.owasp.org/).
+The script refuses a non-empty restore target, verifies server/database identity, checks the `genomeguard_runtime` schema and verifies the restored audit chain.
