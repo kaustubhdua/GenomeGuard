@@ -95,6 +95,36 @@ def test_postgres_concurrent_audit_appends_have_unique_contiguous_sequence(pg_st
     assert [entry["idx"] for entry in audit.entries()] == list(range(1, 101))
 
 
+
+def test_postgres_synthetic_cohort_seed_round_trips_with_tenant_columns(pg_store):
+    from app.data.synth import generate
+
+    master = b"g" * 32
+    cohort = generate(
+        n_donors=12, n_variants=24, n_populations=2, n_families=3,
+        seed=17, n_planted=2, rare_maf=0.01,
+    )
+    pg_store.save_cohort(
+        cohort, master, "integration-synthetic",
+        metadata={"source": "integration test synthetic generator",
+                  "genotypes_real": False, "consent_simulated": True},
+    )
+    loaded = pg_store.load_dataset(master, "integration-synthetic")
+    assert loaded.genotypes.shape == (12, 24)
+    assert len(loaded.donors) == 12
+    assert len(loaded.variants) == 24
+    assert pg_store.one(
+        "SELECT organization_id FROM donors ORDER BY id LIMIT 1"
+    )["organization_id"] is None
+    assert pg_store.one(
+        "SELECT organization_id FROM genotypes LIMIT 1"
+    )["organization_id"] is None
+    assert pg_store.one(
+        "SELECT dataset_id FROM cohort_metadata WHERE id=1"
+    )["dataset_id"] == "integration-synthetic"
+
+
+
 def test_postgres_store_survives_connection_reopen(pg_store):
     url = os.environ["GG_TEST_DATABASE_URL"]
     requester_id = pg_store.add_requester(
