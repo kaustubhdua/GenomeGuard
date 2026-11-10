@@ -172,6 +172,9 @@ def test_review_endpoint_requires_admin_and_works():
     def assert_store_lock_released(stage):
         # TestClient dispatches sync handlers through AnyIO worker threads. A lock
         # accidentally retained by a completed request deadlocks the next admin call.
+        assert not svc.store.lock._is_owned(), (
+            f"test thread already owns store lock after {stage}: {svc.store.lock!r}"
+        )
         acquired = svc.store.lock.acquire(blocking=False)
         assert acquired, f"store lock leaked after {stage}: {svc.store.lock!r}"
         svc.store.lock.release()
