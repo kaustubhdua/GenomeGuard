@@ -279,14 +279,35 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 "organization_id": identity.organization_id,
                 "issuer": identity.issuer,
                 "subject": identity.subject,
+                "global": False,
             }
+            path = request.url.path
+            global_only = (
+                path == "/audit" or path.startswith("/audit/")
+                or path.startswith("/reports/compliance")
+                or path in {"/admin/consent-events", "/admin/dataset-qc", "/admin/requesters"}
+            )
+            if global_only:
+                raise ServiceError(
+                    403, "global_steward_access_required",
+                    "this operation requires the separately controlled global administrator credential",
+                )
+            if scoped_principal["role"] == "reviewer" and (
+                path.endswith("/release") or path.endswith("/copilot")
+                or path.endswith("/exposure") or path == "/admin/vcf-qc"
+                or path.startswith("/admin/oidc-bindings")
+            ):
+                raise ServiceError(
+                    403, "steward_role_required",
+                    "this operation requires an organization steward role",
+                )
             request.state.admin_principal = scoped_principal
             return scoped_principal
         if settings.oidc_admin_required:
             raise ServiceError(401, "unauthorized", "institutional reviewer bearer token required")
         if not S().is_admin(request.headers.get("x-admin-key")):
             raise ServiceError(401, "unauthorized", "admin key required (X-Admin-Key)")
-        global_principal = {"role": "admin", "organization_id": None}
+        global_principal = {"role": "admin", "organization_id": None, "global": True}
         request.state.admin_principal = global_principal
         return global_principal
 
@@ -498,6 +519,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(422, "invalid_request", "subject must contain 1 to 255 characters")
         if organization_id not in settings.oidc_allowed_organizations:
             raise ServiceError(403, "organization_not_allowed", "organization is not enabled")
+        reviewer_scope = request.state.admin_principal.get("organization_id")
+        if reviewer_scope and organization_id != reviewer_scope:
+            raise ServiceError(
+                403, "cross_organization_binding_forbidden",
+                "an organization-scoped reviewer may only revoke identities in their own organization",
+            )
         S().revoke_oidc_identity(settings.oidc_issuer, subject, organization_id)
         return _j({"revoked": True, "organization_id": organization_id})
 
