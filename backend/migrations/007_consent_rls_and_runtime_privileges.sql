@@ -85,6 +85,10 @@ BEGIN
         RAISE EXCEPTION
           'genomeguard_app_runtime must not inherit genomeguard_owner privileges';
       END IF;
+      EXECUTE 'GRANT USAGE ON SCHEMA genomeguard_runtime, genomeguard TO genomeguard_app_runtime';
+      EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_app_runtime';
+      EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO genomeguard_app_runtime';
+      EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard TO genomeguard_app_runtime';
       EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_app_runtime';
       EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_app_runtime';
       EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_app_runtime';
