@@ -109,6 +109,7 @@ The service applies a deterministic request pipeline: request validation, policy
 - [Hosted deployment and operational limitations](docs/production-deployment.md)
 - [PostgreSQL operations, backups, and recovery](docs/postgresql-operations.md)
 - [Release readiness and database validation evidence](docs/release-readiness-2026-11-10.md)
+- [Five-minute hackathon demo and submission guide](docs/hackathon-demo-guide.md)
 - [Evidence-based completion audit (26 October 2026)](docs/completion-audit-2026-10-26.md)
 - [Production assurance implementation status](docs/production-assurance-implementation-2026-10-26.md)
 - [OWASP ASVS verification register](docs/asvs-verification.md)
