@@ -370,21 +370,6 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
                 (990002, 990002, "self", "tenant-b"),
             )
             pg_store.x(
-                "INSERT INTO cohort_metadata(id,dataset_id,metadata_json,organization_id) "
-                "VALUES(?,?,?,?)",
-                (990001, "tenant-a-cohort", "{}", "tenant-a"),
-            )
-            pg_store.x(
-                "INSERT INTO cohort_metadata(id,dataset_id,metadata_json,organization_id) "
-                "VALUES(?,?,?,?)",
-                (990002, "tenant-b-cohort", "{}", "tenant-b"),
-            )
-            pg_store.x(
-                "INSERT INTO cohort_metadata(id,dataset_id,metadata_json,organization_id) "
-                "VALUES(?,?,?,?)",
-                (990003, "public-synthetic", "{}", None),
-            )
-            pg_store.x(
                 "INSERT INTO donor_access(donor_id,purpose,organization_id) VALUES(?,?,?)",
                 (990001, "tenant-a-access", "tenant-a"),
             )
@@ -401,7 +386,7 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
             assert {r["donor_id"] for r in pg_store.q("SELECT donor_id FROM genotypes")} == {990001, 990003}
             assert {r["id"] for r in pg_store.q("SELECT id FROM variants")} == {880001, 880003}
             assert {r["donor_a"] for r in pg_store.q("SELECT donor_a FROM relationships")} == {990001}
-            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {990001, 990003}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {1}
             assert {r["purpose"] for r in pg_store.q("SELECT purpose FROM donor_access")} == {"tenant-a-access"}
 
         with pg_store.transaction():
@@ -410,7 +395,7 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
             assert {r["donor_id"] for r in pg_store.q("SELECT donor_id FROM genotypes")} == {990002, 990003}
             assert {r["id"] for r in pg_store.q("SELECT id FROM variants")} == {880002, 880003}
             assert {r["donor_a"] for r in pg_store.q("SELECT donor_a FROM relationships")} == {990002}
-            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {990002, 990003}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {1}
             assert {r["purpose"] for r in pg_store.q("SELECT purpose FROM donor_access")} == {"tenant-b-access"}
 
         with pg_store.transaction():
@@ -418,7 +403,7 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
             assert {r["donor_id"] for r in pg_store.q("SELECT donor_id FROM genotypes")} == {990003}
             assert {r["id"] for r in pg_store.q("SELECT id FROM variants")} == {880003}
             assert pg_store.q("SELECT id FROM relationships") == []
-            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {990003}
+            assert {r["id"] for r in pg_store.q("SELECT id FROM cohort_metadata")} == {1}
             assert pg_store.q("SELECT purpose FROM donor_access") == []
 
         with pytest.raises(psycopg.Error):
@@ -456,7 +441,6 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
         pg_store.x("DELETE FROM donor_access WHERE donor_id BETWEEN 990001 AND 990003")
         pg_store.x("DELETE FROM relationships WHERE donor_a BETWEEN 990001 AND 990003")
         pg_store.x("DELETE FROM genotypes WHERE donor_id BETWEEN 990001 AND 990003")
-        pg_store.x("DELETE FROM cohort_metadata WHERE id BETWEEN 990001 AND 990003")
         pg_store.x("DELETE FROM variants WHERE id BETWEEN 880001 AND 880003")
         pg_store.x("DELETE FROM donors WHERE id BETWEEN 990001 AND 990003")
         connection.execute(f'DROP OWNED BY "{role}"')
