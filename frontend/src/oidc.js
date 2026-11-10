@@ -47,7 +47,7 @@ async function discover(issuer) {
   return metadata;
 }
 
-async function verifyIdToken(token, metadata, clientId, expectedNonce) {
+async function verifyIdToken(token, metadata, clientId, expectedNonce, accessToken) {
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("The institution returned a malformed ID token.");
   const header = decodeJsonPart(parts[0]);
@@ -60,7 +60,7 @@ async function verifyIdToken(token, metadata, clientId, expectedNonce) {
     throw new Error("The institution's ID token failed issuer, subject or nonce validation.");
   }
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!audiences.includes(clientId) || (audiences.length > 1 && claims.azp !== clientId)
+  if (audiences.length !== 1 || audiences[0] !== clientId
       || (claims.azp && claims.azp !== clientId)) {
     throw new Error("The institution's ID token has the wrong audience.");
   }
@@ -76,7 +76,8 @@ async function verifyIdToken(token, metadata, clientId, expectedNonce) {
   if (!jwksResponse.ok) throw new Error("Could not retrieve the institution's signing keys.");
   const jwks = await jwksResponse.json();
   const jwk = (jwks.keys || []).find((item) => item.kid === header.kid && item.use !== "enc");
-  if (!jwk || (jwk.alg && jwk.alg !== header.alg)) {
+  if (!jwk || (jwk.alg && jwk.alg !== header.alg)
+      || (jwk.key_ops && !jwk.key_ops.includes("verify"))) {
     throw new Error("The institution's ID-token signing key was not found or did not match.");
   }
   let key;
@@ -99,6 +100,14 @@ async function verifyIdToken(token, metadata, clientId, expectedNonce) {
     new TextEncoder().encode(parts[0] + "." + parts[1]),
   );
   if (!valid) throw new Error("The institution's ID-token signature is invalid.");
+  if (claims.at_hash) {
+    const accessDigest = new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(accessToken)),
+    );
+    if (encode64url(accessDigest.slice(0, 16)) !== claims.at_hash) {
+      throw new Error("The institution's ID-token access-token hash is invalid.");
+    }
+  }
   return claims;
 }
 
@@ -173,7 +182,9 @@ export async function completeOidcCallback(config) {
   if (tokens.token_type?.toLowerCase() !== "bearer" || !tokens.access_token || !tokens.id_token) {
     throw new Error("The institution returned an incomplete OIDC token response.");
   }
-  await verifyIdToken(tokens.id_token, metadata, config.client_id, transaction.nonce);
+  await verifyIdToken(
+    tokens.id_token, metadata, config.client_id, transaction.nonce, tokens.access_token,
+  );
   if (tokens.access_token.split(".").length !== 3) {
     throw new Error("The institution must issue a signed JWT access token for the GenomeGuard API.");
   }
