@@ -204,7 +204,7 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
         versions = [row["version"] for row in reopened.q(
             "SELECT version FROM schema_migrations ORDER BY version"
         )]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     finally:
         reopened.close()
 
