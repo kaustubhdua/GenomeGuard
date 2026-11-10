@@ -19,5 +19,9 @@ BEGIN
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM genomeguard_runtime';
     EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON schema_migrations FROM genomeguard_runtime';
   END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
+    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM genomeguard_app_runtime';
+    EXECUTE 'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON schema_migrations FROM genomeguard_app_runtime';
+  END IF;
 END;
 $$;
