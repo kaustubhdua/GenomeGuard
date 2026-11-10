@@ -44,21 +44,38 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         oidc_audience="genomeguard-api",
         oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
         oidc_allowed_organizations=("org-a",),
+        oidc_required=True,
+        oidc_admin_required=True,
     )
     monkeypatch.setattr("app.api.get_settings", lambda: settings)
     monkeypatch.setattr(
         "app.identity.verify_access_token",
-        lambda *args, **kwargs: OIDCIdentity(
-            "https://id.example.edu", "subject-1", "org-a", {},
+        lambda token, *args, **kwargs: OIDCIdentity(
+            "https://id.example.edu", token, "org-a", {},
         ),
     )
     svc = bootstrap()
     requester = svc.store.requester_by_key(hash_key("demo-researcher"))
     svc.store.add_identity_binding(
-        requester["id"], "https://id.example.edu", "subject-1", "org-a",
+        requester["id"], "https://id.example.edu", "researcher-sub", "org-a",
+    )
+    reviewer_id = svc.store.add_requester(
+        "Reviewer", "reviewer", "controlled", "Example University", hash_key("unused-reviewer-key"),
+    )
+    svc.store.add_identity_binding(
+        reviewer_id, "https://id.example.edu", "reviewer-sub", "org-a",
     )
     client = TestClient(create_app(svc))
 
-    assert client.get("/me", headers={"Authorization": "Bearer valid-token"}).status_code == 200
-    svc.store.revoke_identity_binding("https://id.example.edu", "subject-1", "org-a")
-    assert client.get("/me", headers={"Authorization": "Bearer valid-token"}).status_code == 403
+    assert client.get("/me", headers={"Authorization": "Bearer researcher-sub"}).status_code == 200
+    assert client.get("/admin/anomalies", headers={
+        "Authorization": "Bearer researcher-sub",
+    }).status_code == 403
+    assert client.get("/admin/anomalies", headers={
+        "Authorization": "Bearer reviewer-sub",
+    }).status_code == 200
+    assert client.get("/me", headers={"Authorization": "Bearer reviewer-sub"}).status_code == 403
+    svc.store.revoke_identity_binding("https://id.example.edu", "reviewer-sub", "org-a")
+    assert client.get("/admin/anomalies", headers={
+        "Authorization": "Bearer reviewer-sub",
+    }).status_code == 403
