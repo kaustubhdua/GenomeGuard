@@ -1,6 +1,8 @@
 import numpy as np
 
 from app.core.dataset import Dataset
+from app.data import real
+from app.data.synth import generate
 from redteam import attacks as A
 from redteam.benign_traffic import run_benign, wilson
 from redteam.run_eval import run_all, to_markdown
