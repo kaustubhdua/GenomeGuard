@@ -768,3 +768,137 @@ def test_postgres_rejects_distinct_urls_for_the_same_runtime_and_migration_role(
             url,
             migration_database_url=url + "?application_name=misleading-distinct-url",
         )
+
+def test_postgres_tenant_scoped_researcher_to_steward_workflow(pg_store, monkeypatch):
+    """Exercise the authenticated workflow against real PostgreSQL RLS.
+
+    The JWT verifier is stubbed at the trust boundary; identity binding lookup,
+    request submission, steward review, release gating, and tenant isolation all
+    execute against the disposable PostgreSQL integration database and its
+    restricted runtime role.
+    """
+    import base64
+
+    from starlette.testclient import TestClient
+
+    from app.api import create_app
+    from app.config import Settings
+    from app.identity import OIDCIdentity
+    from app.service import bootstrap, hash_key
+
+    settings = Settings(
+        demo_mode=True,
+        dataset_id="pg-oidc-steward-workflow",
+        master_key=base64.b64encode(b"g" * 32).decode("ascii"),
+        oidc_issuer="https://id.example.edu",
+        oidc_audience="genomeguard-api",
+        oidc_client_id="genomeguard-browser",
+        oidc_redirect_uri="https://app.example.edu/auth/callback",
+        oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
+        oidc_allowed_organizations=("org-a", "org-b"),
+        oidc_required=True,
+        oidc_admin_required=True,
+        tenant_isolation_required=True,
+        admin_api_key="integration-test-admin-key-" + ("x" * 32),
+    )
+    svc = bootstrap(settings, store=pg_store)
+
+    identities = {
+        "researcher-a": "org-a",
+        "steward-a": "org-a",
+        "researcher-b": "org-b",
+        "steward-b": "org-b",
+    }
+    with pg_store.transaction():
+        pg_store.set_admin_access()
+        for token, role, organization in (
+            ("researcher-a", "researcher", "org-a"),
+            ("steward-a", "steward", "org-a"),
+            ("researcher-b", "researcher", "org-b"),
+            ("steward-b", "steward", "org-b"),
+        ):
+            requester_id = pg_store.add_requester(
+                f"{role.title()} {organization}", role, "controlled",
+                f"Institution {organization}", hash_key("key-" + token),
+                organization_id=organization,
+            )
+            pg_store.add_identity_binding(
+                requester_id, settings.oidc_issuer, token, organization,
+            )
+
+    # Use the same restricted PostgreSQL principal as the hosted application.
+    pg_store.connection.execute("SET ROLE genomeguard_runtime")
+    pg_store.connection.commit()
+    pg_store.assert_least_privilege_runtime()
+
+    def verify_test_token(token, **_kwargs):
+        organization = identities.get(token)
+        if organization is None:
+            from app.identity import OIDCAuthenticationError
+            raise OIDCAuthenticationError("unknown integration-test subject")
+        return OIDCIdentity(settings.oidc_issuer, token, organization, {})
+
+    monkeypatch.setattr("app.api.get_settings", lambda: settings)
+    monkeypatch.setattr("app.identity.verify_access_token", verify_test_token)
+    client = TestClient(create_app(svc))
+
+    researcher_a = {"Authorization": "Bearer researcher-a"}
+    steward_a = {"Authorization": "Bearer steward-a"}
+    researcher_b = {"Authorization": "Bearer researcher-b"}
+    steward_b = {"Authorization": "Bearer steward-b"}
+
+    held_response = client.post(
+        "/requests",
+        headers=researcher_a,
+        json={
+            "purpose": "disease_research", "disease": "diabetes", "is_commercial": False,
+            "data_level": "record", "cohort_filter": {},
+            "variant_filter": {"min_maf": 0.1, "limit": 20, "include_planted": 2},
+        },
+    )
+    assert held_response.status_code == 201, held_response.text
+    held = held_response.json()
+    assert held["outcome"] == "escalate"
+    assert held["status"] == "held"
+    assert held["needs_human"] is True
+    request_path = f"/requests/{held['id']}"
+
+    # A different organization's researcher and steward cannot discover the
+    # request, even when they know its numeric identifier.
+    assert client.get(request_path, headers=researcher_b).status_code == 404
+    assert client.get(request_path, headers=steward_b).status_code == 404
+    assert client.get(request_path, headers=steward_a).status_code == 200
+
+    approved = client.post(
+        f"{request_path}/review",
+        headers=steward_a,
+        json={"approve": True, "reviewer": "Org A Steward"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved_pending_release"
+    assert approved.json().get("release") in (None, {})
+
+    # Approval is not release: the second, separately authorized action must
+    # re-evaluate the synthetic fixture and fail closed without returning rows.
+    assert client.post(
+        f"{request_path}/release",
+        headers=researcher_a,
+        json={"reviewer": "Unauthorized Researcher"},
+    ).status_code == 403
+    release_attempt = client.post(
+        f"{request_path}/release",
+        headers=steward_a,
+        json={"reviewer": "Org A Steward"},
+    )
+    assert release_attempt.status_code == 200, release_attempt.text
+    blocked = release_attempt.json()
+    assert blocked["status"] == "release_blocked"
+    assert blocked.get("release") in (None, {})
+    assert client.get(request_path, headers=researcher_a).json()["status"] == "release_blocked"
+
+    # Organization-scoped stewards cannot read the global audit ledger.
+    assert client.get("/audit", headers=steward_a).status_code == 403
+    assert client.get("/audit/verify").json()["ok"] is True
+
+    pg_store.connection.execute("RESET ROLE")
+    pg_store.connection.commit()
