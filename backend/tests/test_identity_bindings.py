@@ -95,8 +95,8 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     assert len(client.get("/requests", headers=researcher_headers).json()["requests"]) == 1
     assert len(client.get("/requests", headers=reviewer_headers).json()["requests"]) == 1
     assert client.get(f"/requests/{request_id}", headers=reviewer_headers).status_code == 200
-    assert client.get("/admin/anomalies", headers=researcher_headers).status_code == 403
-    assert client.get("/admin/anomalies", headers=reviewer_headers).status_code == 200
+    assert client.get("/anomalies", headers=researcher_headers).status_code == 403
+    assert client.get("/anomalies", headers=reviewer_headers).status_code == 200
     assert ("tenant", "org-a") in rls_scopes
     assert ("global_admin", None) not in rls_scopes
     assert client.get("/me", headers=reviewer_headers).status_code == 403
@@ -125,4 +125,4 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     ).status_code == 403
 
     svc.store.revoke_identity_binding("https://id.example.edu", "reviewer-sub", "org-a")
-    assert client.get("/admin/anomalies", headers=reviewer_headers).status_code == 403
+    assert client.get("/anomalies", headers=reviewer_headers).status_code == 403
