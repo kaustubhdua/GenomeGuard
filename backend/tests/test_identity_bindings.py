@@ -152,6 +152,49 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         "/me", headers={"Authorization": "Bearer new-researcher-sub"},
     ).status_code == 200
 
+    # Exercise the actual authenticated researcher -> steward review lifecycle,
+    # not only identity lookup and read-only queue access.
+    controlled_id = svc.store.add_requester(
+        "Controlled Org A Researcher", "researcher", "controlled",
+        "Example University", hash_key("unused-controlled-researcher-key"),
+        organization_id="org-a",
+    )
+    svc.store.add_identity_binding(
+        controlled_id, "https://id.example.edu", "controlled-researcher-sub", "org-a",
+    )
+    controlled_headers = {"Authorization": "Bearer controlled-researcher-sub"}
+    held_response = client.post(
+        "/requests",
+        headers=controlled_headers,
+        json={
+            "purpose": "disease_research", "disease": "diabetes", "is_commercial": False,
+            "data_level": "record", "cohort_filter": {},
+            "variant_filter": {"min_maf": 0.1, "limit": 20, "include_planted": 2},
+        },
+    )
+    assert held_response.status_code == 201
+    held = held_response.json()
+    assert held["status"] == "held" and held["needs_human"] is True
+    assert held.get("release") in (None, {})
+
+    request_path = f"/requests/{held['id']}"
+    assert client.get(request_path, headers=steward_headers).status_code == 200
+    assert client.post(
+        f"{request_path}/review",
+        headers=steward_headers,
+        json={"approve": False, "reviewer": "Org A Steward"},
+    ).status_code == 200
+    reviewed = client.get(request_path, headers=controlled_headers).json()
+    assert reviewed["status"] == "denied"
+    assert reviewed["reviewed_by"] == "Org A Steward"
+    assert reviewed.get("release") in (None, {})
+    assert client.post(
+        f"{request_path}/review",
+        headers=controlled_headers,
+        json={"approve": True},
+    ).status_code == 403
+    assert client.get("/audit/verify").json()["ok"] is True
+
     # The same steward cannot create users in another tenant or grant a peer
     # the steward role. A reviewer cannot provision accounts at all.
     cross_org_provision = client.post(
