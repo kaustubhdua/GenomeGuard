@@ -1461,6 +1461,14 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         "encryption": _encryption_provenance(kind),
     }
     if not store.requesters() and s.demo_mode:
-        for name, role, level, inst, key in DEMO_REQUESTERS:
-            svc.create_requester(name, role, level, inst, key)
+        if store.path == "postgresql":
+            # Bootstrap personas are intentionally unscoped demo identities. Make that
+            # exception explicit in one transaction rather than weakening tenant RLS.
+            with store.transaction():
+                store.set_allow_unscoped_demo()
+                for name, role, level, inst, key in DEMO_REQUESTERS:
+                    svc.create_requester(name, role, level, inst, key)
+        else:
+            for name, role, level, inst, key in DEMO_REQUESTERS:
+                svc.create_requester(name, role, level, inst, key)
     return svc
