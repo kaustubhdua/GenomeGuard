@@ -39,15 +39,19 @@ jobs:
       - run: make setup
       - run: make lint
       - run: make seed
+      - name: Install per-test timeout support
+        run: .venv/bin/pip install pytest-timeout==2.4.0
       - name: Run unit and API tests
+        timeout-minutes: 15
         env:
           GG_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/genomeguard_test
-        run: .venv/bin/python -m pytest -vv --durations=25 --ignore=backend/tests/test_postgres_integration.py
+        run: .venv/bin/python -m pytest -vv --durations=25 --timeout=240 --timeout-method=thread --ignore=backend/tests/test_postgres_integration.py
       - name: Run real PostgreSQL integration and tenant-isolation tests
+        timeout-minutes: 15
         env:
           GG_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/genomeguard_test
-          PYTEST_ADDOPTS: "-vv --durations=25"
-        run: .venv/bin/python -m pytest -vv --durations=25 backend/tests/test_postgres_integration.py
+          PYTEST_ADDOPTS: "-vv --durations=25 --timeout=240 --timeout-method=thread"
+        run: .venv/bin/python -m pytest -vv --durations=25 --timeout=240 --timeout-method=thread backend/tests/test_postgres_integration.py
       - name: Exercise encrypted PostgreSQL backup, restore and audit verification
         env:
           PGPASSWORD: postgres
