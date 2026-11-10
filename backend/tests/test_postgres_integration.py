@@ -176,7 +176,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -499,6 +499,11 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
                 "RETURNING organization_id"
             ).fetchone()
             assert row["organization_id"] == "tenant-a"
+            public_row = pg_store.connection.execute(
+                "INSERT INTO donor_access(donor_id,purpose) VALUES(990003,'public-donor-access') "
+                "RETURNING organization_id"
+            ).fetchone()
+            assert public_row["organization_id"] == "tenant-a"
         with pytest.raises(psycopg.Error):
             with pg_store.transaction():
                 connection.execute("SET ROLE genomeguard_runtime")
@@ -538,7 +543,7 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
         versions = [row["version"] for row in reopened.q(
             "SELECT version FROM schema_migrations ORDER BY version"
         )]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     finally:
         reopened.close()
 
