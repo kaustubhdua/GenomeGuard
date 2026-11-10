@@ -51,6 +51,9 @@ def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
             hashlib.sha256,
         ).hexdigest(),),
     )
+    assert svc.store.one(
+        "SELECT source_sample_id_hash FROM donors WHERE id=1",
+    )["source_sample_id_hash"] != "SOURCE-SAMPLE-001"
     event = signed_event(private, svc.dataset_id)
 
     result = svc.apply_signed_consent_event(
