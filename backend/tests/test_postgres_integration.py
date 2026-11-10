@@ -178,11 +178,18 @@ def test_postgres_runtime_role_cannot_mutate_audit_or_migration_ledgers(pg_store
             "has_table_privilege(current_user,'genomeguard_runtime.audit_log','DELETE') AS audit_delete, "
             "has_table_privilege(current_user,'genomeguard_runtime.audit_log','TRUNCATE') AS audit_truncate, "
             "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','SELECT') AS migrations_select, "
-            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','INSERT') AS migrations_insert"
+            "has_table_privilege(current_user,'genomeguard_runtime.schema_migrations','INSERT') AS migrations_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','SELECT') AS consent_select, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','INSERT') AS consent_insert, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','UPDATE') AS consent_update, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','DELETE') AS consent_delete, "
+            "has_table_privilege(current_user,'genomeguard_runtime.consent_events','TRUNCATE') AS consent_truncate"
         )[0]
         assert privileges == {
             "audit_insert": True, "audit_update": False, "audit_delete": False,
             "audit_truncate": False, "migrations_select": True, "migrations_insert": False,
+            "consent_select": True, "consent_insert": True, "consent_update": False,
+            "consent_delete": False, "consent_truncate": False,
         }
         pg_store.connection.execute("RESET ROLE")
 
