@@ -124,7 +124,7 @@ def test_postgres_bootstrap_installs_standalone_reference_schema(pg_store):
     versions = [row["version"] for row in pg_store.q(
         "SELECT version FROM schema_migrations ORDER BY version"
     )]
-    assert versions == [1, 2, 3, 4, 5]
+    assert versions == [1, 2, 3, 4, 5, 6]
     tables = {
         row["table_name"] for row in pg_store.q(
             "SELECT table_name FROM information_schema.tables "
@@ -155,7 +155,7 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
         versions = [row["version"] for row in reopened.q(
             "SELECT version FROM schema_migrations ORDER BY version"
         )]
-        assert versions == [1, 2, 3, 4, 5]
+        assert versions == [1, 2, 3, 4, 5, 6]
     finally:
         reopened.close()
 
