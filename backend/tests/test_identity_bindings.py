@@ -88,6 +88,9 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     svc.store.set_tenant = lambda organization_id: rls_scopes.append(("tenant", organization_id))
     svc.store.set_admin_access = lambda: rls_scopes.append(("global_admin", None))
     client = TestClient(create_app(svc))
+    # Bootstrap synthetic fixtures in demo mode, then exercise the production-only
+    # provisioning route with the same non-demo guard used by an institutional instance.
+    settings.demo_mode = False
 
     researcher_headers = {"Authorization": "Bearer researcher-sub"}
     reviewer_headers = {"Authorization": "Bearer reviewer-sub"}
