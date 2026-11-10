@@ -8,7 +8,7 @@ import psycopg
 import pytest
 
 from app.core.audit_chain import AuditChain
-from app.postgres_store import PostgresStore
+from app.postgres_store import PostgresStore, _ensure_migration_schema_access
 from app.store import AuditStore
 
 
@@ -165,6 +165,41 @@ def test_postgres_audit_log_is_append_only(pg_store):
     with pytest.raises(psycopg.Error, match="append-only"):
         with pg_store.transaction():
             pg_store.x("DELETE FROM audit_log WHERE idx=1")
+
+
+
+def test_postgres_migration_bootstrap_handles_runtime_owned_legacy_schema(pg_store):
+    connection = pg_store.connection
+    connection.execute(
+        "CREATE ROLE genomeguard_owner NOLOGIN NOSUPERUSER NOBYPASSRLS "
+        "NOCREATEDB NOCREATEROLE"
+    )
+    connection.execute(
+        "GRANT genomeguard_runtime TO genomeguard_owner WITH INHERIT FALSE, SET TRUE"
+    )
+    connection.execute(
+        "ALTER SCHEMA genomeguard_runtime OWNER TO genomeguard_runtime"
+    )
+    connection.execute(
+        "REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_owner"
+    )
+    connection.commit()
+    try:
+        connection.execute("SET ROLE genomeguard_owner")
+        connection.commit()
+        _ensure_migration_schema_access(connection)
+        assert connection.execute("SELECT current_user AS role").fetchone()["role"] == "genomeguard_owner"
+        assert connection.execute(
+            "SELECT has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS can_create"
+        ).fetchone()["can_create"] is True
+    finally:
+        connection.execute("RESET ROLE")
+        connection.execute("ALTER SCHEMA genomeguard_runtime OWNER TO postgres")
+        connection.execute("REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_owner")
+        connection.execute("REVOKE genomeguard_runtime FROM genomeguard_owner")
+        connection.execute("DROP ROLE genomeguard_owner")
+        connection.commit()
+
 
 
 def test_postgres_runtime_role_cannot_mutate_audit_or_migration_ledgers(pg_store):
