@@ -72,6 +72,14 @@ BEGIN
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_runtime';
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_runtime';
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
+    -- genomeguard_runtime is the actual GG_DATABASE_URL principal. Ownership moves to
+    -- genomeguard_owner above, so restore only the DML needed by the application.
+    EXECUTE 'GRANT USAGE ON SCHEMA genomeguard_runtime, genomeguard TO genomeguard_runtime';
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA genomeguard_runtime TO genomeguard_runtime';
+    EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO genomeguard_runtime';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA genomeguard TO genomeguard_runtime';
+    EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard_runtime FROM genomeguard_runtime';
+    EXECUTE 'REVOKE TRUNCATE ON ALL TABLES IN SCHEMA genomeguard FROM genomeguard_runtime';
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
       IF EXISTS (
         SELECT 1 FROM pg_roles
@@ -104,6 +112,12 @@ BEGIN
            || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
            || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
+      EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
+           || 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO genomeguard_runtime';
+      EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
+           || 'GRANT USAGE, SELECT ON SEQUENCES TO genomeguard_runtime';
+      EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
+           || 'GRANT SELECT ON TABLES TO genomeguard_runtime';
       IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_app_runtime') THEN
         EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
              || 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO genomeguard_app_runtime';
