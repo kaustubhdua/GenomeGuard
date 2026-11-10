@@ -141,7 +141,9 @@ def _ensure_migration_schema_access(connection: psycopg.Connection) -> None:
                 return
         raise RuntimeError(
             "PostgreSQL migration principal cannot CREATE in genomeguard_runtime; "
-            "make it the schema owner or grant it migration-only CREATE before startup"
+            "make it the schema owner or grant it migration-only CREATE before startup "
+            f"(role={row['migration_role']!r}, schema_owner={row['schema_owner']!r}, "
+            f"can_create={row['can_create']}, can_set_runtime={row['can_set_runtime']})"
         )
 
 
