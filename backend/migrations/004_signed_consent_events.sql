@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS consent_events (
   donor_id INTEGER NOT NULL REFERENCES donors(id) ON DELETE RESTRICT,
   dataset_id TEXT NOT NULL,
   event_type TEXT NOT NULL CHECK (event_type IN ('consent_updated','withdrawn','restored')),
-  consent_json TEXT NOT NULL CHECK (jsonb_typeof(consent_json::jsonb) = 'object'),
+  consent_blob BYTEA NOT NULL,
   source_issuer TEXT NOT NULL,
   source_record_sha256 TEXT NOT NULL CHECK (source_record_sha256 ~ '^[0-9a-f]{64}$'),
   effective_at TEXT NOT NULL,
