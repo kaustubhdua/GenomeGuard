@@ -25,7 +25,10 @@ BEGIN
     EXECUTE 'REVOKE CREATE ON SCHEMA genomeguard FROM genomeguard_runtime';
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM genomeguard_runtime';
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_owner') THEN
-      EXECUTE 'REVOKE genomeguard_owner FROM genomeguard_runtime';
+      IF pg_has_role('genomeguard_runtime', 'genomeguard_owner', 'MEMBER') THEN
+        RAISE EXCEPTION
+          'genomeguard_runtime must not inherit genomeguard_owner privileges; remove provider role membership before migrations';
+      END IF;
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
            || 'REVOKE TRUNCATE ON TABLES FROM genomeguard_runtime';
       EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
