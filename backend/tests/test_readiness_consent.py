@@ -45,3 +45,21 @@ def test_policy_scope_is_never_reported_as_matched_participant_consent():
     assert body["provenance"]["consent_source"] is None
     assert body["provenance"]["consent_records_sha256"] is None
     assert body["dataset_policy_samples_scoped"] == svc.ds.n_donors
+
+
+
+def test_readiness_fails_closed_without_private_tenant_ingestion_and_operations_assurance():
+    _svc, client = make_client()
+
+    response = client.get("/health/ready")
+    body = response.json()
+
+    assert response.status_code == 503
+    for gate in (
+        "private_cohort_ingestion_verified",
+        "tenant_processing_isolation_verified",
+        "backup_retention_and_restore_verified",
+        "monitoring_and_alerting_verified",
+    ):
+        assert body["checks"][gate] is False
+    assert body["ready"] is False
