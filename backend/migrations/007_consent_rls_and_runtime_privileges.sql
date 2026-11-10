@@ -19,6 +19,10 @@ BEGIN
     EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON consent_events FROM gg_app_runtime';
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'genomeguard_owner') THEN
       EXECUTE 'REVOKE genomeguard_owner FROM gg_app_runtime';
+      EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard_runtime '
+           || 'REVOKE TRUNCATE ON TABLES FROM gg_app_runtime';
+      EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE genomeguard_owner IN SCHEMA genomeguard '
+           || 'REVOKE TRUNCATE ON TABLES FROM gg_app_runtime';
     END IF;
   END IF;
 END;
