@@ -221,19 +221,33 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                                    "verified organization scope is required")
             return fn(*args, **kwargs)
 
-    def admin_call(fn, *args, **kwargs):
-        with S().store.transaction():
-            set_admin = getattr(S().store, "set_admin_access", None)
-            if set_admin is not None:
-                set_admin()
-            elif settings.tenant_isolation_required and not settings.demo_mode:
+    def apply_admin_scope(principal: dict) -> None:
+        """Apply the narrowest RLS scope for the authenticated reviewer principal."""
+        organization_id = principal.get("organization_id")
+        if organization_id:
+            set_tenant = getattr(S().store, "set_tenant", None)
+            if set_tenant is None:
                 raise ServiceError(
                     503, "tenant_store_unsupported",
-                    "tenant-isolated admin access requires PostgreSQL RLS",
+                    "organization-scoped reviewer access requires PostgreSQL RLS",
                 )
+            set_tenant(organization_id)
+            return
+        set_admin = getattr(S().store, "set_admin_access", None)
+        if set_admin is not None:
+            set_admin()
+        elif settings.tenant_isolation_required and not settings.demo_mode:
+            raise ServiceError(
+                503, "tenant_store_unsupported",
+                "tenant-isolated admin access requires PostgreSQL RLS",
+            )
+
+    def admin_call(principal: dict, fn, *args, **kwargs):
+        with S().store.transaction():
+            apply_admin_scope(principal)
             return fn(*args, **kwargs)
 
-    def admin(request: Request) -> None:
+    def admin(request: Request) -> dict:
         authorization = request.headers.get("authorization", "")
         if authorization.startswith("Bearer "):
             if not (settings.oidc_issuer and settings.oidc_audience and settings.oidc_jwks_url
@@ -260,11 +274,21 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if not principal or principal.get("role") not in {"reviewer", "steward", "admin"}:
                 raise ServiceError(403, "steward_identity_required",
                                    "a provisioned reviewer or steward identity is required")
-            return
+            scoped_principal = {
+                "role": principal["role"],
+                "organization_id": identity.organization_id,
+                "issuer": identity.issuer,
+                "subject": identity.subject,
+            }
+            request.state.admin_principal = scoped_principal
+            return scoped_principal
         if settings.oidc_admin_required:
             raise ServiceError(401, "unauthorized", "institutional reviewer bearer token required")
         if not S().is_admin(request.headers.get("x-admin-key")):
             raise ServiceError(401, "unauthorized", "admin key required (X-Admin-Key)")
+        global_principal = {"role": "admin", "organization_id": None}
+        request.state.admin_principal = global_principal
+        return global_principal
 
     def require_governed_data(svc: GenomeGuardService) -> None:
         if not svc.release_enabled:
@@ -283,16 +307,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                     # for every database operation in the handler. The handler's own admin()
                     # call remains as defense in depth and preserves route-local validation.
                     if who == "admin":
-                        admin(request)
+                        principal = admin(request)
                         with S().store.transaction():
-                            set_admin = getattr(S().store, "set_admin_access", None)
-                            if set_admin is not None:
-                                set_admin()
-                            elif settings.tenant_isolation_required and not settings.demo_mode:
-                                raise ServiceError(
-                                    503, "tenant_store_unsupported",
-                                    "tenant-isolated admin access requires PostgreSQL RLS",
-                                )
+                            apply_admin_scope(principal)
                             return await fn(request)
                     # Other routes authenticate inside their handlers so protocol-specific
                     # error envelopes (for example GA4GH Beacon) remain intact.
@@ -456,7 +473,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                                "a trusted participant consent authority is not configured")
         body = await _body(request)
         result = admin_call(
-            S().apply_signed_consent_event,
+            request.state.admin_principal, S().apply_signed_consent_event,
             body,
             public_key_b64=settings.consent_authority_public_key,
             trusted_issuer=settings.consent_authority_issuer,
@@ -623,10 +640,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 if exc.code != "role_not_allowed":
                     raise
                 admin(request)
-                rows = admin_call(S().requests_for, None)
+                rows = admin_call(request.state.admin_principal, S().requests_for, None)
                 return _j({"requests": rows})
         elif S().is_admin(request.headers.get("x-admin-key")):
-            rows = admin_call(S().requests_for, None)
+            admin(request)
+            rows = admin_call(request.state.admin_principal, S().requests_for, None)
             return _j({"requests": rows})
         else:
             identity = requester(request)
@@ -648,8 +666,10 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 is_admin = True
         elif not is_admin:
             current = requester(request)
+        elif is_admin:
+            admin(request)
         d = (
-            admin_call(S().store.decision, rid) if is_admin
+            admin_call(request.state.admin_principal, S().store.decision, rid) if is_admin
             else scoped_requester_call(current, S().store.decision, rid)
         )
         # Use the same response for missing and non-owned requests to prevent ID enumeration.
@@ -673,7 +693,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             approve = action == "approve"
         who = str(b.get("reviewer", "reviewer"))[:32]
         d = await run_in_threadpool(
-            admin_call, S().review, request.path_params["id"], who, approve, action,
+            admin_call, request.state.admin_principal, S().review, request.path_params["id"], who, approve, action,
         )
         return _j(d)
 
@@ -683,7 +703,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         body = await _body(request)
         who = str(body.get("reviewer", "reviewer"))[:32]
         result = await run_in_threadpool(
-            admin_call, S().release_approved, request.path_params["id"], who,
+            admin_call, request.state.admin_principal, S().release_approved, request.path_params["id"], who,
         )
         return _j(result)
 
@@ -694,7 +714,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         admin(request)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
         return _j(await run_in_threadpool(
-            admin_call, S().copilot_review, request.path_params["id"], refresh,
+            admin_call, request.state.admin_principal, S().copilot_review, request.path_params["id"], refresh,
         ))
 
     @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model); "
@@ -706,7 +726,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if not S().store.decision(rid, with_release=False):
                 raise ServiceError(404, "not_found", "no such request")
             return S().exposure(rid)
-        return _j(admin_call(exposure))
+        return _j(admin_call(request.state.admin_principal, exposure))
 
     @route("GET", "/consent/summary", "How many donors would be eligible (counts only)",
            "requester")
@@ -992,7 +1012,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/anomalies", "Per-requester timelines and alerts", "admin")
     async def anomalies(request):
         admin(request)
-        return _j(admin_call(S().anomalies))
+        return _j(admin_call(request.state.admin_principal, S().anomalies))
 
     @route("POST", "/requesters/{id:int}/freeze", "Freeze an account", "admin")
     async def freeze(request):
