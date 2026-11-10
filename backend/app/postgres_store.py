@@ -74,6 +74,30 @@ def _translate(sql: str) -> str:
     return statement.replace("?", "%s")
 
 
+
+def _ensure_runtime_schema_exists(connection: psycopg.Connection) -> None:
+    """Avoid requiring database CREATE privilege when the schema is already provisioned.
+
+    The migration principal is intentionally not CREATEDB. CREATE SCHEMA IF NOT EXISTS
+    still requires CREATE on the database even when the schema exists, so check first.
+    A fresh database must be provisioned with the schema or grant this narrowly scoped
+    database privilege to the migration principal during bootstrap.
+    """
+    present = connection.execute(
+        "SELECT EXISTS (SELECT 1 FROM pg_namespace "
+        "WHERE nspname='genomeguard_runtime') AS present"
+    ).fetchone()["present"]
+    if present:
+        return
+    try:
+        connection.execute("CREATE SCHEMA genomeguard_runtime")
+    except psycopg.errors.InsufficientPrivilege as exc:
+        raise RuntimeError(
+            "PostgreSQL migration principal cannot create the initial genomeguard_runtime "
+            "schema; provision the schema or grant CREATE ON DATABASE for initial bootstrap"
+        ) from exc
+
+
 def _ensure_migration_schema_access(connection: psycopg.Connection) -> None:
     """Let the migration owner create objects in a legacy runtime-owned schema.
 
@@ -189,9 +213,7 @@ class PostgresStore(Store):
                 # Only the migration principal may create schemas or run DDL. The ordinary
                 # application connection receives a search_path after the owner creates it.
                 with self.migration_connection.transaction():
-                    self.migration_connection.execute(
-                        "CREATE SCHEMA IF NOT EXISTS genomeguard_runtime"
-                    )
+                    _ensure_runtime_schema_exists(self.migration_connection)
                     self.migration_connection.execute(
                         "SET search_path TO genomeguard_runtime, public"
                     )
