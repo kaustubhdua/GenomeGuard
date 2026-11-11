@@ -6,7 +6,9 @@ on:
     branches: [main, feat/remove-supabase-runtime]
   workflow_dispatch:
 concurrency:
-  group: genomeguard-ci-${{ github.event.pull_request.number || github.ref }}
+  # A push to a PR head and the corresponding pull_request event must not run
+  # the same expensive PostgreSQL suite twice in parallel.
+  group: genomeguard-ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 permissions:
   contents: read
@@ -37,11 +39,19 @@ jobs:
       - run: make setup
       - run: make lint
       - run: make seed
-      - name: Run test suite including real PostgreSQL integration tests
+      - name: Install per-test timeout support
+        run: .venv/bin/pip install pytest-timeout==2.4.0
+      - name: Run unit and API tests
+        timeout-minutes: 15
         env:
           GG_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/genomeguard_test
-          PYTEST_ADDOPTS: "-vv --durations=25"
-        run: make test
+        run: .venv/bin/python -m pytest -vv --durations=25 --timeout=240 --timeout-method=thread --ignore=backend/tests/test_postgres_integration.py
+      - name: Run real PostgreSQL integration and tenant-isolation tests
+        timeout-minutes: 15
+        env:
+          GG_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/genomeguard_test
+          PYTEST_ADDOPTS: "-vv --durations=25 --timeout=240 --timeout-method=thread"
+        run: .venv/bin/python -m pytest -vv --durations=25 --timeout=240 --timeout-method=thread backend/tests/test_postgres_integration.py
       - name: Exercise encrypted PostgreSQL backup, restore and audit verification
         env:
           PGPASSWORD: postgres

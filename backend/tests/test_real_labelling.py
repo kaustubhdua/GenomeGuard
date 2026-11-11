@@ -21,7 +21,10 @@ REAL_META = {"source": "1000 Genomes (IGSR)", "genotypes_real": True, "consent_s
 
 
 def _cohort_file(d: str, meta: dict) -> str:
-    c = generate(n_donors=600, n_variants=3000, n_families=100, seed=5)
+    # Membership inference needs 100 members + a 200-person reference panel +
+    # 40 non-members. These tests validate provenance/report flow, not statistical power;
+    # full-scale behavior is exercised by the dedicated evaluation jobs.
+    c = generate(n_donors=340, n_variants=80, n_families=68, seed=5)
     out = Path(d) / "c.npz"
     real.save_cohort(c, meta, out)
     return str(out)
@@ -60,7 +63,17 @@ def test_eval_on_a_cohort_not_marked_real_is_never_called_real():
         assert "do not describe these as real-data results" in md
 
 
-def test_default_eval_is_unchanged_and_synthetic():
+def test_default_eval_is_unchanged_and_synthetic(monkeypatch):
+    # Preserve the no-cohort/default-synthetic code path, but keep this unit test small.
+    # The dedicated CI eval-smoke step exercises the full default 600x3000 workload.
+    original = run_eval.Dataset.synthetic
+    monkeypatch.setattr(
+        run_eval.Dataset,
+        "synthetic",
+        classmethod(lambda cls, **kwargs: original(
+            n_donors=340, n_variants=80, n_families=68, **kwargs
+        )),
+    )
     res = run_eval.run_all(quick=True)
     assert res["meta"]["dataset"] == "synthetic" and res["robustness"]
     assert "Dataset: **synthetic**" in run_eval.to_markdown(res)

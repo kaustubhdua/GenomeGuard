@@ -6,17 +6,19 @@ Updated: 10 November 2026
 
 GenomeGuard is a first-party Python/Starlette research application with a browser workbench, synthetic/public-data workflow, PostgreSQL persistence, institutional-control foundations, and evaluation/interoperability tooling.
 
-The repository is **not yet verified as a final submission build**: the latest exact-head CI and hosted staging acceptance must finish on the same commit. A live synthetic-only Render staging service now starts successfully, connects to Neon through distinct runtime and migration credentials, loads a freshly encrypted 600-donor synthetic cohort, and provisions four demo personas. The exact PR head still needs to be deployed and accepted.
+The repository is **not yet verified as a final submission build**. PR #120 is open as a draft from `feat/institutional-production-controls` to `main`. The current feature head is `0258fe3169028fa823da582f959c0c8a37ab7312`. The isolated Render staging service is live on that exact commit, and the exact-head hosted acceptance, security verification, and deployment-configuration checks have passed. Backend CI is still running its unit/API suite; PostgreSQL integration, backup/restore, evaluation, demo, compilation, and local browser/accessibility stages have not yet completed. See the current workflow links below.
 
-This is **not production-ready for controlled participant genomic data or clinical use**. The live demo uses synthetic data and simulated consent. Institutional OIDC, authoritative consent, external audit anchoring, provider recovery policy, and governance approvals remain external dependencies.
+This is **not production-ready for controlled participant genomic data or clinical use**. The hosted demo uses synthetic data and simulated consent. Private institutional cohort ingestion, real institutional OIDC, authoritative consent, external audit anchoring, provider-grade recovery, monitoring, and governance approvals remain incomplete or external dependencies.
 
 ## Source and pull-request topology
 
-- PR #111 (Supabase-free runtime) is merged into `main`.
-- PR #112 (institutional controls) was merged into the intermediate `feat/remove-supabase-runtime` branch, not directly into `main`.
-- PR #113 is the current draft proposal from `feat/institutional-production-controls` to `main`.
-- Keep PR #113 draft until exact-head CI and staging acceptance are green. Do not bypass review or merge an unverified commit.
-- Main remains on the previously merged Supabase-free baseline. Production has not been changed.
+- PR #111 (Supabase-free runtime) and PR #113 (institutional controls) are merged into `main`. PR #113 merge commit: `088eaa9adde25cf95b748c31bad365880fe95343`.
+- PR #112 was merged into the intermediate `feat/remove-supabase-runtime` branch; its follow-up work was carried into the PR #113 integration branch.
+- PRs #116, #117 and #118 were merged into the feature branch before PR #113 merged and are included in main.
+- PR #119 was merged into `feat/institutional-production-controls` after PR #113 merged. PR #120 is the current draft and includes the positive steward approval/separate-release safety test, a PostgreSQL-backed tenant workflow integration test, CI separation/deduplication, and smaller unit-test synthetic fixtures.
+- Current feature head: `0258fe3169028fa823da582f959c0c8a37ab7312`. PR #120 remains draft pending exact-head CI completion and review.
+- GitHub reports `main` as unprotected (`protected: false`). Branch protection and required status checks remain unconfigured/unverified.
+- Do not merge another change or declare a release until exact-head CI and staging acceptance are green. Production is to remain untouched.
 
 ## PostgreSQL migrations and direct validation
 
@@ -62,21 +64,27 @@ The staging branch currently contains a freshly generated synthetic cohort (600 
 - URL: https://genomeguard-staging-pr113.onrender.com
 - Service ID: `srv-dbpjsie1egvs73cajdlg`
 - Neon database branch: `br-flat-wildflower-a1pgfnhn`
-- Live deployment observed: `52126ade746fae914bd90f67c800328aa1da8be7`
-- Logs show application startup complete, `GET /health` returning 200, and the four demo requesters present in PostgreSQL.
-- The live service uses distinct runtime and migration URLs and a unique staging encryption key. Database URLs and secrets are not exposed to the browser or this report.
-- The checked-in Blueprint specifies `/health/live`, but the live Render service currently reports an empty provider health-check path. A Blueprint adoption plan is still required to reconcile this without changing production.
-- The latest PR head is newer than the currently observed live deployment. Deploy and verify the final exact head before submission.
+- Current live Render deployment: `0258fe3169028fa823da582f959c0c8a37ab7312`, deployment `dep-dbpn762jnfac73bq0a1g`, status `live`.
+- The exact-head staging acceptance workflow is running for the same SHA. API/database/authorization/provenance/audit checks passed; hosted browser/mobile checks are in progress: https://github.com/kaustubhdua/GenomeGuard/actions/runs/42887847389
+- Exact-head security verification passed secret scanning, CodeQL Python/JavaScript, and dependency vulnerability audit: https://github.com/kaustubhdua/GenomeGuard/actions/runs/42887847324
+- Exact-head deployment configuration checks passed: https://github.com/kaustubhdua/GenomeGuard/actions/runs/42887847574
+- The service is configured for commit-based auto-deploy, but the integration has not consistently deployed automatically. The latest deployment was explicitly triggered and then verified live on the exact SHA.
+- Staging contains synthetic data only and simulated consent. It is not approved for controlled participant genomic data or clinical use.
+- Render environment-variable values are not exposed by the available service interface; the exact mapping of runtime and migration URLs to the Neon branch/roles cannot be independently confirmed from Render metadata alone.
 
 The previous staging service on `feat/remove-supabase-runtime` remains separate and unchanged.
 
 ## CI and delivery status
 
-- Earlier CI run `42850704480` failed at lint due to import formatting; that issue was fixed.
-- CI run `42851307521` on commit `c451dd6279fa809318fbafbfc8e68a10dc4cbe3b` passed lint and seed and is running PostgreSQL integration tests. It is not the latest PR head.
-- On that run, deployment configuration, CodeQL (Python and JavaScript), dependency audit, FHIR R4 Consent validation, GA4GH Beacon v2 validation, and the real-data image build passed.
-- The staging acceptance workflow is still running and must finish against the exact deployed PR head.
-- A Vercel preview or successful Docker image build is not proof of database, OIDC, consent, or staging workflow readiness.
+Current exact feature head: `0258fe3169028fa823da582f959c0c8a37ab7312`.
+
+- Backend CI run [42887847565](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42887847565): setup, lint, and seed passed; unit/API suite is in progress. Real PostgreSQL integration/tenant-isolation, encrypted backup/restore, evaluation, demo, frontend syntax, Python compilation, and local browser/accessibility steps are pending.
+- Hosted staging acceptance [42887847389](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42887847389): API/database/authorization/provenance/audit passed; browser/mobile stage is in progress.
+- Security verification [42887847324](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42887847324): secret scanning, CodeQL Python/JavaScript, and dependency audit passed.
+- Deployment configuration checks [42887847574](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42887847574): passed.
+- Main branch remains at `088eaa9adde25cf95b748c31bad365880fe95343` and is unprotected (`protected: false`). Main-branch CI on the merge commit is not a substitute for the current feature-head validation.
+- Vercel preview deployments have hit the account's daily deployment quota. A successful prior preview is not a substitute for current exact-head CI or Render staging validation.
+- Do not merge PR #120 until all exact-head CI stages pass and review gates are satisfied.
 
 ## Cohort and institutional boundary
 
@@ -89,11 +97,11 @@ The public/synthetic rows are intentionally visible across organizations. Privat
 - The encrypted PostgreSQL backup/restore and audit-verification test is part of CI and must pass on the final head.
 - The linked Neon project is on a free plan with a short history-retention window and no scheduled snapshot policy. This is suitable only for disposable demo staging, not production recovery.
 - No institution-approved PITR/offsite retention, RPO/RTO, independent key custody, monitoring/alert routing, or recurring restore drill has been verified.
-- The live Render service is on a free plan. The provider health-check path still needs to be reconciled with the checked-in Blueprint.
+- The live Render staging service is on a free plan. Its current provider health-check path is `/health/live`, matching the checked-in staging Blueprint. Commit-triggered deployment is not currently observed despite the configured auto-deploy setting.
 
-## Latest hosted acceptance and CI follow-up
+## Historical hosted acceptance and CI follow-up
 
-At 16:23 UTC on 10 November 2026:
+The following 16:23 UTC checkpoint is historical and is superseded by the current 18:06 UTC snapshot above. At 16:23 UTC on 10 November 2026:
 
 - The isolated Render service deployed commit `b6a13be11341622dc7854de54efdc4a2d8443a60` successfully and served the synthetic cohort over PostgreSQL.
 - GitHub Actions staging-acceptance run [42853659255](https://github.com/kaustubhdua/GenomeGuard/actions/runs/42853659255) passed. Its read-only API checks verified the expected commit, PostgreSQL backend, 600 synthetic donors, 3,000 variants, simulated-consent disclosure, anonymous authorization denials, public audit-chain verification, and source/dataset/chromosome catalogues. Browser acceptance passed in light and dark themes, all ten checked routes had no JavaScript errors, and responsive checks at 320, 375, and 414 px reported no horizontal overflow.
@@ -102,8 +110,8 @@ At 16:23 UTC on 10 November 2026:
 
 ## Final hackathon submission gates
 
-1. Complete exact-head CI: PostgreSQL integration, encrypted backup/restore, audit verification, evaluation, demo, Python/JS checks, Playwright browser routes, responsive layouts, and axe accessibility.
-2. Deploy the exact tested commit to `genomeguard-staging-pr113`.
+1. Finish exact-head CI on the merged main commit and the follow-up feature test commit: PostgreSQL integration, encrypted backup/restore, audit verification, evaluation, demo, Python/JS checks, Playwright browser routes, responsive layouts, and axe accessibility.
+2. Resolve the Render Git-provider/commit-trigger issue, deploy the exact tested commit to `genomeguard-staging-pr113`, and verify the deployed SHA before hosted acceptance.
 3. Verify `/health`, `/health/ready`, database readiness, demo personas, request submission, steward approval/rejection, output transformation, privacy-budget accounting, audit verification, consent examples, FHIR/Beacon outputs, and browser journeys.
 4. Reconcile the live Render health-check path with `render.staging.yaml` through a reviewed Blueprint plan.
 5. Capture current screenshots and a five-minute demo recording using `docs/hackathon-demo-guide.md`.

@@ -198,6 +198,55 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     ).status_code == 403
     assert client.get("/audit/verify").json()["ok"] is True
 
+    # Exercise the positive steward approval transition and the separate release
+    # authorization boundary. Approval alone must not release record-level data.
+    release_researcher_id = svc.store.add_requester(
+        "Controlled Org A Release Researcher", "researcher", "controlled",
+        "Example University", hash_key("unused-release-researcher-key"),
+        organization_id="org-a",
+    )
+    svc.store.add_identity_binding(
+        release_researcher_id, "https://id.example.edu", "controlled-release-sub", "org-a",
+    )
+    release_researcher_headers = {"Authorization": "Bearer controlled-release-sub"}
+    held_for_approval = client.post(
+        "/requests",
+        headers=release_researcher_headers,
+        json={
+            "purpose": "disease_research", "disease": "diabetes", "is_commercial": False,
+            "data_level": "record", "cohort_filter": {},
+            "variant_filter": {"min_maf": 0.1, "limit": 20, "include_planted": 2},
+        },
+    )
+    assert held_for_approval.status_code == 201
+    pending = held_for_approval.json()
+    assert pending["status"] == "held" and pending["needs_human"] is True
+    pending_path = f"/requests/{pending['id']}"
+    approved = client.post(
+        f"{pending_path}/review",
+        headers=steward_headers,
+        json={"approve": True, "reviewer": "Org A Steward"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved_pending_release"
+    assert approved.json().get("release") in (None, {})
+    assert client.post(
+        f"{pending_path}/release",
+        headers=release_researcher_headers,
+        json={"reviewer": "Unauthorized Researcher"},
+    ).status_code == 403
+    release_attempt = client.post(
+        f"{pending_path}/release",
+        headers=steward_headers,
+        json={"reviewer": "Org A Steward"},
+    )
+    assert release_attempt.status_code == 200
+    blocked = release_attempt.json()
+    assert blocked["status"] == "release_blocked"
+    assert blocked.get("release") in (None, {})
+    assert client.get(pending_path, headers=release_researcher_headers).json()["status"] == "release_blocked"
+    assert client.get("/audit/verify").json()["ok"] is True
+
     # The same steward cannot create users in another tenant or grant a peer
     # the steward role. A reviewer cannot provision accounts at all.
     cross_org_provision = client.post(

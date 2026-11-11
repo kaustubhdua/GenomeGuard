@@ -168,14 +168,28 @@ def test_frozen_account_gets_403_with_reason_and_admin_can_unfreeze():
 
 def test_review_endpoint_requires_admin_and_works():
     svc, c = make_client()
+
+    def assert_store_lock_released(stage):
+        # TestClient dispatches sync handlers through AnyIO worker threads. A lock
+        # accidentally retained by a completed request deadlocks the next admin call.
+        assert not svc.store.lock._is_owned(), (
+            f"test thread already owns store lock after {stage}: {svc.store.lock!r}"
+        )
+        acquired = svc.store.lock.acquire(blocking=False)
+        assert acquired, f"store lock leaked after {stage}: {svc.store.lock!r}"
+        svc.store.lock.release()
+
     req = {"purpose": "general_research", "data_level": "record",
            "variant_filter": {"min_maf": 0.2, "limit": 5}}
     d = c.post("/requests", json=req, headers=H("demo-controlled")).json()
     assert d["needs_human"]
+    assert_store_lock_released("request submission")
     assert c.post(f"/requests/{d['id']}/review", json={"approve": True}).status_code == 401
+    assert_store_lock_released("unauthorized review")
     # Strings such as "false" must never be coerced to truthy approval.
     invalid = c.post(f"/requests/{d['id']}/review", json={"approve": "false"}, headers=ADMIN)
     assert invalid.status_code == 422 and invalid.json()["error"] == "invalid_review"
+    assert_store_lock_released("invalid review")
     out = c.post(f"/requests/{d['id']}/review", json={"approve": True, "reviewer": "carol"},
                  headers=ADMIN).json()
     assert out["status"] == "approved_pending_release" and out["reviewed_by"] == "carol"
