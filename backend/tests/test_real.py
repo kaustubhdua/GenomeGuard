@@ -315,6 +315,12 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
         real.save_cohort(cohort, meta, out)
         settings = Settings(
             db_path=":memory:", database_url="postgresql://test-only",
+            migration_database_url="postgresql://owner-test-only",
+            oidc_required=True, oidc_admin_required=True, tenant_isolation_required=True,
+            oidc_issuer="https://id.example.edu", oidc_audience="genomeguard-api",
+            oidc_client_id="genomeguard-browser", oidc_redirect_uri="https://genomeguard.example.edu/",
+            oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
+            oidc_allowed_organizations=("research-org-1",),
             demo_mode=False, allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
             master_key=base64.b64encode(b"x" * 32).decode(),
