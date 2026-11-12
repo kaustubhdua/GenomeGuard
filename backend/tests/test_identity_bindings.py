@@ -248,11 +248,13 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         headers=steward_headers,
         json={"reviewer": "Org A Steward"},
     )
-    assert release_attempt.status_code == 200
-    blocked = release_attempt.json()
-    assert blocked["status"] == "release_blocked"
-    assert blocked.get("release") in (None, {})
-    assert client.get(pending_path, headers=release_researcher_headers).json()["status"] == "release_blocked"
+    # Missing verified import is an infrastructure/data-readiness failure, not a
+    # governance denial. Preserve the approved decision but do not release data.
+    assert release_attempt.status_code == 503
+    assert release_attempt.json()["error"] == "governed_release_unavailable"
+    still_pending = client.get(pending_path, headers=release_researcher_headers).json()
+    assert still_pending["status"] == "approved_pending_release"
+    assert still_pending.get("release") in (None, {})
     assert client.get("/audit/verify").json()["ok"] is True
 
     # The same steward cannot create users in another tenant or grant a peer
