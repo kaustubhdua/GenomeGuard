@@ -93,7 +93,7 @@ async function renderCatalogue(sample, force = false) {
         h("a", { class: "btn", href: "#/chromosomes" }, "Explore chromosome reference metadata"),
         h("button", { class: "ghost", onclick: showSample }, "View illustrative preview"))));
     root.append(card("How a dataset becomes available", "A transparent, reproducible import gate", provenanceChecklist()));
-    root.append(h("p", { class: "fine dataset-footnote" }, "Nothing here is synthetic. A dataset will appear only after a real import has been verified."));
+    root.append(h("p", { class: "fine dataset-footnote" }, "A dataset appears only after its source, checksum, assembly and imported counts have been verified."));
     return root;
   }
 
