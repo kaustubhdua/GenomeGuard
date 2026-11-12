@@ -23,10 +23,22 @@ def pg_store():
         pytest.skip("GG_TEST_DATABASE_URL is not configured")
     with psycopg.connect(url, autocommit=True) as admin:
         admin.execute(
-            "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "WHERE rolname='genomeguard_owner') THEN "
+            "CREATE ROLE genomeguard_owner NOLOGIN NOSUPERUSER NOBYPASSRLS "
+            "NOCREATEDB NOCREATEROLE; END IF; END $"
+        )
+        admin.execute(
+            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "WHERE rolname='genomeguard_app_runtime') THEN "
+            "CREATE ROLE genomeguard_app_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
+            "NOCREATEDB NOCREATEROLE; END IF; END $"
+        )
+        admin.execute(
+            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
             "WHERE rolname='genomeguard_runtime') THEN "
             "CREATE ROLE genomeguard_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
-            "NOCREATEDB NOCREATEROLE; END IF; END $$"
+            "NOCREATEDB NOCREATEROLE; END IF; END $"
         )
         admin.execute("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime")
         admin.execute("GRANT USAGE ON SCHEMA genomeguard_runtime TO genomeguard_runtime")
@@ -63,6 +75,8 @@ def test_postgres_runtime_startup_skips_schema_migrations(pg_store, monkeypatch)
     monkeypatch.setattr(PostgresStore, "_migrate", fail_if_called)
     runtime_store = PostgresStore(url, run_migrations=False)
     try:
+        runtime_store.connection.execute("SET ROLE genomeguard_runtime")
+        runtime_store.connection.commit()
         assert runtime_store.one(
             "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
         ) is not None
@@ -356,7 +370,9 @@ def test_postgres_unscoped_demo_requester_requires_explicit_demo_context(pg_stor
         connection.execute("RESET ROLE")
     with pg_store.transaction():
         connection.execute("SET ROLE genomeguard_runtime")
-        assert pg_store.requesters()
+        assert pg_store.requesters() == []
+        pg_store.set_allow_unscoped_demo()
+        assert any(r["name"] == "Synthetic Demo Researcher" for r in pg_store.requesters())
         connection.execute("RESET ROLE")
     pg_store.x("DELETE FROM requesters WHERE name=?", ("Synthetic Demo Researcher",))
     connection.commit()
