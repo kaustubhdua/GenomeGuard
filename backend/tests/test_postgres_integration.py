@@ -410,7 +410,6 @@ def test_postgres_donor_consent_updates_require_admin_scope(pg_store):
 
 
 def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_tenant_links(pg_store):
-    role = "gg_cohort_rls_test_role"
     connection = pg_store.connection
     connection.execute("CREATE ROLE gg_cohort_rls_test_role NOLOGIN")
     connection.execute(
@@ -587,7 +586,6 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
 
 
 def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_store):
-    role = "gg_tenant_isolation_test_role"
     pg_store.connection.execute("CREATE ROLE gg_tenant_isolation_test_role NOLOGIN")
     try:
         pg_store.connection.execute(
