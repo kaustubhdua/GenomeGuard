@@ -118,6 +118,10 @@ def main() -> int:
             ctx = browser.new_context(viewport={"width": width, "height": 800})
             page = ctx.new_page()
             page.set_default_timeout(args.timeout)
+            errors: list[str] = []
+            page.on("pageerror", lambda e, errs=errors: errs.append("JavaScript: " + str(e)))
+            page.on("console", lambda msg, errs=errors: errs.append("Console: " + msg.text)
+                   if msg.type == "error" else None)
             page.goto(base + "/#/overview", wait_until="domcontentloaded")
             page.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
             for route in MOBILE_PAGES:
@@ -136,6 +140,7 @@ def main() -> int:
                 except Exception as exc:
                     check(f"{width}px {route}", False,
                           f"{type(exc).__name__}: {str(exc)[:160]}")
+            check(f"{width}px no JavaScript or console errors", not errors, "; ".join(errors)[:240])
             ctx.close()
         browser.close()
     print("\n" + ("LIVE UI SMOKE PASSED" if not FAILURES else f"LIVE UI SMOKE FAILED ({len(FAILURES)} checks)"))
