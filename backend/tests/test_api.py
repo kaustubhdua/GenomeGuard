@@ -443,6 +443,10 @@ def test_catalogue_endpoints():
     svc, c = make_client()
     resp = c.get("/catalogue/datasets")
     assert resp.status_code == 200
+    assert resp.headers["cache-control"] == (
+        "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+    )
+    assert resp.headers["vary"] == "Accept"
     data = resp.json()
     assert "datasets" in data
     assert "dataset_count" in data
@@ -453,6 +457,7 @@ def test_catalogue_endpoints():
 
     c_resp = c.get("/catalogue/chromosomes?assembly=GRCh38")
     assert c_resp.status_code == 200
+    assert c_resp.headers["cache-control"].startswith("public, max-age=0, s-maxage=60")
     c_data = c_resp.json()
     assert c_data["reference_assembly"] == "GRCh38"
     assert c_data["chromosome_count"] == 25
@@ -500,6 +505,7 @@ def test_public_source_catalogue_is_discovery_only_and_keeps_review_boundaries()
     _, c = make_client()
     response = c.get("/catalogue/sources")
     assert response.status_code == 200
+    assert response.headers["cache-control"].startswith("public, max-age=0, s-maxage=60")
     data = response.json()
     assert data["discovery_only"] is True
     assert data["source_count"] == len(data["sources"]) == 3
