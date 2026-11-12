@@ -136,7 +136,7 @@ def main() -> int:
                         pass
                 expected_empty_record = (
                     response.status == 404
-                    and re.fullmatch(r"/requests/\\d+(?:/exposure)?", path)
+                    and re.fullmatch(r"/requests/\d+(?:/exposure)?", path)
                     and is_json
                 )
                 if not expected_empty_record:
