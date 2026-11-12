@@ -908,11 +908,12 @@ def test_postgres_tenant_scoped_researcher_to_steward_workflow(pg_store, monkeyp
         headers=steward_a,
         json={"reviewer": "Org A Steward"},
     )
-    assert release_attempt.status_code == 200, release_attempt.text
-    blocked = release_attempt.json()
-    assert blocked["status"] == "release_blocked"
-    assert blocked.get("release") in (None, {})
-    assert client.get(request_path, headers=researcher_a).json()["status"] == "release_blocked"
+    assert release_attempt.status_code == 503, release_attempt.text
+    unavailable = release_attempt.json()
+    assert unavailable["error"] == "governed_release_unavailable"
+    pending = client.get(request_path, headers=researcher_a).json()
+    assert pending["status"] == "approved_pending_release"
+    assert pending.get("release") in (None, {})
 
     # Organization-scoped stewards cannot read the global audit ledger.
     assert client.get("/audit", headers=steward_a).status_code == 403
