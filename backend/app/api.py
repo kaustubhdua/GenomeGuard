@@ -325,10 +325,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         return global_principal
 
     def require_governed_data(svc: GenomeGuardService) -> None:
-        if not svc.release_enabled:
+        # Request evaluation and consent previews may run against an initialized cohort
+        # even when this deployment is not authorized to release its data. Release
+        # eligibility is enforced separately by the service after the policy pipeline.
+        if svc.ds.n_donors < 1 or svc.ds.n_variants < 1:
             raise ServiceError(
                 503, "governed_data_unavailable",
-                "The active decision engine is not linked to a verified normalized dataset import.",
+                "The active decision engine has no initialized cohort to evaluate.",
             )
 
     def route(method: str, path: str, summary: str, who: str):
