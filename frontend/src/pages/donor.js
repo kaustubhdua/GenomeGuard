@@ -14,8 +14,8 @@ export async function render() {
     state.donors.map((d) => h("option", { value: d.id }, d.label)));
   pick.value = state.donor.id;
   root.append(h("h1", {}, "Your data, in your hands"),
-    h("p", { class: "lede" }, "This view illustrates participant consent controls. These are example records; changes affect only this walkthrough and are not real-world consent actions."),
-    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Example participant (not a real consent record)", pick), body);
+    h("p", { class: "lede" }, "This is a guided preview of participant consent controls. The example records are isolated to this walkthrough; changes do not alter real-world consent or participant records."),
+    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Preview participant (not a real consent record)", pick), body);
   const flash = h("div", { "aria-live": "polite" });
 
   async function load() {
