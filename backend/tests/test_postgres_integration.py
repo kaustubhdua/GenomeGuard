@@ -820,6 +820,9 @@ def test_postgres_tenant_scoped_researcher_to_steward_workflow(pg_store, monkeyp
         admin_api_key="integration-test-admin-key-" + ("x" * 32),
     )
     svc = bootstrap(settings, store=pg_store)
+    # Exercise the closed gate independently of the synthetic demo's permitted
+    # aggregate-only workflow. Missing verified import must never release data.
+    svc.release_enabled = False
 
     identities = {
         "researcher-a": "org-a",
