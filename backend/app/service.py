@@ -63,6 +63,7 @@ def transactional(method):
              and ("organization_id" in value or value.get("_allow_unscoped_demo"))),
             None,
         )
+        transaction_depth = getattr(self.store, "_transaction_depth", 0)
         try:
             with transaction():
                 if requester and requester.get("organization_id"):
@@ -73,7 +74,7 @@ def transactional(method):
         except ServiceError as exc:
             # A frozen-account refusal must survive the rollback of the rejected request.
             # Persist only the security event after the failed request transaction has ended.
-            if exc.code == "requester_frozen":
+            if exc.code == "requester_frozen" and transaction_depth == 0:
                 with transaction():
                     if requester and requester.get("organization_id"):
                         self.store.set_tenant(requester["organization_id"])
