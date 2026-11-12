@@ -6,6 +6,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 
 | Method | Path | Purpose | Access |
 |---|---|---|---|
+| GET | `/auth/oidc` | Institutional OIDC login initiation and callback metadata | public |
 | GET | `/health` | Liveness, dataset facts, and deployment revision when provided by the host | public |
 | GET | `/health/live` | Cheap process liveness and deployment revision; no database or cohort initialization | public |
 | GET | `/health/ready` | Production readiness gate; distinguishes liveness from safe real-data operation | public |
