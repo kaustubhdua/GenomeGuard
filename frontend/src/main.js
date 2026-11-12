@@ -166,7 +166,7 @@ function drawWho() {
         note.textContent = state.oidcError || "Access is limited to provisioned institutional identities.";
       }
     } else {
-      note.textContent = "Institutional sign-in is not configured. Production research access remains disabled.";
+      note.textContent = "Account creation and sign-in are disabled because institutional sign-in is not configured. Production research access remains disabled.";
     }
   }
 }
