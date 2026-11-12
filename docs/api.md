@@ -11,7 +11,9 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/health/live` | Cheap process liveness and deployment revision; no database or cohort initialization | public |
 | GET | `/health/ready` | Production readiness gate; distinguishes liveness from safe real-data operation | public |
 | GET | `/demo/requesters` | Demo accounts and keys (demo mode only) | public |
-| POST | `/admin/requesters` | Provision a requester API key (returned once) | admin |
+| POST | `/admin/requesters` | Provision a requester identity; API key returned only in API-key mode | admin |
+| POST | `/admin/oidc-bindings` | Bind an institutional OIDC subject to a provisioned requester and organization | steward/admin |
+| POST | `/admin/oidc-bindings/revoke` | Revoke an institutional identity binding | steward/admin |
 | GET | `/me` | Who am I, my budget | requester |
 | POST | `/requests` | Submit a data request; returns decision, explanation, risk, transform summary and (if released) aggregate data | requester |
 | POST | `/requests/preview` | Non-consuming privacy and utility preview | requester |
