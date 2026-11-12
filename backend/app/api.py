@@ -73,6 +73,16 @@ def _j(data, status: int = 200) -> JSONResponse:
     return JSONResponse(jsonable(data), status_code=status)
 
 
+def _public_catalogue_json(data: dict) -> JSONResponse:
+    """Cache only non-sensitive, public reference/catalogue responses at shared edges."""
+    response = _j(data)
+    response.headers["Cache-Control"] = (
+        "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+    )
+    response.headers["Vary"] = "Accept"
+    return response
+
+
 def _deployment_info() -> dict[str, str | None]:
     commit = os.environ.get("RENDER_GIT_COMMIT", "")
     return {
@@ -1219,7 +1229,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         from app.data.public_sources import public_source_catalogue
 
         sources = public_source_catalogue()
-        return _j({
+        return _public_catalogue_json({
             "sources": sources,
             "source_count": len(sources),
             "discovery_only": True,
@@ -1250,7 +1260,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 "Dataset-level public research terms; no individual consent records are represented."
             ),
         } for item in imported]
-        return _j({
+        return _public_catalogue_json({
             "datasets": datasets,
             "dataset_count": len(datasets),
             "provenance_note": (
@@ -1321,7 +1331,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                     "coverage_status": "available" if coverage_available else "unavailable",
                 },
             })
-        return _j({
+        return _public_catalogue_json({
             "reference_assembly": assembly, "chromosome_count": len(rows), "chromosomes": rows,
             "coverage_available": coverage_available,
             "provenance_note": (
