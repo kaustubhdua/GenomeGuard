@@ -5,16 +5,18 @@ on:
     paths:
       - "Dockerfile"
       - "pyproject.toml"
-      - "backend/app/data/real.py"
-      - "backend/app/service.py"
+      - "backend/requirements.txt"
+      - "backend/app/data/**"
+      - "backend/app/core/**"
       - "docs/policies/igsr-1000-genomes-public-release.json"
       - ".github/workflows/real-data-image-build.yml"
   pull_request:
     paths:
       - "Dockerfile"
       - "pyproject.toml"
-      - "backend/app/data/real.py"
-      - "backend/app/service.py"
+      - "backend/requirements.txt"
+      - "backend/app/data/**"
+      - "backend/app/core/**"
       - "docs/policies/igsr-1000-genomes-public-release.json"
   workflow_dispatch:
 permissions:
