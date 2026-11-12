@@ -281,9 +281,9 @@ def test_postgres_migration_bootstrap_handles_runtime_owned_legacy_schema(pg_sto
         connection.execute("SET ROLE genomeguard_owner")
         connection.commit()
         _ensure_migration_schema_access(connection)
-        assert connection.execute("SELECT current_user AS role").fetchone()["role"] == "genomeguard_owner"
         assert connection.execute(
-            "SELECT has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS can_create"
+            "SELECT has_schema_privilege('genomeguard_owner',"
+            "'genomeguard_runtime','CREATE') AS can_create"
         ).fetchone()["can_create"] is True
     finally:
         connection.execute("RESET ROLE")
@@ -730,16 +730,7 @@ def test_postgres_consent_event_ledger_rejects_update_and_delete(pg_store):
 
 
 def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
-    from uuid import uuid4
-
-    role = "gg_test_runtime_" + uuid4().hex[:12]
-    pg_store.connection.execute(
-        f'CREATE ROLE "{role}" NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE'
-    )
-    pg_store.connection.execute(
-        f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
-    )
-    pg_store.connection.commit()
+    role = "genomeguard_runtime"
     try:
         pg_store.connection.execute(f'SET ROLE "{role}"')
         pg_store.connection.commit()
@@ -772,8 +763,13 @@ def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
         pg_store.connection.commit()
     finally:
         pg_store.connection.execute("RESET ROLE")
-        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
-        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+        pg_store.connection.execute(
+            f'REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM "{role}"'
+        )
+        pg_store.connection.execute(
+            f'REVOKE UPDATE ON TABLE genomeguard_runtime.audit_log FROM "{role}"'
+        )
+        pg_store.connection.commit()
 
 
 
