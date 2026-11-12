@@ -23,6 +23,40 @@ PED = "\n".join([
 SAMPLES = ["dad", "mum", "kid1", "kid2"] + [f"s{i}" for i in range(40)]
 
 
+def test_checksum_pinned_mirror_fallback_uses_same_verified_artifact(tmp_path, monkeypatch):
+    name = "ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
+    monkeypatch.setattr(real, "resolve_vcf_url", lambda _chrom: (_ for _ in ()).throw(
+        real.urllib.error.HTTPError("https://ftp.1000genomes.ebi.ac.uk", 429, "rate limited", {}, None)
+    ))
+    urls = real.resolve_vcf_urls("22")
+    assert urls == [
+        real.RELEASE_DIR + name,
+        "https://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20130502/" + name,
+    ]
+
+    good = b"same pinned public artifact"
+    calls = []
+    target = tmp_path / "chr22.vcf.gz"
+
+    def fake_download(url, dest, **kwargs):
+        calls.append(url)
+        if len(calls) == 1:
+            raise RuntimeError("primary mirror unavailable")
+        assert kwargs["expected_sha256"] == real.KNOWN_DOWNLOADS[name]["sha256"]
+        assert kwargs["expected_size"] == real.KNOWN_DOWNLOADS[name]["size"]
+        dest.write_bytes(good)
+        return dest
+
+    monkeypatch.setattr(real, "download", fake_download)
+    assert real.download_from_mirrors(
+        urls, target,
+        expected_sha256=real.KNOWN_DOWNLOADS[name]["sha256"],
+        expected_size=real.KNOWN_DOWNLOADS[name]["size"],
+    ) == target
+    assert calls == urls
+    assert target.read_bytes() == good
+
+
 def test_download_retries_digest_mismatch_and_never_publishes_corrupt_bytes(tmp_path, monkeypatch):
     good = b"verified official artifact"
     bad = b"badified official artifact"
