@@ -19,7 +19,7 @@ permissions:
   contents: read
 concurrency:
   group: genomeguard-staging-acceptance
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   staging:
     name: Shared synthetic staging environment acceptance
