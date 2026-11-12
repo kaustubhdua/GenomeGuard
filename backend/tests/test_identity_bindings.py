@@ -98,6 +98,9 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     # Bootstrap synthetic fixtures in demo mode, then exercise the production-only
     # provisioning route with the same non-demo guard used by an institutional instance.
     settings.demo_mode = False
+    # The service was bootstrapped with local demo fixtures; emulate the production
+    # release gate as well as the production authentication gate.
+    svc.release_enabled = False
 
     researcher_headers = {"Authorization": "Bearer researcher-sub"}
     reviewer_headers = {"Authorization": "Bearer reviewer-sub"}
