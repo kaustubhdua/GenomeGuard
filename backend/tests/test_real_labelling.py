@@ -134,7 +134,7 @@ def _dataset_policy_meta(*, bad_digest=False):
     digest = hashlib.sha256(policy_path.read_bytes()).hexdigest()
     return {
         "source": "1000 Genomes (IGSR)",
-        "samples": 600,
+        "samples": 340,
         "genotypes_real": True,
         "consent_simulated": False,
         "consent_basis": "dataset_policy",
@@ -150,7 +150,7 @@ def _dataset_policy_meta(*, bad_digest=False):
         "consent_policy_source_file": policy_path.name,
         "consent_policy_source_sha256": ("0" * 64 if bad_digest else digest),
         "consent_records_matched": 0,
-        "dataset_policy_samples_scoped": 600,
+        "dataset_policy_samples_scoped": 340,
         "source_vcf_sha256": "a" * 64,
         "source_sample_metadata_sha256": "b" * 64,
         "source_vcf_file": "public-test.vcf.gz",
@@ -167,7 +167,7 @@ def test_dataset_policy_provenance_requires_matching_source_document_hash():
         health = TestClient(create_app(svc)).get("/health").json()
         assert health["consent_provenance_consistent"] is True
         assert health["participant_consent_records_matched"] == 0
-        assert health["dataset_policy_samples_scoped"] == 600
+        assert health["dataset_policy_samples_scoped"] == 340
         assert health["provenance"]["consent_source"] is None
         assert health["provenance"]["consent_policy_source_sha256"] == _dataset_policy_meta()["consent_policy_source_sha256"]
 
