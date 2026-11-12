@@ -84,6 +84,12 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         {"purpose": "disease_research", "disease": None, "is_commercial": False,
          "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
     )
+    # The request-list read model intentionally includes only evaluated decisions.
+    svc.store.save_decision(request_id, {
+        "outcome": "permit", "reasons": [], "risk": {}, "transform": {},
+        "explanation": "identity-scope fixture", "needs_human": False,
+        "private": {}, "release": None,
+    })
     # Record the RLS context calls just as the PostgreSQL store would receive them.
     rls_scopes = []
     svc.store.set_tenant = lambda organization_id: rls_scopes.append(("tenant", organization_id))
