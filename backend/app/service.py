@@ -75,6 +75,10 @@ def transactional(method):
             # Persist only the security event after the failed request transaction has ended.
             if exc.code == "requester_frozen":
                 with transaction():
+                    if requester and requester.get("organization_id"):
+                        self.store.set_tenant(requester["organization_id"])
+                    elif requester and requester.get("_allow_unscoped_demo"):
+                        self.store.set_allow_unscoped_demo()
                     self.audit.append(
                         "system", "request.refused_frozen",
                         {"request_id": exc.extra.get("request_id")},
