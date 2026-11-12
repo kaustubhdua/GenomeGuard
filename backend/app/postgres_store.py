@@ -61,7 +61,7 @@ def _translate(sql: str) -> str:
             "explanation_text,needs_human,private_json,release_json"
             ") VALUES(?,?,?,?,?,?,?,?,?)"
         )
-        if re.sub(r"\\s+", "", statement).lower() != re.sub(r"\\s+", "", expected_sqlite).lower():
+        if "".join(statement.split()).lower() != "".join(expected_sqlite.split()).lower():
             raise ValueError("unsupported decisions upsert statement")
         statement = (
             "INSERT INTO decisions(request_id,outcome,reasons_json,risk_json,transform_json,"
