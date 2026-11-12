@@ -62,7 +62,7 @@ def differencing_attack(ds: Dataset, trials: int = 40, seed: int = 1, n: int = 6
         target = int(cohort[0])
         a_ids = [int(i) + 1 for i in cohort]
         b_ids = a_ids[1:]
-        v = rng.choice(common, n_vars, replace=False)
+        v = rng.choice(common, min(n_vars, len(common)), replace=False)
         truth = G[target, v].astype(int)
         base = np.array([int(np.argmax([(1 - f) ** 2, 2 * f * (1 - f), f**2]))
                          for f in ds.alt_freq[v]])
