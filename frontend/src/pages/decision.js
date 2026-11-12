@@ -139,7 +139,7 @@ function toolSummary(tool, r) {
       const c = r.consent || {};
       return c.considered == null ? "No policy count was recorded."
         : state.demo
-          ? `${c.eligible} of ${c.considered} synthetic donors pass simulated permission rules.`
+          ? `${c.eligible} of ${c.considered} preview donor records pass example permission rules.`
           : state.health?.provenance?.consent === "source_records"
             ? `${c.eligible} of ${c.considered} individuals pass source-matched consent rules.`
             : `${c.eligible} of ${c.considered} individuals pass the dataset-level policy mapping; this is not participant-specific consent.`;
