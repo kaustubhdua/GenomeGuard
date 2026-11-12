@@ -791,8 +791,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def copilot(request):
         admin(request)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
-        return _j(await run_in_threadpool(
-            admin_call, request.state.admin_principal, S().copilot_review, request.path_params["id"], refresh,
+        return _j(admin_call(
+            request.state.admin_principal, S().copilot_review,
+            request.path_params["id"], refresh,
         ))
 
     @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model); "
@@ -1107,8 +1108,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def compliance(request):
         admin(request)
         q = request.query_params
-        return _j(await run_in_threadpool(
-            admin_call, S().compliance_report, q.get("from"), q.get("to"),
+        return _j(admin_call(
+            request.state.admin_principal, S().compliance_report, q.get("from"), q.get("to"),
         ))
 
     @route("GET", "/reports/compliance/export",
@@ -1116,8 +1117,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def compliance_export(request):
         admin(request)
         q = request.query_params
-        evidence = await run_in_threadpool(
-            admin_call, S().compliance_evidence_pack, q.get("from"), q.get("to"),
+        evidence = admin_call(
+            request.state.admin_principal, S().compliance_evidence_pack, q.get("from"), q.get("to"),
         )
         return _j(evidence)
 
