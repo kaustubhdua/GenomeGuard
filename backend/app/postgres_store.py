@@ -328,7 +328,7 @@ class PostgresStore(Store):
                     ).fetchone()
                     if applied:
                         continue
-                    sql = "\\n".join(
+                    sql = "\n".join(
                         line for line in migration.read_text(encoding="utf-8").splitlines()
                         if not line.lstrip().startswith("--")
                     )
