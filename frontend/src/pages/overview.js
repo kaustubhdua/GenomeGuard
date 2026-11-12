@@ -117,7 +117,7 @@ export async function render() {
 
   root.append(h("section", { class: "gg-command" },
     h("div", { class: "gg-command-copy" },
-      h("div", { class: "gg-eyebrow" }, h("span", { class: hl.status === "ok" ? "gg-live-dot" : "gg-live-dot gg-live-dot-off" }), state.demo ? "DEMONSTRATION ENVIRONMENT / SYNTHETIC COHORT" : "GENOMIC DATA GOVERNANCE / RESEARCH WORKSPACE"),
+      h("div", { class: "gg-eyebrow" }, h("span", { class: hl.status === "ok" ? "gg-live-dot" : "gg-live-dot gg-live-dot-off" }), "GENOMIC DATA GOVERNANCE / RESEARCH WORKSPACE"),
       h("h1", {}, "Research access, governed with evidence."),
       h("p", {}, "A unified workspace for genomic dataset provenance, privacy-aware access decisions and accountable research operations."),
       tourAvailable()
