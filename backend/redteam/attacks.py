@@ -58,7 +58,7 @@ def differencing_attack(ds: Dataset, trials: int = 40, seed: int = 1, n: int = 6
     res = {k: [] for k in ("none", "dp_only", "ladder_only", "ladder_plus_guard", "baseline")}
     guard_blocked = 0
     for _ in range(trials):
-        cohort = rng.choice(ds.n_donors, n, replace=False)
+        cohort = rng.choice(ds.n_donors, min(n, ds.n_donors), replace=False)
         target = int(cohort[0])
         a_ids = [int(i) + 1 for i in cohort]
         b_ids = a_ids[1:]
