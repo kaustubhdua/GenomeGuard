@@ -762,7 +762,9 @@ def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
 
 
 def test_postgres_rejects_distinct_urls_for_the_same_runtime_and_migration_role():
-    url = os.environ["GG_TEST_DATABASE_URL"]
+    url = os.environ.get("GG_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("GG_TEST_DATABASE_URL is not configured")
     with pytest.raises(ValueError, match="different PostgreSQL roles"):
         PostgresStore(
             url,
