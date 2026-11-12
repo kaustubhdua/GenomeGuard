@@ -236,6 +236,8 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved_pending_release"
     assert approved.json().get("release") in (None, {})
+    # The test has no verified production dataset import; never enable release.
+    svc.release_enabled = False
     assert client.post(
         f"{pending_path}/release",
         headers=release_researcher_headers,
