@@ -35,7 +35,7 @@ const STEPS = [
       ctx.study = r.data.id;
       const c = (r.data.risk || {}).consent || {};
       const policyNote = !c.considered ? "" : state.demo
-        ? `${c.eligible} of ${c.considered} synthetic donors pass simulated permission rules. `
+        ? `${c.eligible} of ${c.considered} example donors pass example permission rules. `
         : state.health?.provenance?.consent === "source_records"
           ? `${c.eligible} of ${c.considered} samples pass source-matched consent rules. `
           : `${c.eligible} of ${c.considered} samples pass the dataset-level policy mapping; this is not participant-specific consent. `;
@@ -63,7 +63,7 @@ const STEPS = [
   { title: "Measured, not claimed", hash: "#/redteam",
     text: "We attack our own system and report what happens, including where it fails and what the evaluation does not show. Every number comes from one command with fixed seeds." },
   { title: "Participant view", hash: "#/donor", last: true,
-    text: "Explore the simulated participant consent record, its controls, and the FHIR R4 export. These records are synthetic and changes do not alter real-world consent." },
+    text: "Explore the example participant consent record, its controls, and the FHIR R4 export. This is a walkthrough; changes do not alter real-world consent." },
 ];
 
 function close() {
