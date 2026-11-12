@@ -41,7 +41,7 @@ export async function render() {
 }
 
 // The router passes its own argument to render(), so the sample switch lives on a separate function.
-async function renderCatalogue(sample) {
+async function renderCatalogue(sample, force = false) {
   const root = h("div", { class: "stack dataset-page" });
   root.append(h("section", { class: "card hero dataset-hero" }, h("div", { class: "hero-copy" },
     h("h1", {}, "Dataset catalogue"),
@@ -50,13 +50,13 @@ async function renderCatalogue(sample) {
       h("span", { class: "status-dot" }, "Verified records only"),
       h("span", { class: "muted" }, "Public research data. Not for clinical use.")))));
 
-  const response = sample ? { ok: true, status: 200, data: sampleDatasets() } : await loadPublicCatalogue("datasets");
+  const response = sample ? { ok: true, status: 200, data: sampleDatasets() } : await loadPublicCatalogue("datasets", { force });
   const showSample = async () => root.replaceWith(await renderCatalogue(true));
   if (!response.ok) {
     const retry = h("button", { class: "btn", onclick: async () => {
       retry.disabled = true;
       retry.textContent = "Checking…";
-      const next = await renderCatalogue(false);
+      const next = await renderCatalogue(false, true);
       root.replaceWith(next);
     } }, "Retry connection");
     root.append(notice("warn",
