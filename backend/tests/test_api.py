@@ -236,7 +236,11 @@ def test_release_is_separately_gated_when_active_data_is_not_linked():
     )
     assert released.status_code == 503
     assert released.json()["error"] == "governed_release_unavailable"
-    assert c.post("/requests", json=DEMO_REQ, headers=H(RESEARCHER)).status_code == 503
+    unavailable = c.post("/requests", json=DEMO_REQ, headers=H(RESEARCHER))
+    assert unavailable.status_code == 201
+    assert unavailable.json()["status"] == "held"
+    assert "governed_release_unavailable" in unavailable.json()["reasons"]
+    assert unavailable.json().get("release") in (None, {})
 
 
 def test_audit_endpoints_and_tamper_demo_over_http():
