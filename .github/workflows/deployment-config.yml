@@ -62,6 +62,7 @@ jobs:
         run: |
           ruby -e '
             require "yaml"
+            # Safe loading avoids Ruby object deserialization from repository YAML.
             config = YAML.safe_load_file("render.staging.yaml", permitted_classes: [], permitted_symbols: [], aliases: false)
             services = config.fetch("services")
             raise "staging blueprint must define exactly one service" unless services.length == 1
