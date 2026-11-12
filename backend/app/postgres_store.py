@@ -52,19 +52,27 @@ WITH measured AS (
 
 
 def _translate(sql: str) -> str:
-    """Translate the small, known SQLite SQL subset used by Store into PostgreSQL SQL."""
+    """Translate the fixed SQLite SQL subset used by Store into PostgreSQL SQL."""
     statement = sql.strip()
     if statement.upper().startswith("INSERT OR REPLACE INTO DECISIONS"):
-        match = re.match(
-            r"INSERT OR REPLACE INTO decisions\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
-            statement, re.IGNORECASE,
+        expected_sqlite = (
+            "INSERT OR REPLACE INTO decisions("
+            "request_id,outcome,reasons_json,risk_json,transform_json,"
+            "explanation_text,needs_human,private_json,release_json"
+            ") VALUES(?,?,?,?,?,?,?,?,?)"
         )
-        if not match:
+        if re.sub(r"\\s+", "", statement).lower() != re.sub(r"\\s+", "", expected_sqlite).lower():
             raise ValueError("unsupported decisions upsert statement")
-        columns = [c.strip() for c in match.group(1).split(",")]
-        updates = ", ".join(f"{c}=EXCLUDED.{c}" for c in columns if c != "request_id")
-        statement = (f"INSERT INTO decisions ({', '.join(columns)}) VALUES ({match.group(2)}) "
-                     f"ON CONFLICT (request_id) DO UPDATE SET {updates}")
+        statement = (
+            "INSERT INTO decisions(request_id,outcome,reasons_json,risk_json,transform_json,"
+            "explanation_text,needs_human,private_json,release_json) "
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT (request_id) DO UPDATE SET "
+            "outcome=EXCLUDED.outcome, reasons_json=EXCLUDED.reasons_json, "
+            "risk_json=EXCLUDED.risk_json, transform_json=EXCLUDED.transform_json, "
+            "explanation_text=EXCLUDED.explanation_text, needs_human=EXCLUDED.needs_human, "
+            "private_json=EXCLUDED.private_json, release_json=EXCLUDED.release_json"
+        )
     elif statement.upper().startswith("INSERT OR REPLACE INTO EPSILON_LEDGER"):
         statement = (
             "INSERT INTO epsilon_ledger(requester_id,dataset_id,epsilon_spent,updated_at) "

@@ -3,13 +3,32 @@ from app.postgres_store import _translate
 
 
 def test_decision_replace_becomes_postgres_upsert():
-    sql = _translate(
-        "INSERT OR REPLACE INTO decisions(request_id,outcome,reasons_json) VALUES(?,?,?)"
+    statement = (
+        "INSERT OR REPLACE INTO decisions("
+        "request_id,outcome,reasons_json,risk_json,transform_json,"
+        "explanation_text,needs_human,private_json,release_json"
+        ") VALUES(?,?,?,?,?,?,?,?,?)"
     )
-    assert "ON CONFLICT (request_id) DO UPDATE SET" in sql
-    assert "outcome=EXCLUDED.outcome" in sql
-    assert "reasons_json=EXCLUDED.reasons_json" in sql
-    assert "?" not in sql
+    translated = _translate(statement)
+    assert translated == (
+        "INSERT INTO decisions(request_id,outcome,reasons_json,risk_json,transform_json,"
+        "explanation_text,needs_human,private_json,release_json) "
+        "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+        "ON CONFLICT (request_id) DO UPDATE SET "
+        "outcome=EXCLUDED.outcome, reasons_json=EXCLUDED.reasons_json, "
+        "risk_json=EXCLUDED.risk_json, transform_json=EXCLUDED.transform_json, "
+        "explanation_text=EXCLUDED.explanation_text, needs_human=EXCLUDED.needs_human, "
+        "private_json=EXCLUDED.private_json, release_json=EXCLUDED.release_json"
+    )
+    assert translated.count("%s") == 9
+
+
+def test_decision_replace_rejects_unexpected_columns():
+    import pytest
+
+    with pytest.raises(ValueError, match="unsupported decisions upsert"):
+        _translate("INSERT OR REPLACE INTO decisions(request_id,untrusted_column) VALUES(?,?)")
+
 
 
 def test_privacy_ledger_replace_becomes_composite_key_upsert():
