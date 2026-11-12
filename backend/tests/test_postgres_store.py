@@ -216,6 +216,14 @@ def test_runtime_and_migration_connections_are_separated(monkeypatch):
 
         def execute(self, statement, args=()):
             self.statements.append((statement, args))
+            class Cursor:
+                def fetchone(self_inner):
+                    if "SELECT current_user AS role" in statement:
+                        return {"role": "runtime" if self.url.startswith("postgresql://runtime") else "owner"}
+                    if "SELECT EXISTS" in statement and "genomeguard_runtime" in statement:
+                        return {"present": True}
+                    return None
+            return Cursor()
 
         def close(self):
             self.closed = True
@@ -242,7 +250,9 @@ def test_runtime_and_migration_connections_are_separated(monkeypatch):
     assert connections[0].closed is False
     assert connections[1].closed is True
     assert all("CREATE SCHEMA" not in statement for statement, _ in connections[0].statements)
-    assert any("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime" in statement
+    assert any("SELECT EXISTS" in statement and "genomeguard_runtime" in statement
+               for statement, _ in connections[1].statements)
+    assert any("SET search_path TO genomeguard_runtime, public" in statement
                for statement, _ in connections[1].statements)
     assert store.migration_connection is None
     store.close()
@@ -255,7 +265,17 @@ def test_schema_migrations_execute_only_through_owner_connection():
     from app.postgres_store import PostgresStore
 
     class Cursor:
+        def __init__(self, statement):
+            self.statement = statement
+
         def fetchone(self):
+            if "SELECT current_user AS migration_role" in self.statement:
+                return {
+                    "migration_role": "genomeguard_owner",
+                    "schema_owner": "genomeguard_owner",
+                    "can_create": True,
+                    "can_set_runtime": False,
+                }
             return None
 
     class FakeConnection:
@@ -267,7 +287,7 @@ def test_schema_migrations_execute_only_through_owner_connection():
 
         def execute(self, statement, args=(), **kwargs):
             self.statements.append((statement, args, kwargs))
-            return Cursor()
+            return Cursor(statement)
 
     runtime = FakeConnection()
     owner = FakeConnection()
