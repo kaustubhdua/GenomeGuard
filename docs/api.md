@@ -12,6 +12,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/health/ready` | Production readiness gate; distinguishes liveness from safe real-data operation | public |
 | GET | `/demo/requesters` | Demo accounts and keys (demo mode only) | public |
 | POST | `/admin/requesters` | Provision a requester identity; API key returned only in API-key mode | admin |
+| POST | `/admin/consent-events` | Apply a signed, source-authority participant consent event | admin |
 | POST | `/admin/oidc-bindings` | Bind an institutional OIDC subject to a provisioned requester and organization | steward/admin |
 | POST | `/admin/oidc-bindings/revoke` | Revoke an institutional identity binding | steward/admin |
 | GET | `/me` | Who am I, my budget | requester |
@@ -73,6 +74,8 @@ production readiness.
 GET /variants/population-frequency accepts chromosome, position, reference_allele, alternate_allele, and assembly (GRCh37 or GRCh38) as query parameters. It returns only exact-locus aggregate rows from manifests whose data-use review is approved_public_research and import status is loaded. Each row identifies the source, release, URL, checksum, assembly, population, AC, AN, AF, and homozygote count.
 
 The status is available, empty, or unavailable. An empty result means no approved loaded reference matched; unavailable means the serving database, migration, or reader role is not configured. Neither state is filled with estimated values. This public reference endpoint is separate from participant-level cohort evidence and does not create or bypass a governed release.
+
+In deployments that load a public reference cohort without a verified normalized governed-import lifecycle, consent summaries, previews and research-request evaluation may still run. A permitted evaluation is held for steward review with `governed_release_unavailable`; it does not materialize data or charge a release budget. A steward cannot override this deployment-level release gate.
 
 `POST /admin/vcf-qc` requires `Content-Type: application/octet-stream`,
 `X-Filename`, and `X-Reference-Assembly: GRCh37|GRCh38`; `X-Expected-Sha256` is

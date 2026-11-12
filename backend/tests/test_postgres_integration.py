@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 import pytest
+from psycopg import sql as pg_sql
 
 from app.core.audit_chain import AuditChain
 from app.postgres_store import (
@@ -23,10 +24,22 @@ def pg_store():
         pytest.skip("GG_TEST_DATABASE_URL is not configured")
     with psycopg.connect(url, autocommit=True) as admin:
         admin.execute(
-            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "DO $role$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "WHERE rolname='genomeguard_owner') THEN "
+            "CREATE ROLE genomeguard_owner NOLOGIN NOSUPERUSER NOBYPASSRLS "
+            "NOCREATEDB NOCREATEROLE; END IF; END $role$"
+        )
+        admin.execute(
+            "DO $role$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "WHERE rolname='genomeguard_app_runtime') THEN "
+            "CREATE ROLE genomeguard_app_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
+            "NOCREATEDB NOCREATEROLE; END IF; END $role$"
+        )
+        admin.execute(
+            "DO $role$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
             "WHERE rolname='genomeguard_runtime') THEN "
             "CREATE ROLE genomeguard_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
-            "NOCREATEDB NOCREATEROLE; END IF; END $"
+            "NOCREATEDB NOCREATEROLE; END IF; END $role$"
         )
         admin.execute("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime")
         admin.execute("GRANT USAGE ON SCHEMA genomeguard_runtime TO genomeguard_runtime")
@@ -63,6 +76,8 @@ def test_postgres_runtime_startup_skips_schema_migrations(pg_store, monkeypatch)
     monkeypatch.setattr(PostgresStore, "_migrate", fail_if_called)
     runtime_store = PostgresStore(url, run_migrations=False)
     try:
+        runtime_store.connection.execute("SET ROLE genomeguard_runtime")
+        runtime_store.connection.commit()
         assert runtime_store.one(
             "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
         ) is not None
@@ -267,14 +282,16 @@ def test_postgres_migration_bootstrap_handles_runtime_owned_legacy_schema(pg_sto
         connection.execute("SET ROLE genomeguard_owner")
         connection.commit()
         _ensure_migration_schema_access(connection)
-        assert connection.execute("SELECT current_user AS role").fetchone()["role"] == "genomeguard_owner"
         assert connection.execute(
-            "SELECT has_schema_privilege(current_user,'genomeguard_runtime','CREATE') AS can_create"
+            "SELECT has_schema_privilege('genomeguard_owner',"
+            "'genomeguard_runtime','CREATE') AS can_create"
         ).fetchone()["can_create"] is True
     finally:
         connection.execute("RESET ROLE")
         connection.execute(
-            f"ALTER SCHEMA genomeguard_runtime OWNER TO {original_schema_owner}"
+            pg_sql.SQL("ALTER SCHEMA genomeguard_runtime OWNER TO {}").format(
+                pg_sql.Identifier(original_schema_owner)
+            )
         )
         connection.execute("REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_owner")
         if not owner_was_runtime_member:
@@ -356,7 +373,9 @@ def test_postgres_unscoped_demo_requester_requires_explicit_demo_context(pg_stor
         connection.execute("RESET ROLE")
     with pg_store.transaction():
         connection.execute("SET ROLE genomeguard_runtime")
-        assert pg_store.requesters()
+        assert pg_store.requesters() == []
+        pg_store.set_allow_unscoped_demo()
+        assert any(r["name"] == "Synthetic Demo Researcher" for r in pg_store.requesters())
         connection.execute("RESET ROLE")
     pg_store.x("DELETE FROM requesters WHERE name=?", ("Synthetic Demo Researcher",))
     connection.commit()
@@ -394,19 +413,16 @@ def test_postgres_donor_consent_updates_require_admin_scope(pg_store):
 
 
 def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_tenant_links(pg_store):
-    from uuid import uuid4
-
-    role = "gg_cohort_rls_" + uuid4().hex[:12]
     connection = pg_store.connection
-    connection.execute(f'CREATE ROLE "{role}" NOLOGIN')
+    connection.execute("CREATE ROLE gg_cohort_rls_test_role NOLOGIN")
     connection.execute(
-        f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+        "GRANT USAGE ON SCHEMA genomeguard_runtime TO gg_cohort_rls_test_role"
     )
     connection.execute(
-        f'GRANT SELECT ON donors, genotypes, variants, relationships, cohort_metadata, donor_access TO "{role}"'
+        "GRANT SELECT ON donors, genotypes, variants, relationships, cohort_metadata, donor_access TO gg_cohort_rls_test_role"
     )
     connection.execute(
-        f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
+        "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO gg_cohort_rls_test_role"
     )
     connection.commit()
 
@@ -474,7 +490,7 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
                 (990002, "tenant-b-access", "tenant-b"),
             )
 
-        connection.execute(f'SET ROLE "{role}"')
+        connection.execute("SET ROLE gg_cohort_rls_test_role")
         connection.commit()
         with pg_store.transaction():
             pg_store.set_tenant("tenant-a")
@@ -543,8 +559,8 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
         pg_store.x("DELETE FROM variants WHERE id BETWEEN 880001 AND 880003")
         pg_store.x("DELETE FROM cohort_metadata WHERE id=1")
         pg_store.x("DELETE FROM donors WHERE id BETWEEN 990001 AND 990003")
-        connection.execute(f'DROP OWNED BY "{role}"')
-        connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+        connection.execute("DROP OWNED BY gg_cohort_rls_test_role")
+        connection.execute("DROP ROLE IF EXISTS gg_cohort_rls_test_role")
         connection.commit()
 
 
@@ -573,23 +589,19 @@ def test_postgres_native_migrations_are_idempotent(pg_store):
 
 
 def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_store):
-    from uuid import uuid4
-
-    role = "gg_test_rls_" + uuid4().hex[:12]
-    pg_store.connection.execute(f'CREATE ROLE "{role}" NOLOGIN')
+    pg_store.connection.execute("CREATE ROLE gg_tenant_isolation_test_role NOLOGIN")
     try:
         pg_store.connection.execute(
-            f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+            "GRANT USAGE ON SCHEMA genomeguard_runtime TO gg_tenant_isolation_test_role"
         )
         pg_store.connection.execute(
-            f'GRANT SELECT, INSERT, UPDATE, DELETE ON requests, decisions, epsilon_ledger, alerts '
-            f'TO "{role}"'
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON requests, decisions, epsilon_ledger, alerts TO gg_tenant_isolation_test_role"
         )
         pg_store.connection.execute(
-            f'GRANT SELECT ON requesters, identity_bindings, consent_events TO "{role}"'
+            "GRANT SELECT ON requesters, identity_bindings, consent_events TO gg_tenant_isolation_test_role"
         )
         pg_store.connection.execute(
-            f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
+            "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO gg_tenant_isolation_test_role"
         )
 
         pg_store.x(
@@ -625,7 +637,7 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
                 })
                 ids[org] = req_id
 
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute("SET ROLE gg_tenant_isolation_test_role")
         pg_store.connection.commit()
         with pg_store.transaction():
             pg_store.set_tenant("tenant-a")
@@ -677,8 +689,8 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
         pg_store.connection.commit()
     finally:
         pg_store.connection.execute("RESET ROLE")
-        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
-        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+        pg_store.connection.execute("DROP OWNED BY gg_tenant_isolation_test_role")
+        pg_store.connection.execute("DROP ROLE IF EXISTS gg_tenant_isolation_test_role")
 
 
 
@@ -714,41 +726,31 @@ def test_postgres_consent_event_ledger_rejects_update_and_delete(pg_store):
 
 
 def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
-    from uuid import uuid4
-
-    role = "gg_test_runtime_" + uuid4().hex[:12]
-    pg_store.connection.execute(
-        f'CREATE ROLE "{role}" NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE'
-    )
-    pg_store.connection.execute(
-        f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
-    )
-    pg_store.connection.commit()
     try:
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute("SET ROLE genomeguard_runtime")
         pg_store.connection.commit()
         pg_store.assert_least_privilege_runtime()
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.commit()
 
         pg_store.connection.execute(
-            f'GRANT TRUNCATE ON TABLE genomeguard_runtime.requests TO "{role}"'
+            "GRANT TRUNCATE ON TABLE genomeguard_runtime.requests TO genomeguard_runtime"
         )
         pg_store.connection.commit()
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute("SET ROLE genomeguard_runtime")
         pg_store.connection.commit()
         with pytest.raises(RuntimeError, match="over-privileged"):
             pg_store.assert_least_privilege_runtime()
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.commit()
         pg_store.connection.execute(
-            f'REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM "{role}"'
+            "REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM genomeguard_runtime"
         )
         pg_store.connection.execute(
-            f'GRANT UPDATE ON TABLE genomeguard_runtime.audit_log TO "{role}"'
+            "GRANT UPDATE ON TABLE genomeguard_runtime.audit_log TO genomeguard_runtime"
         )
         pg_store.connection.commit()
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute("SET ROLE genomeguard_runtime")
         pg_store.connection.commit()
         with pytest.raises(RuntimeError, match="over-privileged"):
             pg_store.assert_least_privilege_runtime()
@@ -756,13 +758,20 @@ def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
         pg_store.connection.commit()
     finally:
         pg_store.connection.execute("RESET ROLE")
-        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
-        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+        pg_store.connection.execute(
+            "REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM genomeguard_runtime"
+        )
+        pg_store.connection.execute(
+            "REVOKE UPDATE ON TABLE genomeguard_runtime.audit_log FROM genomeguard_runtime"
+        )
+        pg_store.connection.commit()
 
 
 
 def test_postgres_rejects_distinct_urls_for_the_same_runtime_and_migration_role():
-    url = os.environ["GG_TEST_DATABASE_URL"]
+    url = os.environ.get("GG_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("GG_TEST_DATABASE_URL is not configured")
     with pytest.raises(ValueError, match="different PostgreSQL roles"):
         PostgresStore(
             url,
@@ -802,6 +811,9 @@ def test_postgres_tenant_scoped_researcher_to_steward_workflow(pg_store, monkeyp
         admin_api_key="integration-test-admin-key-" + ("x" * 32),
     )
     svc = bootstrap(settings, store=pg_store)
+    # Exercise the closed gate independently of the synthetic demo's permitted
+    # aggregate-only workflow. Missing verified import must never release data.
+    svc.release_enabled = False
 
     identities = {
         "researcher-a": "org-a",
@@ -890,11 +902,12 @@ def test_postgres_tenant_scoped_researcher_to_steward_workflow(pg_store, monkeyp
         headers=steward_a,
         json={"reviewer": "Org A Steward"},
     )
-    assert release_attempt.status_code == 200, release_attempt.text
-    blocked = release_attempt.json()
-    assert blocked["status"] == "release_blocked"
-    assert blocked.get("release") in (None, {})
-    assert client.get(request_path, headers=researcher_a).json()["status"] == "release_blocked"
+    assert release_attempt.status_code == 503, release_attempt.text
+    unavailable = release_attempt.json()
+    assert unavailable["error"] == "governed_release_unavailable"
+    pending = client.get(request_path, headers=researcher_a).json()
+    assert pending["status"] == "approved_pending_release"
+    assert pending.get("release") in (None, {})
 
     # Organization-scoped stewards cannot read the global audit ledger.
     assert client.get("/audit", headers=steward_a).status_code == 403

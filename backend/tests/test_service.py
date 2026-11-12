@@ -22,6 +22,20 @@ def test_demo_step1_to_3_permit_with_transform_drops_planted_variants():
     assert "request" in d["explanation"].lower()
 
 
+def test_release_disabled_keeps_request_reviewable_without_materializing_or_charging():
+    svc = make_service()
+    svc.release_enabled = False
+    requester = U(svc, RESEARCHER)
+    before = svc.store.eps_spent(requester["id"], svc.dataset_id)
+    decision = svc.submit(requester, DEMO_REQ)
+    assert decision["outcome"] == "escalate"
+    assert decision["status"] == "held"
+    assert decision["needs_human"] is True
+    assert decision["reasons"] == ["governed_release_unavailable"]
+    assert decision.get("release") in (None, {})
+    assert svc.store.eps_spent(requester["id"], svc.dataset_id) == before
+
+
 def test_release_matches_true_frequencies_when_no_noise():
     svc = make_service()
     d = svc.submit(U(svc, RESEARCHER), {**DEMO_REQ, "variant_filter": {"min_maf": 0.2, "limit": 5}})

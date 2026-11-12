@@ -1,0 +1,3 @@
+name: GenomeGuard CodeQL configuration
+queries:
+  - uses: security-extended

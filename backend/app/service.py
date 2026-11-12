@@ -63,12 +63,28 @@ def transactional(method):
              and ("organization_id" in value or value.get("_allow_unscoped_demo"))),
             None,
         )
-        with transaction():
-            if requester and requester.get("organization_id"):
-                self.store.set_tenant(requester["organization_id"])
-            elif requester and requester.get("_allow_unscoped_demo"):
-                self.store.set_allow_unscoped_demo()
-            return method(self, *args, **kwargs)
+        transaction_depth = getattr(self.store, "_transaction_depth", 0)
+        try:
+            with transaction():
+                if requester and requester.get("organization_id"):
+                    self.store.set_tenant(requester["organization_id"])
+                elif requester and requester.get("_allow_unscoped_demo"):
+                    self.store.set_allow_unscoped_demo()
+                return method(self, *args, **kwargs)
+        except ServiceError as exc:
+            # A frozen-account refusal must survive the rollback of the rejected request.
+            # Persist only the security event after the failed request transaction has ended.
+            if exc.code == "requester_frozen" and transaction_depth == 0:
+                with transaction():
+                    if requester and requester.get("organization_id"):
+                        self.store.set_tenant(requester["organization_id"])
+                    elif requester and requester.get("_allow_unscoped_demo"):
+                        self.store.set_allow_unscoped_demo()
+                    self.audit.append(
+                        "system", "request.refused_frozen",
+                        {"request_id": exc.extra.get("request_id")},
+                    )
+            raise
     return wrapped
 
 
@@ -464,6 +480,12 @@ class GenomeGuardService:
                           private=private, **kw)
         if level == "record":
             return finish("escalate", ["record_level_needs_approval", "record_rows_never_released"],
+                          needs_human=True, private=private, **kw)
+        if not self.release_enabled:
+            # A valid decision can be recorded for steward review, but this instance
+            # is not linked to a verified, releasable dataset import. Never attempt
+            # materialization or charge the privacy ledger in this state.
+            return finish("escalate", ["governed_release_unavailable"],
                           needs_human=True, private=private, **kw)
         release = self._release(rid, req_id, elig.donor_ids, private["plan"], ladder.epsilon_spent)
         return finish(ladder.outcome, ladder.reasons, release=release, private=private, **kw)
@@ -1406,8 +1428,12 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         raise ValueError("stored cohort is not verified real-genotype data with source-matched consent")
     ds = store.load_dataset(master, s.dataset_id)
     llm = llm or LLM()
+    # Reaching this point means the selected dataset passed its mode-specific
+    # provenance gates: synthetic fixtures are explicitly demo-only, while non-demo
+    # cohorts must have verified real-genotype and consent/data-use provenance.
+    # Record-level rows are separately prohibited by release_approved().
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
-                             admin_key=s.admin_api_key, release_enabled=s.demo_mode, **kwargs)
+                             admin_key=s.admin_api_key, release_enabled=True, **kwargs)
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:

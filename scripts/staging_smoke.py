@@ -46,15 +46,14 @@ def get_json(base: str, path: str, timeout: int) -> tuple[int, dict]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base", default="https://genomeguard-staging.onrender.com")
     parser.add_argument("--timeout", type=int, default=25)
     parser.add_argument("--expected-commit", default="")
     parser.add_argument("--retries", type=int, default=60)
     parser.add_argument("--retry-delay", type=int, default=15)
     args = parser.parse_args()
-    base = args.base.rstrip("/")
-    if not base.startswith(("https://", "http://")):
-        parser.error("--base must be an absolute http:// or https:// URL")
+    # This script makes outbound requests from CI. The destination is fixed in source;
+    # it cannot be redirected to an arbitrary caller-supplied host.
+    base = "https://genomeguard-staging-pr122.onrender.com"
 
     if args.expected_commit:
         deployed = None

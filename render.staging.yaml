@@ -1,11 +1,11 @@
 # Dedicated synthetic-only PR staging service. Production is not managed here.
 services:
   - type: web
-    name: genomeguard-staging-pr113
+    name: genomeguard-staging-pr122
     runtime: docker
     plan: free
     region: singapore
-    branch: feat/institutional-production-controls
+    branch: fix/main-release-acceptance-blockers
     autoDeploy: true
     dockerfilePath: ./Dockerfile.staging
     dockerContext: .

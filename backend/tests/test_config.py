@@ -69,7 +69,7 @@ def test_synthetic_demo_mode_keeps_no_key_guided_demo_available():
 
 def test_tenant_isolation_requires_fully_configured_oidc():
     with pytest.raises(ValueError, match="GG_TENANT_ISOLATION_REQUIRED"):
-        validate_settings(secure_settings(tenant_isolation_required=True))
+        validate_settings(secure_settings(tenant_isolation_required=True, oidc_required=False))
     validate_settings(secure_settings(
         tenant_isolation_required=True,
         oidc_required=True,

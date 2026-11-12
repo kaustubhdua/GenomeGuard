@@ -84,6 +84,12 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         {"purpose": "disease_research", "disease": None, "is_commercial": False,
          "data_level": "frequency", "cohort_filter": {}, "variant_filter": {}},
     )
+    # The request-list read model intentionally includes only evaluated decisions.
+    svc.store.save_decision(request_id, {
+        "outcome": "permit", "reasons": [], "risk": {}, "transform": {},
+        "explanation": "identity-scope fixture", "needs_human": False,
+        "private": {}, "release": None,
+    })
     # Record the RLS context calls just as the PostgreSQL store would receive them.
     rls_scopes = []
     svc.store.set_tenant = lambda organization_id: rls_scopes.append(("tenant", organization_id))
@@ -92,7 +98,6 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     # Bootstrap synthetic fixtures in demo mode, then exercise the production-only
     # provisioning route with the same non-demo guard used by an institutional instance.
     settings.demo_mode = False
-
     researcher_headers = {"Authorization": "Bearer researcher-sub"}
     reviewer_headers = {"Authorization": "Bearer reviewer-sub"}
     assert client.get("/me", headers=researcher_headers).status_code == 200
@@ -231,6 +236,8 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved_pending_release"
     assert approved.json().get("release") in (None, {})
+    # The test has no verified production dataset import; never enable release.
+    svc.release_enabled = False
     assert client.post(
         f"{pending_path}/release",
         headers=release_researcher_headers,
@@ -241,11 +248,13 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         headers=steward_headers,
         json={"reviewer": "Org A Steward"},
     )
-    assert release_attempt.status_code == 200
-    blocked = release_attempt.json()
-    assert blocked["status"] == "release_blocked"
-    assert blocked.get("release") in (None, {})
-    assert client.get(pending_path, headers=release_researcher_headers).json()["status"] == "release_blocked"
+    # Missing verified import is an infrastructure/data-readiness failure, not a
+    # governance denial. Preserve the approved decision but do not release data.
+    assert release_attempt.status_code == 503
+    assert release_attempt.json()["error"] == "governed_release_unavailable"
+    still_pending = client.get(pending_path, headers=release_researcher_headers).json()
+    assert still_pending["status"] == "approved_pending_release"
+    assert still_pending.get("release") in (None, {})
     assert client.get("/audit/verify").json()["ok"] is True
 
     # The same steward cannot create users in another tenant or grant a peer
