@@ -62,13 +62,13 @@ jobs:
         run: |
           ruby -e '
             require "yaml"
-            config = YAML.load_file("render.staging.yaml")
+            config = YAML.safe_load_file("render.staging.yaml", permitted_classes: [], permitted_symbols: [], aliases: false)
             services = config.fetch("services")
             raise "staging blueprint must define exactly one service" unless services.length == 1
             service = services.first
-            raise "staging service must use the PR branch" unless service["branch"] == "feat/institutional-production-controls"
+            raise "staging service must use the PR branch" unless service["branch"] == "fix/main-release-acceptance-blockers"
             raise "staging service must be a separate free Singapore Docker service" unless
-              service["name"] == "genomeguard-staging-pr113" && service["plan"] == "free" &&
+              service["name"] == "genomeguard-staging-pr122" && service["plan"] == "free" &&
               service["region"] == "singapore" && service["runtime"] == "docker"
             raise "staging auto-deploy must remain disabled" unless service["autoDeploy"] == true
             raise "staging health check must use liveness only" unless service["healthCheckPath"] == "/health/live"
