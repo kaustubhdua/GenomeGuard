@@ -75,6 +75,8 @@ GET /variants/population-frequency accepts chromosome, position, reference_allel
 
 The status is available, empty, or unavailable. An empty result means no approved loaded reference matched; unavailable means the serving database, migration, or reader role is not configured. Neither state is filled with estimated values. This public reference endpoint is separate from participant-level cohort evidence and does not create or bypass a governed release.
 
+In deployments that load a public reference cohort without a verified normalized governed-import lifecycle, consent summaries, previews and research-request evaluation may still run. A permitted evaluation is held for steward review with `governed_release_unavailable`; it does not materialize data or charge a release budget. A steward cannot override this deployment-level release gate.
+
 `POST /admin/vcf-qc` requires `Content-Type: application/octet-stream`,
 `X-Filename`, and `X-Reference-Assembly: GRCh37|GRCh38`; `X-Expected-Sha256` is
 optional. The raw body must be one `.vcf` or `.vcf.gz`, up to 100 MiB compressed.
