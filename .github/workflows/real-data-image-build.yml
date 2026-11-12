@@ -25,7 +25,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The verified IGSR VCF download + normalization has taken ~103 minutes on Render.
+    # Keep CI alive long enough to finish the same reproducible real-data build.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
       - name: Build image and fetch the official public genotype source
