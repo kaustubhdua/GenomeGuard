@@ -246,15 +246,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             )
 
     def admin_call(principal: dict, fn, *args, **kwargs):
-        # Service mutations decorated with @transactional already open their own
-        # store transaction. Run the undecorated implementation inside this outer
-        # admin-scoped transaction instead of nesting transaction wrappers. This
-        # keeps tenant/RLS scope and the mutation atomic while avoiding duplicate
-        # transaction ownership across SQLite and PostgreSQL adapters.
-        operation = getattr(fn, "__wrapped__", fn)
         with S().store.transaction():
             apply_admin_scope(principal)
-            return operation(*args, **kwargs)
+            return fn(*args, **kwargs)
 
     def admin(request: Request) -> dict:
         authorization = request.headers.get("authorization", "")
@@ -771,8 +765,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if action is not None:
             approve = action == "approve"
         who = str(b.get("reviewer", "reviewer"))[:32]
-        d = await run_in_threadpool(
-            admin_call, request.state.admin_principal, S().review, request.path_params["id"], who, approve, action,
+        # The admin route wrapper already owns the transaction on this event-loop
+        # thread. Keep this short database mutation on the same thread; moving it
+        # to a worker would block on the transaction-scoped lock.
+        d = admin_call(
+            request.state.admin_principal, S().review,
+            request.path_params["id"], who, approve, action,
         )
         return _j(d)
 
@@ -781,8 +779,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         admin(request)
         body = await _body(request)
         who = str(body.get("reviewer", "reviewer"))[:32]
-        result = await run_in_threadpool(
-            admin_call, request.state.admin_principal, S().release_approved, request.path_params["id"], who,
+        result = admin_call(
+            request.state.admin_principal, S().release_approved,
+            request.path_params["id"], who,
         )
         return _j(result)
 
