@@ -23,22 +23,22 @@ def pg_store():
         pytest.skip("GG_TEST_DATABASE_URL is not configured")
     with psycopg.connect(url, autocommit=True) as admin:
         admin.execute(
-            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "DO $role$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
             "WHERE rolname='genomeguard_owner') THEN "
             "CREATE ROLE genomeguard_owner NOLOGIN NOSUPERUSER NOBYPASSRLS "
-            "NOCREATEDB NOCREATEROLE; END IF; END $"
+            "NOCREATEDB NOCREATEROLE; END IF; END $role$"
         )
         admin.execute(
-            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "DO $role$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
             "WHERE rolname='genomeguard_app_runtime') THEN "
             "CREATE ROLE genomeguard_app_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
-            "NOCREATEDB NOCREATEROLE; END IF; END $"
+            "NOCREATEDB NOCREATEROLE; END IF; END $role$"
         )
         admin.execute(
-            "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
+            "DO $role$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles "
             "WHERE rolname='genomeguard_runtime') THEN "
             "CREATE ROLE genomeguard_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS "
-            "NOCREATEDB NOCREATEROLE; END IF; END $"
+            "NOCREATEDB NOCREATEROLE; END IF; END $role$"
         )
         admin.execute("CREATE SCHEMA IF NOT EXISTS genomeguard_runtime")
         admin.execute("GRANT USAGE ON SCHEMA genomeguard_runtime TO genomeguard_runtime")
