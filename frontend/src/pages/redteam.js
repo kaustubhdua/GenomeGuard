@@ -17,7 +17,7 @@ export async function render() {
   if (!res.ok) { root.append(notice("warn", res.status === 404 ? "No results yet. Run make eval, then reload." : errorText(res))); return root; }
   const r = res.data, d = r.differencing, ledger = h("div", { class: "ledger" });
   const realData = (r.meta || {}).dataset === "real_1000g";
-  lede.append(realData ? " The genotypes are real 1000 Genomes data; consent records and query traffic are simulated." : " The data is synthetic.");
+  lede.append(realData ? " Genotypes come from the public 1000 Genomes release; consent records and query traffic in this evaluation are test scenarios, not participant activity." : " This evaluation uses a generated preview cohort, not participant records.");
   repro.lastChild.textContent = (r.meta || {}).command || "make eval";
 
   const names = [["none", "No defence"], ["dp_only", "Noise only"], ["ladder_only", "Protections only, per query"], ["ladder_plus_guard", "Protections + differencing guard"], ["baseline", "Guessing from frequencies"]];
@@ -41,12 +41,12 @@ export async function render() {
     h("p", { class: "muted" }, "Fast probing is caught within about ten queries. An attacker who waits longer than the 15-minute window evades the monitor; the minimum group size and the privacy budget still apply.")));
 
   const b = r.benign;
-  ledger.append(row("False alarms", `${b.sessions} simulated researchers`,
+  ledger.append(row("False alarms", `${b.sessions} test researcher sessions`,
     h("dl", { class: "facts" }, h("dt", {}, "Researchers flagged"), h("dd", {}, `${pct(b.monitor_flag_rate)} (95% CI up to ${pct(b.monitor_flag_ci95[1])})`), h("dt", {}, "Queries refused by the protections"), h("dd", {}, pct(b.ladder_refusal_rate)), h("dt", {}, "Queries answered"), h("dd", {}, pct(b.served_rate))),
-    h("p", { class: "muted" }, "Zero means none occurred in this simulated traffic. The behaviours are our assumption, not measured logs.")));
+    h("p", { class: "muted" }, "Zero means none occurred in this test traffic. The behaviours are assumptions, not measured production logs.")));
 
   ledger.append(row("Not shown here", "Read this before quoting a number", h("ul", { class: "plain" },
-    [realData ? "The genotypes are real but the evaluated subset, consent and traffic are simulated, and results from one cohort do not carry over to another." : "All data is synthetic; real genomes differ in ways that could move results either way.", "The attackers are simplified and written by the same team as the defences.", "The beacon test is a simplified replication of an arXiv paper (2001.08852), not the paper's attack.", "Researcher behaviour is assumed. False-alarm rates must be re-measured on real traffic.", "Epsilon accounting is simple sequential composition, not a formal accountant."].map((t) => h("li", {}, t)))));
+    [realData ? "The genotypes are from the public reference release, but the evaluated subset, consent and traffic are test scenarios; results from one cohort do not carry over to another." : "This evaluation uses a generated preview cohort; real genomes differ in ways that could move results either way.", "The attackers are simplified and written by the same team as the defences.", "The beacon test is a simplified replication of an arXiv paper (2001.08852), not the paper's attack.", "Researcher behaviour is assumed. False-alarm rates must be re-measured on real traffic.", "Epsilon accounting is simple sequential composition, not a formal accountant."].map((t) => h("li", {}, t)))));
   root.append(ledger);
   return root;
 }
