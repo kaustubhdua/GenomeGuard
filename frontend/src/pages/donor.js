@@ -8,14 +8,14 @@ const plain = (s) => String(s || "").replaceAll("_", " ");
 
 export async function render() {
   const root = h("div", { class: "donor" });
-  if (!state.donors.length) return h("div", { class: "empty" }, "Simulated participant records are unavailable because the demonstration dataset is disabled.");
+  if (!state.donors.length) return h("div", { class: "empty" }, "Example participant records are unavailable because this walkthrough is disabled.");
   const body = h("div", { class: "stack" });
-  const pick = h("select", { id: "persona", "aria-label": "Simulated participant", onchange: (e) => { state.donor = state.donors.find((d) => String(d.id) === e.target.value); load(); } },
+  const pick = h("select", { id: "persona", "aria-label": "Example participant", onchange: (e) => { state.donor = state.donors.find((d) => String(d.id) === e.target.value); load(); } },
     state.donors.map((d) => h("option", { value: d.id }, d.label)));
   pick.value = state.donor.id;
   root.append(h("h1", {}, "Your data, in your hands"),
-    h("p", { class: "lede" }, "This view illustrates participant consent controls. The records are simulated; changes affect only this local demonstration and are not real-world consent actions."),
-    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Simulated participant (not a real consent record)", pick), body);
+    h("p", { class: "lede" }, "This is a guided preview of participant consent controls. The example records are isolated to this walkthrough; changes do not alter real-world consent or participant records."),
+    h("label", { class: "f", for: "persona", style: "font-family:var(--sans)" }, "Preview participant (not a real consent record)", pick), body);
   const flash = h("div", { "aria-live": "polite" });
 
   async function load() {
@@ -55,7 +55,7 @@ export async function render() {
         h("p", {}, "Your data may be used for ", h("b", {}, use), mods.length ? ", with these limits: " + mods.join(", ") : "", c.population ? `, for the ${c.population} group only` : "", "."),
         c.consent_date ? h("p", { class: "muted", style: "margin:0 0 10px" }, "Consent given on " + c.consent_date + ".") : null,
         h("button", { class: "ghost", onclick: () => download(p) }, "Download my consent (FHIR)"),
-        h("p", { class: "muted", style: "margin:8px 0 0" }, "A standard health-data format your clinic or another system can read. These are demo records, so the file is marked as simulated.")),
+        h("p", { class: "muted", style: "margin:8px 0 0" }, "A standard health-data format your clinic or another system can read. This example export is clearly marked as an example file.")),
       h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "Change what you agree to"), form),
       h("section", { class: "card" }, h("h2", { style: "margin-top:0" }, "Who used statistics that included you"),
         acc.length ? h("ul", { class: "timeline-d" }, acc.map((a) => h("li", {}, h("span", { class: "when" }, when(a.ts)), h("span", {}, `${a.institution || "A researcher"} studied ${plain(a.purpose)}${a.disease ? " (" + a.disease + ")" : ""}, receiving ${plain(a.level)} figures.`))))

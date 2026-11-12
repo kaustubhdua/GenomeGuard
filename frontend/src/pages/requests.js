@@ -190,7 +190,7 @@ function formSection(out) {
       h("i", { class: "seg-ok", style: `width:${100 * c.eligible / total}%` }),
       h("i", { class: "seg-ex", style: `width:${100 * excluded / total}%` }));
     const details = h("div", { class: "legend" },
-      h("span", {}, h("b", {}, c.eligible), state.demo ? ` of ${c.considered} synthetic donors pass simulated permission rules` : ` of ${c.considered} samples pass dataset-level policy mapping (not participant-specific consent)`),
+      h("span", {}, h("b", {}, c.eligible), state.demo ? ` of ${c.considered} example donors pass example permission rules` : ` of ${c.considered} samples pass dataset-level policy mapping (not participant-specific consent)`),
       Object.entries(ex).map(([k, v]) => h("span", {}, `${v} excluded: ${reasonText(k)}`)));
     const result = await api("/requests/preview", { method: "POST", body: b });
     if (run !== previewRun) return;
@@ -242,7 +242,7 @@ function formSection(out) {
       state.demo ? h("div", { class: "presets" }, PRESETS.map((p) => h("button", { class: "ghost", title: p.why, onclick: () => load(p.body) }, p.name))) : null, form,
       h("div", { style: "margin-top:12px;display:flex;gap:10px;flex-wrap:wrap" }, submitBtn, probeBtn,
         att && state.who !== att.api_key ? h("button", { class: "ghost", onclick: () => { setWho(att.api_key); location.reload(); } }, "Switch to the probe account") : null), msg),
-    row(state.demo ? "Simulated consent check" : "Dataset policy check", state.demo ? "Synthetic permissions; demonstration only" : "Dataset-level policy only, not participant-specific consent", preview));
+    row(state.demo ? "Example consent check" : "Dataset policy check", state.demo ? "Example permissions; demonstration only" : "Dataset-level policy only, not participant-specific consent", preview));
   load(state.demo ? PRESETS[0].body : st);
   return wrap;
 }

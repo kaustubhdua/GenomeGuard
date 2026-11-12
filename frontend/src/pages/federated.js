@@ -6,19 +6,19 @@ export function render() {
   root.dataset.title = "Federated analysis";
   if (!state.demo) {
     root.append(h("h1", {}, "Federated analysis"),
-      notice("warn", "The current multi-site and homomorphic-encryption walkthrough uses simulated sites and is disabled in the public-data research instance. It is not a deployed multi-organization federation."));
+      notice("warn", "The current multi-site and homomorphic-encryption walkthrough uses example sites and is disabled in the public-data research instance. It is not a deployed multi-organization federation."));
     return root;
   }
 
-  // Return the page shell before running synthetic federated computations. The old
+  // Return the page shell before running example federated computations. The old
   // awaited request kept the route heading out of the DOM until a full 600-donor
   // simulation completed, making a healthy but busy service look like a broken page.
   root.append(h("h1", {}, "Federated analysis"),
-    h("p", { class: "lede" }, "This experiment illustrates how sites could combine selected statistics using secret sharing without pooling their input rows. It uses simulated sites and does not represent a hardened multi-organization deployment."),
-    notice("warn", h("b", {}, "Simulated hospitals on synthetic data. "), "The secret-sharing and Paillier sections are educational implementations using synthetic data; they are not independently audited security controls."));
+    h("p", { class: "lede" }, "This experiment illustrates how sites could combine selected statistics using secret sharing without pooling their input rows. It uses example sites and does not represent a hardened multi-organization deployment."),
+    notice("warn", h("b", {}, "Example hospitals and example data. "), "The secret-sharing and Paillier sections are educational implementations using example data; they are not independently audited security controls."));
 
   const demoLoading = h("div", { class: "ledger", role: "status" },
-    h("p", { class: "muted" }, "Loading the synthetic multi-site comparison…"));
+    h("p", { class: "muted" }, "Loading the example multi-site comparison…"));
   const he = h("div", { class: "ledger", style: "margin-top:14px" },
     row("Homomorphic encryption", "Paillier, computing on encrypted counts",
       h("div", { class: "skeleton", style: "height:80px" })));
@@ -45,12 +45,12 @@ export function render() {
       h("dl", { class: "facts" }, h("dt", {}, "AUC, federated"), h("dd", {}, String(lr.auc_federated)),
         h("dt", {}, "AUC, pooled data"), h("dd", {}, String(lr.auc_centralised)),
         h("dt", {}, "Largest weight difference"), h("dd", {}, lr.max_weight_difference_vs_centralised.toExponential(1))),
-      h("p", { class: "muted" }, "Same model as training on pooled data, without pooling it. The phenotype is simulated from a few variants so there is a real signal.")));
+      h("p", { class: "muted" }, "Same model as training on pooled data, without pooling it. The phenotype is generated from example variants to demonstrate the workflow.")));
     ledger.append(row("Limits", "Read before quoting",
       h("ul", { class: "plain" }, d.limits.map((t) => h("li", {}, t)))));
     demoLoading.replaceWith(ledger);
   }).catch((error) => {
-    demoLoading.replaceChildren(notice("err", "The synthetic federation example could not load: " + String(error)));
+    demoLoading.replaceChildren(notice("err", "The example federation could not load: " + String(error)));
   });
 
   api("/federated/he").then((res) => {

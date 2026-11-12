@@ -23,6 +23,40 @@ PED = "\n".join([
 SAMPLES = ["dad", "mum", "kid1", "kid2"] + [f"s{i}" for i in range(40)]
 
 
+def test_checksum_pinned_mirror_fallback_uses_same_verified_artifact(tmp_path, monkeypatch):
+    name = "ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
+    monkeypatch.setattr(real, "resolve_vcf_url", lambda _chrom: (_ for _ in ()).throw(
+        real.urllib.error.HTTPError("https://ftp.1000genomes.ebi.ac.uk", 429, "rate limited", {}, None)
+    ))
+    urls = real.resolve_vcf_urls("22")
+    assert urls == [
+        real.RELEASE_DIR + name,
+        "https://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20130502/" + name,
+    ]
+
+    good = b"same pinned public artifact"
+    calls = []
+    target = tmp_path / "chr22.vcf.gz"
+
+    def fake_download(url, dest, **kwargs):
+        calls.append(url)
+        if len(calls) == 1:
+            raise RuntimeError("primary mirror unavailable")
+        assert kwargs["expected_sha256"] == real.KNOWN_DOWNLOADS[name]["sha256"]
+        assert kwargs["expected_size"] == real.KNOWN_DOWNLOADS[name]["size"]
+        dest.write_bytes(good)
+        return dest
+
+    monkeypatch.setattr(real, "download", fake_download)
+    assert real.download_from_mirrors(
+        urls, target,
+        expected_sha256=real.KNOWN_DOWNLOADS[name]["sha256"],
+        expected_size=real.KNOWN_DOWNLOADS[name]["size"],
+    ) == target
+    assert calls == urls
+    assert target.read_bytes() == good
+
+
 def test_download_retries_digest_mismatch_and_never_publishes_corrupt_bytes(tmp_path, monkeypatch):
     good = b"verified official artifact"
     bad = b"badified official artifact"
@@ -281,6 +315,12 @@ def test_production_bootstrap_preserves_dataset_policy_provenance():
         real.save_cohort(cohort, meta, out)
         settings = Settings(
             db_path=":memory:", database_url="postgresql://test-only",
+            migration_database_url="postgresql://owner-test-only",
+            oidc_required=True, oidc_admin_required=True, tenant_isolation_required=True,
+            oidc_issuer="https://id.example.edu", oidc_audience="genomeguard-api",
+            oidc_client_id="genomeguard-browser", oidc_redirect_uri="https://genomeguard.example.edu/",
+            oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
+            oidc_allowed_organizations=("research-org-1",),
             demo_mode=False, allow_tamper_demo=False,
             admin_api_key="a-unique-production-admin-secret-long-enough",
             master_key=base64.b64encode(b"x" * 32).decode(),

@@ -36,9 +36,9 @@ export async function render() {
     if (!result) return null;
     if (result.status === "loading") return notice("info", "Looking up this exact locus in approved aggregate references…");
     if (result.status === "demo") return h("section", { class: "notice info demo-fixture" },
-      h("strong", {}, "Synthetic demo data — not a real genomic observation"),
+      h("strong", {}, "Example data — not a real genomic observation"),
       h("p", {}, "Illustrative population-frequency values for the demo video only. No participant records or public reference source were queried."),
-      h("p", {}, "Demo population: Synthetic reference · AC 12 · AN 1,000 · AF 0.012 (1.2%) · Homozygotes 0"));
+      h("p", {}, "Example population: reference · AC 12 · AN 1,000 · AF 0.012 (1.2%) · Homozygotes 0"));
     if (result.status === "error") return notice("warn", result.message);
     if (result.status === "unavailable") {
       return notice("warn", result.message || "Approved aggregate population references are unavailable in this deployment.");
@@ -85,10 +85,10 @@ export async function render() {
           h("dt", {}, "Chromosome"), h("dd", {}, v.chromosome),
           h("dt", {}, "Position"), h("dd", {}, fmt(v.position)),
           h("dt", {}, "Alleles"), h("dd", {}, v.reference_allele + ">" + v.alternate_allele),
-          h("dt", {}, "Annotation"), h("dd", {}, v.demo_fixture ? "Synthetic demo fixture — no clinical annotation" : "Not linked to an annotation source"),
+          h("dt", {}, "Annotation"), h("dd", {}, v.demo_fixture ? "Example fixture — no clinical annotation" : "Not linked to an annotation source"),
           h("dt", {}, "Cohort frequency"), h("dd", {}, "Available only through a governed aggregate release")),
         h("div", { class: "population-frequency-controls" },
-          h("p", { class: "fine" }, v.demo_fixture ? "Presentation-only synthetic values; not sourced from a cohort or population database." : "Compare against an approved public reference. Choose the assembly recorded for this variant."),
+          h("p", { class: "fine" }, v.demo_fixture ? "Presentation-only example values; not sourced from a cohort or population database." : "Compare against an approved public reference. Choose the assembly recorded for this variant."),
           lookupButton, frequencyPanel(v)));
     }));
     if (activeMatches.length) {
@@ -132,7 +132,7 @@ export async function render() {
         frequencyResults.clear();
         if (!assembly.value) assembly.value = "GRCh37";
         renderMatches();
-        output.prepend(notice("warn", "Live variant API is unavailable (HTTP 404). Showing a clearly labelled synthetic v42 fixture for demonstration only."));
+        output.prepend(notice("warn", "Live variant API is unavailable (HTTP 404). Showing a clearly labelled example v42 fixture for demonstration only."));
         return;
       }
       output.replaceChildren(notice("err", errorText(result)));

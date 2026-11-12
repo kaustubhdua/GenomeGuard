@@ -8,7 +8,7 @@ COPY frontend ./frontend
 COPY docs ./docs
 # Bump this default when a rebuild must refresh the embedded public cohort. It is
 # consumed by the RUN instruction below, so it participates in Docker's cache key.
-ARG GENOMEGUARD_COHORT_BUILD_REV=2026-11-02-live-policy-metadata
+ARG GENOMEGUARD_COHORT_BUILD_REV=2026-11-13-verified-mirror-failover
 # Build a small cohort from the official public 1000 Genomes VCF at image-build time.
 # Only the derived cohort is retained in the image; the downloaded source VCF and panel are removed.
 # The policy is dataset-level public-release provenance, not participant-specific consent.

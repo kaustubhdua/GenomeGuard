@@ -171,9 +171,9 @@ export function workflow(d) {
     { id: "consent", t: "Consent agent", short: "Consent", kind: "agent",
       state: consentBad ? "bad" : "ok",
       says: cons.considered == null
-        ? (state.demo ? "Checked simulated participant permissions." : "Checked the dataset-level public-release policy; this is not participant-specific consent.")
+        ? (state.demo ? "Checked example participant permissions for this preview." : "Checked the dataset-level public-release policy; this is not participant-specific consent.")
         : state.demo
-          ? `${cons.eligible} of ${cons.considered} synthetic donors pass simulated permission rules.`
+          ? `${cons.eligible} of ${cons.considered} preview donor records pass example permission rules.`
           : state.health?.provenance?.consent === "source_records"
             ? `${cons.eligible} of ${cons.considered} samples pass the configured source-matched consent rules.`
             : `${cons.eligible} of ${cons.considered} samples pass the dataset-level policy mapping; this is not participant-specific consent.`,

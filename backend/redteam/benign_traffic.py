@@ -47,7 +47,7 @@ def _plan_queries(ds: Dataset, kind: str, rng: np.random.Generator) -> list[dict
     cohorts = sorted({d.cohort_id for d in ds.donors})
 
     def variants(k: int) -> list[int]:
-        v = [int(x) for x in rng.choice(common, k, replace=False)]
+        v = [int(x) for x in rng.choice(common, min(k, len(common)), replace=False)]
         if rng.random() < 0.10 and len(rare):  # a few researchers also ask about rare variants
             v += [int(x) for x in rng.choice(rare, 3, replace=False)]
         return v

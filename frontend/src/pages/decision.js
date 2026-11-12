@@ -31,11 +31,11 @@ export async function render([id]) {
 
   if (considered != null) {
     const out_ = Object.values(ex).reduce((a, b) => a + b, 0);
-    ledger.append(row(state.demo ? "Simulated consent" : "Dataset policy", state.demo
-      ? "Synthetic permissions used only for the local demonstration"
+    ledger.append(row(state.demo ? "Example consent" : "Dataset policy", state.demo
+      ? "Example permissions used only for the local demonstration"
       : "Dataset-level public-release policy; not participant-specific consent",
       h("p", { style: "margin:0" }, h("b", {}, eligible), state.demo
-        ? ` of ${considered} synthetic donors pass simulated permission rules.`
+        ? ` of ${considered} example donors pass example permission rules.`
         : ` of ${considered} individuals pass the dataset-level policy mapping for this request.`),
       !state.demo ? h("p", { class: "muted" }, "This is not evidence of individual consent, clinical authorization, or legal approval.") : null,
       h("div", { class: "bar", role: "img", "aria-label": `${eligible} eligible of ${considered}` }, h("i", { class: "seg-ok", style: `width:${(100 * eligible) / (considered || 1)}%` }), h("i", { class: "seg-ex", style: `width:${(100 * out_) / (considered || 1)}%` })),
@@ -112,7 +112,7 @@ function stewardPanel(d, before, after, tr) {
     h("dl", { class: "facts" },
       h("dt", {}, "Rare variants requested"), h("dd", {}, String(before.rare_variants ?? 0)),
       h("dt", {}, "Fewest carriers of any rare variant"), h("dd", {}, before.min_carriers ?? "none"),
-      h("dt", {}, "Relatives exposed (simulated)"), h("dd", {}, String(rel.total ?? 0)),
+      h("dt", {}, "Relatives exposed (modelled)"), h("dd", {}, String(rel.total ?? 0)),
       h("dt", {}, "Expected shared DNA, summed"), h("dd", {}, rel.expected_shared_dna != null ? Number(rel.expected_shared_dna).toFixed(2) : "n/a")),
     rel.total ? h("p", {}, h("a", { href: "#/family/" + d.id }, "Open the family tree"), " to see which relatives would be exposed.") : null,
     Object.keys(notes).length ? h("div", {}, h("h3", { style: "margin-top:12px" }, "Agent notes (advisory)"), h("ul", { class: "plain" }, Object.entries(notes).filter(([, t]) => t).map(([k, t]) => h("li", {}, h("b", {}, k + ": "), t)))) : null,
@@ -139,7 +139,7 @@ function toolSummary(tool, r) {
       const c = r.consent || {};
       return c.considered == null ? "No policy count was recorded."
         : state.demo
-          ? `${c.eligible} of ${c.considered} synthetic donors pass simulated permission rules.`
+          ? `${c.eligible} of ${c.considered} preview donor records pass example permission rules.`
           : state.health?.provenance?.consent === "source_records"
             ? `${c.eligible} of ${c.considered} individuals pass source-matched consent rules.`
             : `${c.eligible} of ${c.considered} individuals pass the dataset-level policy mapping; this is not participant-specific consent.`;
@@ -149,7 +149,7 @@ function toolSummary(tool, r) {
       return `Risk ${b.band || "n/a"} as requested, ${a.band || "n/a"} as released; ${n(a.rare_variants)} rare variants left in the release.`;
     }
     case "family_exposure":
-      return `${n(r.relatives_exposed_total)} relatives of ${n(r.subjects)} rare-variant carriers could be exposed (simulated model).`;
+      return `${n(r.relatives_exposed_total)} relatives of ${n(r.subjects)} rare-variant carriers could be exposed (modelled estimate).`;
     case "requester_history":
       return `${n(r.history_requests)} earlier requests, ${n(r.history_denials)} denials, ${n(r.history_alerts)} alerts${r.frozen ? ", account frozen" : ""}.`;
     case "privacy_budget":

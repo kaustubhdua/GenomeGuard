@@ -16,6 +16,11 @@ def secure_settings(**overrides):
         allow_tamper_demo=False,
         real_cohort_file="/tmp/authorized-real-cohort.npz",
         dataset_id="approved-cohort-2026-01",
+        oidc_required=True, oidc_admin_required=True, tenant_isolation_required=True,
+        oidc_issuer="https://id.example.edu", oidc_audience="genomeguard-api",
+        oidc_client_id="genomeguard-browser", oidc_redirect_uri="https://genomeguard.example.edu/",
+        oidc_jwks_url="https://id.example.edu/.well-known/jwks.json",
+        oidc_allowed_organizations=("research-org-1",),
     )
     return replace(base, **overrides)
 

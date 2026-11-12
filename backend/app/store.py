@@ -61,8 +61,6 @@ CREATE TABLE IF NOT EXISTS audit_log(idx INTEGER PRIMARY KEY, ts TEXT, actor TEX
   payload_json TEXT, prev_hash TEXT, hash TEXT);
 CREATE TABLE IF NOT EXISTS donor_access(id INTEGER PRIMARY KEY AUTOINCREMENT, donor_id INTEGER,
   request_id INTEGER, ts TEXT, purpose TEXT, disease TEXT, level TEXT, institution TEXT);
-CREATE UNIQUE INDEX IF NOT EXISTS donors_source_sample_id_hash_unique
-  ON donors(source_sample_id_hash) WHERE source_sample_id_hash IS NOT NULL;
 CREATE TABLE IF NOT EXISTS consent_events(
   event_id TEXT PRIMARY KEY, donor_id INTEGER NOT NULL, dataset_id TEXT NOT NULL,
   event_type TEXT NOT NULL, consent_blob BLOB NOT NULL, source_issuer TEXT NOT NULL,

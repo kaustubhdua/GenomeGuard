@@ -347,7 +347,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                             return await fn(request)
                     # Other routes authenticate inside their handlers so protocol-specific
                     # error envelopes (for example GA4GH Beacon) remain intact.
-                    return await fn(request)
+                    response = await fn(request)
+                    if method == "GET" and path.startswith("/catalogue/"):
+                        # These endpoints expose only public reference metadata and
+                        # verified dataset manifests. Edge caches may revalidate, but
+                        # browsers must not retain stale catalogue state.
+                        response.headers["Cache-Control"] = (
+                            "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+                        )
+                        response.headers["Vary"] = "Accept"
+                    return response
                 except ServiceError as e:
                     return _j(e.to_json(), e.status)
                 except CatalogueUnavailableError:
@@ -765,8 +774,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if action is not None:
             approve = action == "approve"
         who = str(b.get("reviewer", "reviewer"))[:32]
-        d = await run_in_threadpool(
-            admin_call, request.state.admin_principal, S().review, request.path_params["id"], who, approve, action,
+        # The admin route wrapper already owns the transaction on this event-loop
+        # thread. Keep this short database mutation on the same thread; moving it
+        # to a worker would block on the transaction-scoped lock.
+        d = admin_call(
+            request.state.admin_principal, S().review,
+            request.path_params["id"], who, approve, action,
         )
         return _j(d)
 
@@ -775,8 +788,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         admin(request)
         body = await _body(request)
         who = str(body.get("reviewer", "reviewer"))[:32]
-        result = await run_in_threadpool(
-            admin_call, request.state.admin_principal, S().release_approved, request.path_params["id"], who,
+        result = admin_call(
+            request.state.admin_principal, S().release_approved,
+            request.path_params["id"], who,
         )
         return _j(result)
 
@@ -786,8 +800,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def copilot(request):
         admin(request)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
-        return _j(await run_in_threadpool(
-            admin_call, request.state.admin_principal, S().copilot_review, request.path_params["id"], refresh,
+        return _j(admin_call(
+            request.state.admin_principal, S().copilot_review,
+            request.path_params["id"], refresh,
         ))
 
     @route("GET", "/requests/{id:int}/exposure", "Family-exposure graph (simulated model); "
@@ -1102,8 +1117,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def compliance(request):
         admin(request)
         q = request.query_params
-        return _j(await run_in_threadpool(
-            admin_call, S().compliance_report, q.get("from"), q.get("to"),
+        return _j(admin_call(
+            request.state.admin_principal, S().compliance_report, q.get("from"), q.get("to"),
         ))
 
     @route("GET", "/reports/compliance/export",
@@ -1111,8 +1126,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def compliance_export(request):
         admin(request)
         q = request.query_params
-        evidence = await run_in_threadpool(
-            admin_call, S().compliance_evidence_pack, q.get("from"), q.get("to"),
+        evidence = admin_call(
+            request.state.admin_principal, S().compliance_evidence_pack, q.get("from"), q.get("to"),
         )
         return _j(evidence)
 

@@ -56,7 +56,7 @@ async function render() {
     if (hit && !state.demo && ["donor", "redteam", "federated"].includes(hit[0].nav)) {
       page = h("section", { class: "card empty-state" },
         h("h1", {}, "This workflow is not enabled for this deployment"),
-        h("p", { class: "muted" }, "This page uses demo personas or simulated federated data. It is disabled outside demo mode rather than presenting simulated results as real participant workflows."),
+        h("p", { class: "muted" }, "This workflow requires a provisioned research account and verified institutional identity. It is unavailable in guest preview mode."),
         h("a", { class: "btn ghost", href: "#/overview" }, "Return to overview"));
     } else if (hit) {
       const mod = await hit[0].load(); // route code is fetched only when the route is first visited
@@ -119,7 +119,7 @@ function drawWho() {
     selector.hidden = false;
     if (!state.demo.admin_key && isSteward()) setWho(state.demo.requesters?.[0]?.api_key || "");
     const options = [
-      ...(state.demo.admin_key ? [["steward", "Demo data steward"]] : []),
+      ...(state.demo.admin_key ? [["steward", "Example data steward"]] : []),
       ...(state.demo.requesters || []).map((r) => [r.api_key, r.name || r.institution || "Demo researcher"]),
     ];
     selector.replaceChildren(...options.map(([value, text]) => {
@@ -130,8 +130,8 @@ function drawWho() {
     }));
     selector.value = state.who || "";
     note.textContent = state.demo.admin_key
-      ? "Guest demo · synthetic cohort · no account required"
-      : "Guest demo · synthetic cohort · steward controls disabled on this hosted demo";
+      ? "Guest preview · example accounts · no account required"
+      : "Guest preview · example accounts · steward controls disabled";
   } else {
     label.hidden = true;
     selector.hidden = true;

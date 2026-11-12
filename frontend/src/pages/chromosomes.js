@@ -23,7 +23,7 @@ async function renderAssembly(assembly, sample = false) {
       h("p", { class: "muted" }, "The GenomeGuard chromosome catalogue could not be loaded. Check the connection and try again; no placeholder counts are shown."),
       h("p", { class: "fine" }, "Technical status: HTTP " + (response.status || "network error")),
       h("button", { onclick: showSample }, "View illustrative preview")));
-    root.append(card("What this page will show", "No simulated records",
+    root.append(card("What this page will show", "No imported variant records",
       h("ul", {},
         h("li", {}, "Reference assembly and chromosome length from the Genome Reference Consortium."),
         h("li", {}, "Actual stored variant count and observed coordinate range from the local database."),

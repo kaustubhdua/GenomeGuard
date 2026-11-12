@@ -24,5 +24,6 @@ def test_frontend_runtime_has_no_supabase_dependency():
 
 def test_public_catalogue_uses_same_origin_api():
     source = (FRONTEND / "src" / "catalogue-api.js").read_text(encoding="utf-8")
-    assert 'fetch(`/catalogue/${resource}${query}`' in source
+    assert 'const path = `/catalogue/${resource}${query}`' in source
+    assert 'fetch(path,' in source
     assert "https://" not in source
