@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
+from psycopg import sql as pg_sql
 import pytest
 
 from app.core.audit_chain import AuditChain
@@ -288,7 +289,9 @@ def test_postgres_migration_bootstrap_handles_runtime_owned_legacy_schema(pg_sto
     finally:
         connection.execute("RESET ROLE")
         connection.execute(
-            f"ALTER SCHEMA genomeguard_runtime OWNER TO {original_schema_owner}"
+            pg_sql.SQL("ALTER SCHEMA genomeguard_runtime OWNER TO {}").format(
+                pg_sql.Identifier(original_schema_owner)
+            )
         )
         connection.execute("REVOKE CREATE ON SCHEMA genomeguard_runtime FROM genomeguard_owner")
         if not owner_was_runtime_member:
