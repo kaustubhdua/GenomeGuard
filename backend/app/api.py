@@ -622,7 +622,23 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         svc = S()
         require_governed_data(svc)
         body = await _body(request)
-        d = await run_in_threadpool(scoped_requester_call, r, svc.submit, r, body)
+        try:
+            d = await run_in_threadpool(scoped_requester_call, r, svc.submit, r, body)
+        except ServiceError as exc:
+            if exc.code == "requester_frozen":
+                # scoped_requester_call owns an outer transaction, so the service's
+                # rejected request and its provisional audit event have rolled back.
+                # Record the security refusal now, in a fresh tenant-scoped transaction.
+                with svc.store.transaction():
+                    if r.get("organization_id"):
+                        svc.store.set_tenant(r["organization_id"])
+                    elif r.get("_allow_unscoped_demo") and settings.demo_mode:
+                        svc.store.set_allow_unscoped_demo()
+                    svc.audit.append(
+                        "system", "request.refused_frozen",
+                        {"request_id": exc.extra.get("request_id")},
+                    )
+            raise
         return _j(d if svc.is_admin(request.headers.get("x-admin-key")) else requester_view(d), 201)
 
     @route("GET", "/beacon/g_variants", "GA4GH Beacon v2 style allele lookup, governed by the "
