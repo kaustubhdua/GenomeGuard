@@ -63,12 +63,23 @@ def transactional(method):
              and ("organization_id" in value or value.get("_allow_unscoped_demo"))),
             None,
         )
-        with transaction():
-            if requester and requester.get("organization_id"):
-                self.store.set_tenant(requester["organization_id"])
-            elif requester and requester.get("_allow_unscoped_demo"):
-                self.store.set_allow_unscoped_demo()
-            return method(self, *args, **kwargs)
+        try:
+            with transaction():
+                if requester and requester.get("organization_id"):
+                    self.store.set_tenant(requester["organization_id"])
+                elif requester and requester.get("_allow_unscoped_demo"):
+                    self.store.set_allow_unscoped_demo()
+                return method(self, *args, **kwargs)
+        except ServiceError as exc:
+            # A frozen-account refusal must survive the rollback of the rejected request.
+            # Persist only the security event after the failed request transaction has ended.
+            if exc.code == "requester_frozen":
+                with transaction():
+                    self.audit.append(
+                        "system", "request.refused_frozen",
+                        {"request_id": exc.extra.get("request_id")},
+                    )
+            raise
     return wrapped
 
 
