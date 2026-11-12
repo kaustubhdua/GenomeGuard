@@ -126,6 +126,57 @@ def resolve_vcf_url(chrom: str = "22") -> str:
     return RELEASE_DIR + names[-1]
 
 
+def resolve_vcf_urls(chrom: str = "22") -> list[str]:
+    """Resolve the official EBI artifact and known public NCBI mirror candidates.
+
+    If EBI's directory listing is throttled, use only a filename whose exact bytes
+    are pinned in KNOWN_DOWNLOADS; never guess a version or silently accept a mirror
+    with a different artifact.
+    """
+    try:
+        primary = resolve_vcf_url(chrom)
+        filename = primary.rsplit("/", 1)[-1]
+    except (OSError, urllib.error.URLError, RuntimeError):
+        pinned = [
+            name for name in KNOWN_DOWNLOADS
+            if f".chr{chrom}." in name
+        ]
+        if not pinned:
+            raise
+        filename = sorted(pinned)[-1]
+        primary = RELEASE_DIR + filename
+
+    urls = [primary]
+    if filename in KNOWN_DOWNLOADS:
+        urls.append(
+            "https://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20130502/" + filename
+        )
+    return list(dict.fromkeys(urls))
+
+
+def download_from_mirrors(
+    urls: list[str],
+    dest: Path,
+    *,
+    expected_sha256: str | None = None,
+    expected_size: int | None = None,
+) -> Path:
+    """Try documented public mirrors, accepting bytes only after the same integrity checks."""
+    failures = []
+    for url in urls:
+        try:
+            return download(
+                url, dest, expected_sha256=expected_sha256,
+                expected_size=expected_size, attempts=2, retry_delay=2,
+            )
+        except (OSError, RuntimeError, ValueError, urllib.error.URLError) as exc:
+            failures.append(f"{url}: {type(exc).__name__}: {exc}")
+    raise RuntimeError(
+        "all verified public mirrors failed; no cohort artifact was published: "
+        + " | ".join(failures)
+    )
+
+
 # ------------------------------------------------------------------------------ pedigree file
 
 def _norm(h: str) -> str:
@@ -539,12 +590,15 @@ def main(argv: list[str] | None = None) -> None:
         vcf = Path(a.vcf)
         source_vcf_name = a.source_vcf_name or vcf.name
     else:
-        vcf_url = resolve_vcf_url(a.chrom)
+        vcf_urls = resolve_vcf_urls(a.chrom)
+        vcf_url = vcf_urls[0]
         source_vcf_name = a.source_vcf_name or vcf_url.rsplit("/", 1)[-1]
-        integrity = KNOWN_DOWNLOADS.get(Path(vcf_url).name, {})
-        vcf = download(vcf_url, cache / f"chr{a.chrom}.vcf.gz",
-                       expected_sha256=integrity.get("sha256"),
-                       expected_size=integrity.get("size"))
+        integrity = KNOWN_DOWNLOADS.get(source_vcf_name, {})
+        vcf = download_from_mirrors(
+            vcf_urls, cache / f"chr{a.chrom}.vcf.gz",
+            expected_sha256=integrity.get("sha256"),
+            expected_size=integrity.get("size"),
+        )
     if a.ped and Path(a.ped).exists():
         ped_path = Path(a.ped)
         ped_text = ped_path.read_text()
