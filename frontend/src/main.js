@@ -65,8 +65,9 @@ async function render() {
     } else {
       page = h("div", { class: "empty" }, "That page does not exist. ", h("a", { href: "#/overview" }, "Go to the overview"));
     }
-  } catch {
+  } catch (error) {
     if (mine !== token) return;
+    console.error("GenomeGuard route render failed", { route: hash, title: hit?.[0]?.title }, error);
     page = h("section", { class: "card error-boundary", role: "alert" },
       h("h1", {}, "This page couldn't load"),
       h("p", { class: "muted" }, "The page failed to load. Your existing data has not been changed by this display error."),
