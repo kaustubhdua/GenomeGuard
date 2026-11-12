@@ -481,6 +481,12 @@ class GenomeGuardService:
         if level == "record":
             return finish("escalate", ["record_level_needs_approval", "record_rows_never_released"],
                           needs_human=True, private=private, **kw)
+        if not self.release_enabled:
+            # A valid decision can be recorded for steward review, but this instance
+            # is not linked to a verified, releasable dataset import. Never attempt
+            # materialization or charge the privacy ledger in this state.
+            return finish("escalate", ["governed_release_unavailable"],
+                          needs_human=True, private=private, **kw)
         release = self._release(rid, req_id, elig.donor_ids, private["plan"], ladder.epsilon_spent)
         return finish(ladder.outcome, ladder.reasons, release=release, private=private, **kw)
 
