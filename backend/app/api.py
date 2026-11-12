@@ -347,7 +347,16 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                             return await fn(request)
                     # Other routes authenticate inside their handlers so protocol-specific
                     # error envelopes (for example GA4GH Beacon) remain intact.
-                    return await fn(request)
+                    response = await fn(request)
+                    if method == "GET" and path.startswith("/catalogue/"):
+                        # These endpoints expose only public reference metadata and
+                        # verified dataset manifests. Edge caches may revalidate, but
+                        # browsers must not retain stale catalogue state.
+                        response.headers["Cache-Control"] = (
+                            "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+                        )
+                        response.headers["Vary"] = "Accept"
+                    return response
                 except ServiceError as e:
                     return _j(e.to_json(), e.status)
                 except CatalogueUnavailableError:
