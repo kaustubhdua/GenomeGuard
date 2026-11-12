@@ -59,6 +59,7 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         oidc_allowed_organizations=("org-a", "org-b"),
         oidc_required=True,
         oidc_admin_required=True,
+        tenant_isolation_required=True,
     )
     monkeypatch.setattr("app.api.get_settings", lambda: settings)
     monkeypatch.setattr(
