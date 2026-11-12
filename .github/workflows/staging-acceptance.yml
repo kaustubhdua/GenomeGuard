@@ -1,7 +1,7 @@
 name: staging-acceptance
 on:
   push:
-    branches: [feat/institutional-production-controls]
+    branches: [feat/institutional-production-controls, fix/main-release-acceptance-blockers]
   pull_request:
     branches: [main]
     paths:
@@ -18,11 +18,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: genomeguard-staging-acceptance
+  group: genomeguard-staging-acceptance-pr122
   cancel-in-progress: false
 jobs:
   staging:
-    name: Shared synthetic staging environment acceptance
+    name: PR-branch synthetic staging environment acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -30,15 +30,14 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-      # This shared Render service is pinned to the dedicated staging branch, not the PR branch.
-      # The PR's exact code is exercised by CI; this job checks the shared staging environment
-      # without waiting for an impossible PR-commit match.
-      - name: Verify shared staging API, database, authorization, provenance and audit
-        run: python scripts/staging_smoke.py --base https://genomeguard-staging-pr113.onrender.com --timeout 30
+      # This dedicated Render service is linked to fix/main-release-acceptance-blockers.
+      # It deploys the exact PR branch, so this acceptance job exercises the release candidate itself.
+      - name: Verify PR-branch staging API, database, authorization, provenance and audit
+        run: python scripts/staging_smoke.py --base https://genomeguard-staging-pr122.onrender.com --timeout 30
       - name: Install browser acceptance dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install playwright
           python -m playwright install --with-deps chromium
       - name: Verify hosted public UI routes and mobile layouts
-        run: python scripts/live_ui_smoke.py --base https://genomeguard-staging-pr113.onrender.com --timeout 30000
+        run: python scripts/live_ui_smoke.py --base https://genomeguard-staging-pr122.onrender.com --timeout 30000
