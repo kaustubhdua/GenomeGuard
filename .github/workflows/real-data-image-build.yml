@@ -18,12 +18,13 @@ on:
       - "backend/app/data/**"
       - "backend/app/core/**"
       - "docs/policies/igsr-1000-genomes-public-release.json"
+      - ".github/workflows/real-data-image-build.yml"
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: genomeguard-real-image-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
