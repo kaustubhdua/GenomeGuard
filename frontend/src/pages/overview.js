@@ -84,21 +84,29 @@ function workflowList() {
 }
 
 export async function render() {
-  const hasIdentity = !!(state.demo || state.who || state.adminKey), hl = state.health || {};
-  // Keep the overview responsive when the API or audit store is cold: non-critical
-  // panels get a short budget and never hold the first paint hostage.
-  const quick = (promise, fallback, ms = 650) => Promise.race([
+  const hasIdentity = !!(state.demo || state.who || state.adminKey);
+  let hl = state.health || {};
+  // Cold starts and audit-chain verification can exceed a single network RTT.
+  // Bound each request, but do not turn a 650 ms scheduling delay into a false
+  // "unavailable" state while the API is still doing useful work.
+  const quick = (promise, fallback, ms = 5_000) => Promise.race([
     promise,
     new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
   ]);
-  const [reqs, verify, ev, readyResult] = await Promise.all([
-    hasIdentity ? quick(api("/requests"), { ok: false, data: null }) : Promise.resolve({ ok: false, status: 401, data: null }),
-    quick(api("/audit/verify"), { ok: false, data: null }),
-    state.demo ? quick(api("/eval/results"), { ok: false }) : Promise.resolve({ ok: false }),
+  const [reqs, verify, ev, readyResult, healthResult] = await Promise.all([
+    hasIdentity ? quick(api("/requests", { timeoutMs: 5_000 }), { ok: false, data: null }, 5_250) : Promise.resolve({ ok: false, status: 401, data: null }),
+    quick(api("/audit/verify", { timeoutMs: 8_000 }), { ok: false, data: null }, 8_250),
+    state.demo ? quick(api("/eval/results", { timeoutMs: 5_000 }), { ok: false }, 5_250) : Promise.resolve({ ok: false }),
     state.readiness ? Promise.resolve({ ok: true, status: 200, data: state.readiness }) :
       hl.readiness ? Promise.resolve({ ok: true, status: 200, data: hl.readiness }) :
-        quick(api("/health/ready"), { ok: false, data: null }),
+        quick(api("/health/ready", { timeoutMs: 5_000 }), { ok: false, data: null }, 5_250),
+    hl.status === "ok" ? Promise.resolve({ ok: true, data: hl }) :
+      quick(api("/health", { timeoutMs: 8_000 }), { ok: false, data: null }, 8_250),
   ]);
+  if (healthResult.ok && healthResult.data?.status === "ok") {
+    hl = healthResult.data;
+    state.health = hl;
+  }
   const rows = reqs.ok ? (reqs.data.requests || []) : [];
   const readiness = state.readiness ? { ok: true, data: state.readiness } :
     hl.readiness ? { ok: true, data: hl.readiness } : readyResult;
