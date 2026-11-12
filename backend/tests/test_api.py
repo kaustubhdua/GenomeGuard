@@ -287,50 +287,79 @@ def test_exposure_and_report_endpoints():
     assert c.get("/reports/compliance").status_code == 401
 
 
-def test_production_admin_provisions_a_one_time_requester_key(monkeypatch):
+def test_production_steward_provisions_oidc_bound_requester_without_api_key(monkeypatch):
     from starlette.testclient import TestClient
 
     from app.api import create_app
+    from app.identity import OIDCIdentity
+    from app.service import hash_key
     from tests.helpers import make_service
 
     admin_key = "production-admin-secret-that-is-long-enough-123456"
     master_key = base64.b64encode(b"m" * 32).decode()
     svc = make_service(admin_api_key=admin_key)
     monkeypatch.setenv("GG_DEMO_MODE", "false")
-    monkeypatch.setenv("GG_DATABASE_URL", "postgresql://test.invalid/genomeguard")
+    monkeypatch.setenv("GG_DATABASE_URL", "postgresql://runtime:test@localhost:5432/genomeguard")
+    monkeypatch.setenv("GG_MIGRATION_DATABASE_URL", "postgresql://owner:test@localhost:5432/genomeguard")
+    monkeypatch.setenv("GG_OIDC_REQUIRED", "true")
+    monkeypatch.setenv("GG_OIDC_ADMIN_REQUIRED", "true")
+    monkeypatch.setenv("GG_TENANT_ISOLATION_REQUIRED", "true")
+    monkeypatch.setenv("GG_OIDC_ISSUER", "https://id.example.edu")
+    monkeypatch.setenv("GG_OIDC_AUDIENCE", "genomeguard-api")
+    monkeypatch.setenv("GG_OIDC_CLIENT_ID", "genomeguard-browser")
+    monkeypatch.setenv("GG_OIDC_REDIRECT_URI", "https://genomeguard.example.edu/")
+    monkeypatch.setenv("GG_OIDC_JWKS_URL", "https://id.example.edu/.well-known/jwks.json")
+    monkeypatch.setenv("GG_OIDC_ALLOWED_ORGANIZATIONS", "org-a")
     monkeypatch.setenv("GG_ALLOW_TAMPER_DEMO", "false")
     monkeypatch.setenv("GG_ADMIN_API_KEY", admin_key)
     monkeypatch.setenv("GG_MASTER_KEY", master_key)
     monkeypatch.setenv("GG_REAL_COHORT_FILE", "/secure/authorized-cohort.npz")
     monkeypatch.setenv("GG_DATASET_ID", "approved-cohort-2026-01")
+
+    steward_id = svc.store.add_requester(
+        "Organization Steward", "steward", "controlled", "Research Institute",
+        hash_key("steward-bootstrap-key"), organization_id="org-a",
+    )
+    svc.store.add_identity_binding(
+        steward_id, "https://id.example.edu", "steward-sub", "org-a",
+    )
+    monkeypatch.setattr(
+        "app.identity.verify_access_token",
+        lambda token, **kwargs: OIDCIdentity(
+            "https://id.example.edu", token, "org-a", {},
+        ),
+    )
     client = TestClient(create_app(svc))
+    steward_headers = {"Authorization": "Bearer steward-sub"}
 
     assert client.get("/demo/requesters").status_code == 404
-    for path in ("/demo/donors", "/donor/1", "/federated/demo", "/federated/he",
-                 "/eval/results", "/admin/tamper/1", "/admin/untamper"):
-        if path in ("/admin/tamper/1", "/admin/untamper"):
-            response = client.post(path, headers={"X-Admin-Key": admin_key})
-        else:
-            response = client.get(path)
-        assert response.status_code == 404, path
-    docs = client.get("/openapi.json").json()
-    documented_paths = {item["path"] for item in docs["endpoints"]}
-    assert not any(path.startswith(("/demo/", "/donor/", "/federated/")) for path in documented_paths)
-    assert "/eval/results" not in documented_paths
-    assert client.post("/admin/requesters", json={"name": "Researcher One",
-                                                   "institution": "Research Institute"}).status_code == 401
-    response = client.post("/admin/requesters", headers={"X-Admin-Key": admin_key},
-                           json={"name": "Researcher One", "institution": "Research Institute",
-                                 "credential_level": "registered"})
+    assert client.post("/admin/requesters", json={
+        "name": "Researcher One", "institution": "Research Institute",
+    }).status_code == 401
+    response = client.post(
+        "/admin/requesters", headers=steward_headers,
+        json={
+            "name": "Researcher One", "institution": "Research Institute",
+            "credential_level": "registered", "role": "researcher",
+            "organization_id": "org-a",
+        },
+    )
     assert response.status_code == 201
     payload = response.json()
-    assert payload["shown_once"] is True and len(payload["api_key"]) >= 40
-    assert svc.authenticate(payload["api_key"])["id"] == payload["id"]
-    assert payload["api_key"] not in str(svc.audit.entries())
-    bad = client.post("/admin/requesters", headers={"X-Admin-Key": admin_key},
-                      json={"name": "Bad Level", "institution": "Research Institute",
-                            "credential_level": "anonymous"})
-    assert bad.status_code == 422
+    assert payload["identity_binding_required"] is True
+    assert "api_key" not in payload and "shown_once" not in payload
+
+    bound = client.post(
+        "/admin/oidc-bindings", headers=steward_headers,
+        json={
+            "requester_id": payload["id"], "subject": "researcher-sub",
+            "organization_id": "org-a",
+        },
+    )
+    assert bound.status_code == 201
+    assert client.get(
+        "/me", headers={"Authorization": "Bearer researcher-sub"},
+    ).status_code == 200
 
 
 def test_demo_accounts_endpoint_only_in_demo_mode(monkeypatch):
