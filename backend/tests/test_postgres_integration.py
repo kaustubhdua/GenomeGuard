@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
+from psycopg import sql
 import pytest
 
 from app.core.audit_chain import AuditChain
@@ -414,15 +415,15 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
 
     role = "gg_cohort_rls_" + uuid4().hex[:12]
     connection = pg_store.connection
-    connection.execute(f'CREATE ROLE "{role}" NOLOGIN')
+    connection.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
     connection.execute(
-        f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+        sql.SQL("GRANT USAGE ON SCHEMA genomeguard_runtime TO {}").format(sql.Identifier(role))
     )
     connection.execute(
-        f'GRANT SELECT ON donors, genotypes, variants, relationships, cohort_metadata, donor_access TO "{role}"'
+        sql.SQL("GRANT SELECT ON donors, genotypes, variants, relationships, cohort_metadata, donor_access TO {}").format(sql.Identifier(role))
     )
     connection.execute(
-        f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
+        sql.SQL("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO {}").format(sql.Identifier(role))
     )
     connection.commit()
 
@@ -490,7 +491,7 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
                 (990002, "tenant-b-access", "tenant-b"),
             )
 
-        connection.execute(f'SET ROLE "{role}"')
+        connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         connection.commit()
         with pg_store.transaction():
             pg_store.set_tenant("tenant-a")
@@ -559,8 +560,8 @@ def test_postgres_cohort_rows_are_tenant_scoped_and_foreign_keys_prevent_cross_t
         pg_store.x("DELETE FROM variants WHERE id BETWEEN 880001 AND 880003")
         pg_store.x("DELETE FROM cohort_metadata WHERE id=1")
         pg_store.x("DELETE FROM donors WHERE id BETWEEN 990001 AND 990003")
-        connection.execute(f'DROP OWNED BY "{role}"')
-        connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+        connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+        connection.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
         connection.commit()
 
 
@@ -592,20 +593,19 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
     from uuid import uuid4
 
     role = "gg_test_rls_" + uuid4().hex[:12]
-    pg_store.connection.execute(f'CREATE ROLE "{role}" NOLOGIN')
+    pg_store.connection.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
     try:
         pg_store.connection.execute(
-            f'GRANT USAGE ON SCHEMA genomeguard_runtime TO "{role}"'
+            sql.SQL("GRANT USAGE ON SCHEMA genomeguard_runtime TO {}").format(sql.Identifier(role))
         )
         pg_store.connection.execute(
-            f'GRANT SELECT, INSERT, UPDATE, DELETE ON requests, decisions, epsilon_ledger, alerts '
-            f'TO "{role}"'
+            sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON requests, decisions, epsilon_ledger, alerts TO {}").format(sql.Identifier(role))
         )
         pg_store.connection.execute(
-            f'GRANT SELECT ON requesters, identity_bindings, consent_events TO "{role}"'
+            sql.SQL("GRANT SELECT ON requesters, identity_bindings, consent_events TO {}").format(sql.Identifier(role))
         )
         pg_store.connection.execute(
-            f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO "{role}"'
+            sql.SQL("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA genomeguard_runtime TO {}").format(sql.Identifier(role))
         )
 
         pg_store.x(
@@ -641,7 +641,7 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
                 })
                 ids[org] = req_id
 
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         pg_store.connection.commit()
         with pg_store.transaction():
             pg_store.set_tenant("tenant-a")
@@ -693,8 +693,8 @@ def test_postgres_rls_isolates_tenants_and_requires_explicit_admin_context(pg_st
         pg_store.connection.commit()
     finally:
         pg_store.connection.execute("RESET ROLE")
-        pg_store.connection.execute(f'DROP OWNED BY "{role}"')
-        pg_store.connection.execute(f'DROP ROLE IF EXISTS "{role}"')
+        pg_store.connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+        pg_store.connection.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
 
 
 
@@ -732,30 +732,30 @@ def test_postgres_consent_event_ledger_rejects_update_and_delete(pg_store):
 def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
     role = "genomeguard_runtime"
     try:
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         pg_store.connection.commit()
         pg_store.assert_least_privilege_runtime()
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.commit()
 
         pg_store.connection.execute(
-            f'GRANT TRUNCATE ON TABLE genomeguard_runtime.requests TO "{role}"'
+            sql.SQL("GRANT TRUNCATE ON TABLE genomeguard_runtime.requests TO {}").format(sql.Identifier(role))
         )
         pg_store.connection.commit()
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         pg_store.connection.commit()
         with pytest.raises(RuntimeError, match="over-privileged"):
             pg_store.assert_least_privilege_runtime()
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.commit()
         pg_store.connection.execute(
-            f'REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM "{role}"'
+            sql.SQL("REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM {}").format(sql.Identifier(role))
         )
         pg_store.connection.execute(
-            f'GRANT UPDATE ON TABLE genomeguard_runtime.audit_log TO "{role}"'
+            sql.SQL("GRANT UPDATE ON TABLE genomeguard_runtime.audit_log TO {}").format(sql.Identifier(role))
         )
         pg_store.connection.commit()
-        pg_store.connection.execute(f'SET ROLE "{role}"')
+        pg_store.connection.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role)))
         pg_store.connection.commit()
         with pytest.raises(RuntimeError, match="over-privileged"):
             pg_store.assert_least_privilege_runtime()
@@ -764,10 +764,10 @@ def test_runtime_privilege_assertion_rejects_table_wide_truncate(pg_store):
     finally:
         pg_store.connection.execute("RESET ROLE")
         pg_store.connection.execute(
-            f'REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM "{role}"'
+            sql.SQL("REVOKE TRUNCATE ON TABLE genomeguard_runtime.requests FROM {}").format(sql.Identifier(role))
         )
         pg_store.connection.execute(
-            f'REVOKE UPDATE ON TABLE genomeguard_runtime.audit_log FROM "{role}"'
+            sql.SQL("REVOKE UPDATE ON TABLE genomeguard_runtime.audit_log FROM {}").format(sql.Identifier(role))
         )
         pg_store.connection.commit()
 
