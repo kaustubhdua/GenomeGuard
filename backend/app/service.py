@@ -1428,8 +1428,11 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         raise ValueError("stored cohort is not verified real-genotype data with source-matched consent")
     ds = store.load_dataset(master, s.dataset_id)
     llm = llm or LLM()
+    # Synthetic demo data may exercise decisions and review, but must never be
+    # represented as a governed research release. Only a non-demo deployment that
+    # passed the real-cohort and consent-provenance gates above may release aggregates.
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
-                             admin_key=s.admin_api_key, release_enabled=s.demo_mode, **kwargs)
+                             admin_key=s.admin_api_key, release_enabled=not s.demo_mode, **kwargs)
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:
