@@ -5,8 +5,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
-from psycopg import sql as pg_sql
 import pytest
+from psycopg import sql as pg_sql
 
 from app.core.audit_chain import AuditChain
 from app.postgres_store import (
