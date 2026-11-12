@@ -1,7 +1,7 @@
 name: real-data-image-build
 on:
   push:
-    branches: [main]
+    branches: [main, fix/main-release-acceptance-blockers]
     paths:
       - "Dockerfile"
       - "pyproject.toml"
