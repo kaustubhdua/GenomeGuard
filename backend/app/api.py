@@ -43,6 +43,7 @@ EVAL_JSON = Path(os.environ.get("GG_EVAL_JSON")
 ROUTES_DOC: list[tuple[str, str, str, str]] = []
 _PUBMED_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _DEMO_SESSION_TTL_SECONDS = 1800
+_MAX_DEMO_SESSIONS = 5000
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -148,6 +149,22 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if state["svc"] is None:
             state["svc"] = bootstrap(settings)
         return state["svc"]
+
+    def issue_demo_session(registry: dict[str, dict], payload: dict) -> tuple[str, float]:
+        now = time.time()
+        with demo_session_lock:
+            expired = [token for token, session in registry.items() if session["expires_at"] <= now]
+            for token in expired:
+                registry.pop(token, None)
+            if len(registry) >= _MAX_DEMO_SESSIONS:
+                raise ServiceError(
+                    503, "demo_session_capacity",
+                    "The synthetic demo session capacity is temporarily full. Please retry later.",
+                )
+            token = secrets.token_urlsafe(32)
+            expires_at = now + _DEMO_SESSION_TTL_SECONDS
+            registry[token] = {**payload, "expires_at": expires_at}
+        return token, expires_at
 
     def requester(request: Request) -> dict:
         cached = getattr(request.state, "authenticated_requester", None)
@@ -522,14 +539,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             authenticated = S().authenticate(persona[4])
         if not authenticated or authenticated.get("id") != requester_id:
             raise ServiceError(404, "demo_requester_not_found", "demo requester was not found")
-        token = secrets.token_urlsafe(32)
-        expires_at = time.time() + _DEMO_SESSION_TTL_SECONDS
-        with demo_session_lock:
-            demo_sessions[token] = {
-                "requester_id": requester_id,
-                "api_key": persona[4],
-                "expires_at": expires_at,
-            }
+        token, _expires_at = issue_demo_session(
+            demo_sessions, {"requester_id": requester_id, "api_key": persona[4]},
+        )
         return _j({
             "session_token": token,
             "expires_in": _DEMO_SESSION_TTL_SECONDS,
@@ -1266,10 +1278,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         donor = next((item for item in S().demo_donors() if item["id"] == donor_id), None)
         if not donor:
             raise ServiceError(404, "demo_donor_not_found", "demo donor was not found")
-        token = secrets.token_urlsafe(32)
-        expires_at = time.time() + _DEMO_SESSION_TTL_SECONDS
-        with demo_session_lock:
-            demo_donor_sessions[token] = {"donor_id": donor_id, "expires_at": expires_at}
+        token, _expires_at = issue_demo_session(
+            demo_donor_sessions, {"donor_id": donor_id},
+        )
         return _j({
             "session_token": token,
             "expires_in": _DEMO_SESSION_TTL_SECONDS,
