@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -19,12 +20,14 @@ OK, BAD = "\033[32mPASS\033[0m", "\033[31mFAIL\033[0m"
 failures = 0
 
 
-def call(base, method, path, key=None, admin=None, body=None):
+def call(base, method, path, key=None, admin=None, body=None, session=None):
     headers = {"Content-Type": "application/json"}
     if key:
         headers["X-API-Key"] = key
     if admin:
         headers["X-Admin-Key"] = admin
+    if session:
+        headers["X-Demo-Session"] = session
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(base + path, data=data, headers=headers, method=method)
     try:
@@ -47,16 +50,31 @@ def main():
     st, demo = call(base, "GET", "/demo/requesters")
     if st != 200:
         sys.exit("demo accounts not available: is the server in demo mode?")
-    admin = demo["admin_key"]
+    admin = os.environ.get("GG_ADMIN_API_KEY", "demo-admin-key")
+    accounts = {item["name"]: item for item in demo.get("requesters", [])}
+
+    def session_for(name):
+        persona = accounts.get(name)
+        if not persona:
+            raise RuntimeError(f"missing synthetic demo persona: {name}")
+        status, payload = call(
+            base, "POST", "/demo/session", body={"requester_id": persona["id"]},
+        )
+        if status != 200 or not payload.get("session_token"):
+            raise RuntimeError(f"could not issue short-lived session for {name}: HTTP {status}")
+        return payload["session_token"]
+
+    researcher = session_for("Dr. Amara Nwosu")
+    attacker = session_for("Probe Account")
 
     print("\n1. Registered researcher asks for diabetes frequencies")
     st, c = call(base, "GET", "/consent/summary?disease=diabetes&purpose=disease_research",
-                 key="demo-researcher")
+                 session=researcher)
     check("consent summary returns counts only", st == 200 and "donor_ids" not in json.dumps(c), str(c)[:120])
     body = {"purpose": "disease_research", "disease": "diabetes", "data_level": "frequency",
             "is_commercial": False, "cohort_filter": {},
             "variant_filter": {"min_maf": 0.1, "limit": 20, "include_planted": 2}}
-    st, d = call(base, "POST", "/requests", key="demo-researcher", body=body)
+    st, d = call(base, "POST", "/requests", session=researcher, body=body)
     check("request accepted", st in (200, 201), f"HTTP {st}")
     dec = d.get("decision", d)
     print("   outcome:", dec.get("outcome"))
@@ -68,7 +86,7 @@ def main():
     if rid:
         st, ex = call(base, "GET", f"/requests/{rid}/exposure", admin=admin)
         check("exposure graph available to steward", st == 200, f"HTTP {st}")
-        st, ex2 = call(base, "GET", f"/requests/{rid}/exposure", key="demo-researcher")
+        st, ex2 = call(base, "GET", f"/requests/{rid}/exposure", session=researcher)
         check("exposure graph hidden from researcher", st in (401, 403), f"HTTP {st}")
 
     print("\n3. Probe account sends many near-identical narrow queries")
@@ -79,7 +97,7 @@ def main():
         q = {"purpose": "disease_research", "disease": diseases[i % 6], "is_commercial": i % 2 == 1,
              "data_level": "frequency", "cohort_filter": cell,
              "variant_filter": {"min_maf": 0.1, "limit": 20 + (i % 3)}}
-        st, r = call(base, "POST", "/requests", key="demo-attacker", body=q)
+        st, r = call(base, "POST", "/requests", session=attacker, body=q)
         if st == 403:
             frozen_at = i + 1
             break
@@ -101,7 +119,7 @@ def main():
               cop.get("recommendation") == "deny", str(cop.get("recommendation")))
         check("recommendation is advisory (a human still decides)",
               "Advisory" in str(cop.get("authority", "")))
-        st, _ = call(base, "POST", f"/requests/{hid}/copilot", key="demo-researcher")
+        st, _ = call(base, "POST", f"/requests/{hid}/copilot", session=researcher)
         check("copilot is hidden from researchers", st in (401, 403), f"HTTP {st}")
 
     print("\n5. Audit log: valid, tamper, broken at that entry, anchor")
