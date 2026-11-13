@@ -26,8 +26,8 @@ Last audited: 13 November 2026.
 ### Staging and real-data validation
 
 - PR-branch synthetic staging is the separate Render service genomeguard-staging-pr122; staging-acceptance.yml targets that service and branch. It is not the non-demo research-mode deployment.
-- High-coverage family cohort validation run 43401555287 passed. It downloaded the official 1000 Genomes high-coverage chr22 VCF and pedigree/population metadata, built a 600-sample/3,000-variant family-enriched cohort, verified source hashes and relative-pair metadata, and produced aggregate evaluation evidence. It does not import that cohort into the hosted database.
-- The Phase 3 1000 Genomes validation run 43401555222 was still running at this audit. Do not mark its acceptance complete until the workflow succeeds and its artifact is inspected.
+- High-coverage family cohort validation run 43401555287 passed. It downloaded the official 1000 Genomes high-coverage chr22 VCF and pedigree/population metadata, built a 600-sample/3,000-variant family-enriched cohort with 355 relative pairs, verified source hashes and produced aggregate evaluation evidence. Its consent records are simulated and dataset_policy_samples_scoped=0, so this family cohort is evaluation-only and must not be loaded into non-demo research mode.
+- The Phase 3 1000 Genomes CI validation run 43401555222 uses simulated consent by design and is an evaluation pipeline, not a hosted research-mode import. The Dockerfile builds the separate research-mode cohort with docs/policies/igsr-1000-genomes-public-release.json, which records a dataset-level public-release policy (not participant-specific consent and not independently legal-reviewed). The live research-mode smoke requires that policy provenance to cover every loaded sample.
 
 ### Deployment actions still required
 
