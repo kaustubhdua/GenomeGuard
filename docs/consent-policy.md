@@ -73,3 +73,10 @@ individual-level record access.
 ## Signed consent event ordering
 
 Signed participant consent events must carry an explicit timezone and must not be future-effective. GenomeGuard rejects timezone-naive and future-effective events because scheduled consent changes are not implemented. Each event must be strictly later than every previously applied event for the same participant and dataset; stale or out-of-order restores are rejected. PostgreSQL locks the participant row while checking and applying event order so concurrent event submissions cannot race and overwrite a newer consent state. SQLite serializes writers with its immediate transaction. This ordering control is an application safeguard, not proof that the external consent authority is institutionally accredited or that the event is legally valid.
+
+## Disease-specific research and MONDO identifiers
+
+DUO:0000007 (DS) must be paired with a disease ontology term; the EGA DAC guidance recommends MONDO to support automated evaluation. In institutional/research mode, GenomeGuard therefore treats the request and source-consent `disease` value as a MONDO CURIE (for example `MONDO:0005015`). A human-readable `disease_label` may accompany the code for display, but it is never used as the authorization key. Dataset-level policies using DS must also provide the MONDO identifier. The FHIR R4 export preserves the readable label and emits a separate `disease-ontology` Coding extension with the MONDO system and code.
+
+The public synthetic demo remains clearly separated and may continue to use human-readable example labels; those simulated examples are not participant consent and cannot authorize institutional research-mode access. A MONDO identifier is a terminology identifier, not a diagnosis or clinical recommendation. Disease-term discovery must remain source-backed and user-selected.
+
