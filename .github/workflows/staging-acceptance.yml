@@ -2,14 +2,6 @@ name: staging-acceptance
 on:
   push:
     branches: [feat/institutional-production-controls, fix/main-release-acceptance-blockers]
-  pull_request:
-    branches: [main]
-    paths:
-      - "backend/**"
-      - "scripts/staging_smoke.py"
-      - "Dockerfile.staging"
-      - "render.staging.yaml"
-      - ".github/workflows/staging-acceptance.yml"
   workflow_dispatch:
 permissions:
   contents: read
