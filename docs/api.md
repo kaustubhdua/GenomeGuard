@@ -54,6 +54,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/federated/demo` | Simulated hospitals with secure aggregation (synthetic) | public |
 | GET | `/catalogue/datasets` | Local dataset catalogue (replaces Supabase Edge Function) | public |
 | GET | `/catalogue/chromosomes` | Local chromosome reference (replaces Supabase Edge Function) | public |
+| GET | `/literature/pubmed/search` | Search public PubMed literature metadata via NCBI E-utilities | public |
 | GET | `/catalogue/sources` | Curated public source references with explicit review/import status | public |
 | GET | `/openapi.json` | Machine-readable endpoint list | public |
 | GET | `/docs` | Human-readable endpoint list | public |
