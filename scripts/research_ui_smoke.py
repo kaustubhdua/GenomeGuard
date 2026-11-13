@@ -586,6 +586,11 @@ def main() -> int:
                   "https://www.ebi.ac.uk/ols4/ontologies/hp/"
               )
               and ontology_link.get_attribute("rel") == "noopener noreferrer")
+        page.get_by_role("button", name="Add selected term to publication query").first.click()
+        expanded_query = page.locator("#research-question").input_value()
+        check("ontology term selection adds label and source synonyms as a visible, editable OR expansion",
+              '"Ataxia"' in expanded_query and '"coordination abnormality"' in expanded_query
+              and "BRCA1 ovarian cancer symptoms" in expanded_query)
         page.get_by_role("button", name="Load more terms").click()
         page.wait_for_function(
             "document.querySelectorAll('#ontology-results .ontology-term').length === 3"
