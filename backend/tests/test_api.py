@@ -366,6 +366,19 @@ def test_production_steward_provisions_oidc_bound_requester_without_api_key(monk
     ).status_code == 200
 
 
+def test_demo_settings_default_to_random_admin_secret_and_disable_static_keys(monkeypatch):
+    from app.config import Settings
+
+    monkeypatch.delenv("GG_ADMIN_API_KEY", raising=False)
+    monkeypatch.delenv("GG_TEST_ALLOW_STATIC_DEMO_KEYS", raising=False)
+    first = Settings()
+    second = Settings()
+    assert len(first.admin_api_key) >= 32
+    assert first.admin_api_key != "demo-admin-key"
+    assert first.admin_api_key != second.admin_api_key
+    assert first.allow_static_demo_keys is False
+
+
 def test_demo_accounts_endpoint_only_in_demo_mode(monkeypatch):
     svc, c = make_client()
     response = c.get("/demo/requesters")
