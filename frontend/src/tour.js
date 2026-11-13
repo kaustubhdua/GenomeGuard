@@ -34,32 +34,65 @@ const STEPS = [
 
 let index = 0;
 let dialog = null;
+let returnFocus = null;
 
 function close() {
   if (dialog) dialog.remove();
   dialog = null;
   document.body.classList.remove("tour-open");
   document.removeEventListener("keydown", onKey);
+  const target = returnFocus && returnFocus.isConnected ? returnFocus : document.getElementById("open-cmdk");
+  returnFocus = null;
+  target?.focus();
 }
 function onKey(event) {
-  if (event.key === "Escape") close();
+  if (event.key === "Escape") {
+    close();
+    return;
+  }
+  if (event.key !== "Tab" || !dialog) return;
+  const focusable = Array.from(dialog.querySelectorAll("button:not([disabled])"));
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const heading = dialog.querySelector("h2");
+  const active = document.activeElement;
+  if (!dialog.contains(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && (active === first || active === heading)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || active === heading)) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 async function show(next) {
   index = Math.max(0, Math.min(STEPS.length - 1, next));
   const step = STEPS[index];
   if (!dialog) {
+    const active = document.activeElement;
+    const palette = document.getElementById("cmdk");
+    const paletteTrigger = document.getElementById("open-cmdk");
+    returnFocus = palette?.contains(active) ? paletteTrigger : (active || paletteTrigger);
     dialog = h("section", {
       class: "tour",
       role: "dialog",
       "aria-label": "Guided tour",
       "aria-modal": "true",
       "aria-live": "polite",
+      "aria-describedby": "tour-step-description",
     });
     document.body.append(dialog);
     document.body.classList.add("tour-open");
     document.addEventListener("keydown", onKey);
   }
   const heading = h("h2", { tabindex: "-1" }, step.title);
+  const description = h("p", { id: "tour-step-description" }, step.text);
   const nextButton = h("button", {
     class: step.last ? "" : "",
     onclick: () => step.last ? close() : show(index + 1),
@@ -71,7 +104,7 @@ async function show(next) {
     h("div", { class: "tour-bar", role: "img", "aria-label": `Progress: step ${index + 1} of ${STEPS.length}` },
       h("i", { style: `width:${((index + 1) / STEPS.length) * 100}%` })),
     heading,
-    h("p", {}, step.text),
+    description,
     h("div", { class: "tour-btns" },
       index > 0 ? h("button", { class: "ghost", onclick: () => show(index - 1) }, "Back") : null,
       nextButton),

@@ -235,6 +235,35 @@ def main() -> None:
         check("Ctrl+K opens command palette", palette_open)
         check("keyboard search can navigate to Dataset catalogue", "#/datasets" in keyboard_pg.url)
         check("Escape closes command palette", palette_closes)
+
+        keyboard_pg.keyboard.press("Control+k")
+        keyboard_pg.locator("#cmdk-input").fill("Start the guided tour")
+        keyboard_pg.locator("#cmdk-list li").filter(has_text="Start the guided tour").click()
+        tour_dialog = keyboard_pg.get_by_role("dialog", name="Guided tour")
+        tour_dialog.wait_for()
+        check("guided tour opens from the keyboard command palette",
+              keyboard_pg.get_by_role("heading", name="Welcome to GenomeGuard").count() == 1)
+        keyboard_pg.keyboard.press("Shift+Tab")
+        check("guided tour traps reverse keyboard focus at its last control",
+              keyboard_pg.evaluate("document.activeElement.textContent.trim() === 'Next'"))
+        keyboard_pg.keyboard.press("Tab")
+        check("guided tour cycles forward keyboard focus to Close",
+              keyboard_pg.evaluate("document.activeElement.getAttribute('aria-label') === 'Close the tour'"))
+        keyboard_pg.get_by_role("button", name="Next").click()
+        check("guided tour advances to the literature-discovery step",
+              keyboard_pg.get_by_role("heading", name="Discover biomedical literature").count() == 1)
+        keyboard_pg.get_by_role("button", name="Back").click()
+        check("guided tour supports backward navigation",
+              keyboard_pg.get_by_role("heading", name="Welcome to GenomeGuard").count() == 1)
+        keyboard_pg.keyboard.press("Escape")
+        check("guided tour Escape closes the dialog and restores command-palette focus",
+              keyboard_pg.locator('[role="dialog"][aria-label="Guided tour"]').count() == 0
+              and keyboard_pg.evaluate("document.activeElement.id === 'open-cmdk'"))
+        keyboard_pg.get_by_role("button", name="Explore platform — Guided walkthrough").click()
+        keyboard_pg.get_by_role("dialog", name="Guided tour").wait_for()
+        keyboard_pg.keyboard.press("Escape")
+        check("guided tour restores focus to the actual overview launcher",
+              keyboard_pg.evaluate("document.activeElement.getAttribute('aria-label') === 'Explore platform — Guided walkthrough'"))
         keyboard_ctx.close()
 
         print("\\n0. Startup resilience when browser storage is blocked")
