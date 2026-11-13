@@ -141,6 +141,8 @@ def validate_search_request(
         raise ValueError("provide at least one of gene_symbol, rs_id, or trait")
     if not isinstance(show_child_traits, bool):
         raise ValueError("show_child_traits must be a boolean")
+    if show_child_traits and trait in (None, ""):
+        raise ValueError("show_child_traits requires a trait search")
     if isinstance(page, bool) or not isinstance(page, int) or not 0 <= page <= MAX_PAGE:
         raise ValueError(f"page must be an integer between 0 and {MAX_PAGE}")
     if isinstance(size, bool) or not isinstance(size, int) or not 1 <= size <= MAX_PAGE_SIZE:
