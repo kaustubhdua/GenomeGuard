@@ -78,3 +78,24 @@ Verification:
 - `backend/tests/test_gwas_catalog.py` validates query parameters, release provenance, p-values, alleles, links, pagination, and malformed responses.
 - `backend/tests/test_gwas_api.py` validates input bounds, safe provider errors, no-store responses, and concurrency limits.
 - `scripts/research_ui_smoke.py` checks search, pagination, provenance, exports, and mobile layout with deterministic source-shaped fixtures.
+
+
+## Biomedical ontology term discovery
+
+The research workspace includes a bounded search against the EMBL-EBI Ontology Lookup Service (OLS4) for three explicitly supported ontologies:
+
+- MONDO — Monarch Disease Ontology.
+- HP — Human Phenotype Ontology.
+- DOID — Disease Ontology.
+
+The server-side `POST /research/ontology/search` endpoint accepts a short free-text term, an optional ontology filter, and bounded pagination. It requests only labels, synonyms, descriptions and stable identifiers from OLS4. Obsolete terms are excluded by default. The response preserves the provider's ontology prefix, OBO identifier/short form, IRI, description, synonyms and retrieval timestamp. Provider output is validated against the allowlist before it is returned.
+
+The browser panel is part of Research Discovery and links each result to its OLS4 source record. Query text is sent to EMBL-EBI OLS4; users must not enter participant names, medical record numbers, private genotypes or other identifying/private clinical data. The endpoint is rate/concurrency bounded, caps response size, uses a fixed provider origin, and returns `Cache-Control: no-store`.
+
+**Scientific boundary:** this is term discovery, not automated ontology equivalence, cross-ontology mapping, diagnosis, clinical coding or phenotype-to-gene inference. A similar label or synonym is only a candidate annotation. Any future mapping workflow must retain mapping relation, source, version, confidence/curation provenance, and reviewer decision rather than silently replacing one identifier with another.
+
+Verification:
+- `backend/tests/test_ontology.py` covers input bounds, ontology allowlisting, pagination, response normalization, malformed payloads and response-size limits.
+- `backend/tests/test_ontology_api.py` covers API validation, safe upstream errors, no-store headers and API documentation.
+- `scripts/ontology_provider_smoke.py` checks a live public OLS4 search for MONDO/HPO/DOID terms.
+- `frontend/src/pages/ontology.js` provides the researcher-facing search panel and source links.
