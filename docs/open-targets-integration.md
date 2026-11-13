@@ -16,8 +16,9 @@ JSON body:
 - page_index: zero-based association page, 0–100.
 - page_size: 1–50.
 - evidence_size: 1–50.
+- evidence_cursor: optional opaque cursor returned by the prior evidence response; maximum 2,048 characters.
 
-The server uses a fixed GraphQL document and variables, HTTPS POST, bounded response size, timeout, bounded retry for 429/5xx/transport errors, GraphQL error rejection and a per-process concurrency cap. Responses use Cache-Control: no-store. No user-supplied GraphQL document is accepted.
+The server uses a fixed GraphQL document and variables, HTTPS POST, bounded response size, timeout, bounded retry for 429/5xx/transport errors, GraphQL error rejection, conservative per-process request pacing and a per-process concurrency cap. Responses use Cache-Control: no-store. No user-supplied GraphQL document is accepted.
 
 ## Returned evidence and provenance
 
