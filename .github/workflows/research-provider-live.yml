@@ -1,0 +1,58 @@
+name: research-provider-live
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 6 * * 2"
+
+concurrency:
+  group: genomeguard-research-provider-live
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  provider-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install provider dependencies
+        run: make setup
+      - name: Verify live PubMed E-utilities search and summary contract
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/pubmed_provider_smoke.py
+      - name: Verify live Open Targets GraphQL associations and evidence contract
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/open_targets_provider_smoke.py
+      - name: Verify live ClinVar E-utilities search and classification contract
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/clinvar_provider_smoke.py
+      - name: Verify live GWAS Catalog REST API v2 associations and release metadata
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/gwas_catalog_provider_smoke.py
+      - name: Verify live OLS4 MONDO, HPO, and Disease Ontology search
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/ontology_provider_smoke.py
+      - name: Verify live Europe PMC search and cursor pagination contract
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/research_provider_smoke.py
+      - name: Verify live Ensembl human gene identity lookup
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/ensembl_provider_smoke.py
+      - name: Verify live UniProtKB reviewed human protein lookup
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/uniprot_provider_smoke.py
