@@ -174,24 +174,21 @@ def test_sqlite_upgrade_scrubs_legacy_raw_source_sample_ids(tmp_path):
     store.db.close()
 
 
-
-@pytest.mark.parametrize(
-    "effective_at",
-    [
-        "2026-11-14T12:00:00",
-        (datetime.now(UTC) + timedelta(days=1)).isoformat(),
-    ],
-    ids=["timezone-naive", "future-effective"],
-)
-def test_signed_consent_rejects_ambiguous_or_future_effective_time(effective_at):
+@pytest.mark.parametrize("case", ["timezone-naive", "future-effective"])
+def test_signed_consent_rejects_ambiguous_or_future_effective_time(case):
     svc = make_service()
     private = Ed25519PrivateKey.generate()
     public = base64.b64encode(private.public_key().public_bytes(
         serialization.Encoding.Raw, serialization.PublicFormat.Raw,
     )).decode()
+    effective_at = (
+        "2026-11-14T12:00:00"
+        if case == "timezone-naive"
+        else (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    )
     event = signed_event(private, svc.dataset_id, effective_at=effective_at)
 
-    with pytest.raises(ServiceError, match="invalid_consent_authority_event"):
+    with pytest.raises(ServiceError, match="signature or required fields are invalid"):
         svc.apply_signed_consent_event(
             event, public_key_b64=public, trusted_issuer="https://consent.example.edu",
         )
