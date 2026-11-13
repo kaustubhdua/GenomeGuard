@@ -1,31 +1,27 @@
-> **Live status refresh — 14 November 2026 (supersedes the 10 November snapshot below).**
+> **Live status refresh — 14 November 2026.** This section supersedes the 10 November snapshot below; historical entries are retained for audit history.
 >
-> Current `main`: `50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`. PR #150 (OLS4-backed ontology discovery) and PR #151 (filterable dataset catalogue) are merged.
+> Current main: `50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`.
 >
-> Open implementation/review PRs:
-> - [#150](https://github.com/kaustubhdua/GenomeGuard/pull/150): merged OLS4-backed MONDO/HPO/DOID term discovery and visible, user-controlled query expansion.
-> - [#151](https://github.com/kaustubhdua/GenomeGuard/pull/151): merged filterable dataset catalogue/research explorer.
-> - [#152](https://github.com/kaustubhdua/GenomeGuard/pull/152): CSV formula-injection whitespace correction.
-> - [#153](https://github.com/kaustubhdua/GenomeGuard/pull/153): this live-status, README, threat-model and deployment-documentation reconciliation.
-> - [#154](https://github.com/kaustubhdua/GenomeGuard/pull/154): require gnomAD TSV checksum to match the reviewed manifest before database writes.
-> - [#155](https://github.com/kaustubhdua/GenomeGuard/pull/155): signed-consent policy-basis, timestamp and event-ordering corrections.
-> - [#156](https://github.com/kaustubhdua/GenomeGuard/pull/156): official DUO mappings for POA/NPOA and NCU/NPU/NPUNCU semantics, explicit consent-basis enforcement, signed-event basis alignment, synthetic-demo isolation and truthful FHIR provenance.
-> - #157 was superseded and closed in favour of combined PR #161.
-> - [#158](https://github.com/kaustubhdua/GenomeGuard/pull/158): public demo health smoke retries and diagnostics after a cold-start-related live acceptance failure.
-> - [#159](https://github.com/kaustubhdua/GenomeGuard/pull/159): keep the synthetic demo usable when health metadata endpoints are unavailable, with an explicit degraded-provenance label and no institutional-mode fallback.
-> - #160 was superseded and closed in favour of combined PR #161.
-> - [#161](https://github.com/kaustubhdua/GenomeGuard/pull/161): combined Ensembl gene identity and reviewed UniProtKB protein discovery with API, UI, CI and browser acceptance.
+> **Open PRs (not merged; exact-head checks pending):**
+> - [#153](https://github.com/kaustubhdua/GenomeGuard/pull/153): this documentation reconciliation.
+> - [#154](https://github.com/kaustubhdua/GenomeGuard/pull/154): gnomAD manifest checksum enforcement. This is an importer integrity gate, not evidence that gnomAD data has been imported.
+> - [#164](https://github.com/kaustubhdua/GenomeGuard/pull/164): CI live-provider isolation, research UI smoke correction, dataset catalogue browser reliability, and whitespace-prefixed CSV formula-injection protection.
+> - [#165](https://github.com/kaustubhdua/GenomeGuard/pull/165): consolidated DUO/consent provenance, signed-event chronology and PostgreSQL row locking, MONDO-coded DUO DS restrictions, and FHIR R4 disease coding.
+> - [#166](https://github.com/kaustubhdua/GenomeGuard/pull/166): Ensembl gene and UniProtKB protein discovery, research browser acceptance, synthetic-demo health-metadata fallback and bounded cold-start retries.
 >
-> Exact-head backend CI, CodeQL, secret scanning, dependency audit and deployment-configuration checks for current `main` and open PRs #152–#156, #158–#159 and #161 are queued. A queued check is not a passing check; do not merge or deploy until required checks complete successfully. The GitHub branch inventory reports `main` as unprotected, and a maintainer must configure a required-check ruleset.
+> Superseded, closed without merging: #152 → #164; #155 and #156 → #165; #158, #159 and #161 → #166. Their work is carried by the replacement PRs; reopen them if the replacement PR cannot pass or merge.
 >
-> Render currently reports the primary public synthetic demo live at `3280ebc1924039bcfa19f4c58bb75e83a8c370eb` and a separate recovery demo live at `f200b643f05a5f959887ac51accd7e202c424557`; both are behind current `main`. The connected workspace has no Render-managed PostgreSQL instance, and no accepted institutional research-mode deployment. Do not treat a Render `live` status as production acceptance.
+> **Neon evidence (read-only audit):** `genomeguard-free-demo` default branch has migrations 1–12. `genomeguard-staging` default branch has migrations 1–2. The existing `gg-render-staging-2026-11-10` child branch has migrations 1–12 and 600 synthetic donors, 600 genotype rows and 3,000 variants; its metadata reports `genotypes_real=false` and `consent_simulated=true`. On that candidate branch, public dataset sample/variant tables and gnomAD reference manifest/frequency tables have zero rows. The child branch is a staging candidate, not proof that the live Render service uses it. The Render-to-Neon connection target remains unverified until the user confirms the Render workspace.
 >
-> The public demo remains **synthetic-only**. Do not upload private or controlled-access participant data. The separate public-cohort research image and CI fixtures are not participant-specific consent or institutional authorization.
+> Attempts to protect both Neon default branches were rejected because the current plan has reached its protected-branch limit. GitHub `main` is also reported unprotected; this integration cannot configure repository rulesets. No plan upgrade, paid infrastructure, branch deletion, or live/default-branch migration was performed.
 >
-> Institutional OIDC/SSO and MFA, a verified organisation/legal-entity registry, DAC-verified commercial-purpose classification, durable production PostgreSQL, independently verified backups/restores, external audit anchoring, production observability/incident response, participant-specific consent authority, and independent scientific/privacy/security/legal/institutional sign-off remain release blockers. No paid infrastructure or production configuration was changed during this audit.
+> **Deployment evidence:** the prior Render audit recorded public demo and recovery service SHAs, but they were not re-verified in this session. No claim of exact-SHA staging acceptance or institutional production deployment is made. The user must confirm the Render workspace before its services and environment-to-Neon branch mapping can be inspected.
 >
-> The authoritative, actively maintained acceptance ledger is [GitHub issue #124](https://github.com/kaustubhdua/GenomeGuard/issues/124). Deployment-specific operational evidence is in [docs/production-deployment.md](docs/production-deployment.md); older dated sections in this file are historical and must not be treated as current live status.
-
+> **Release status: NOT PRODUCTION READY.** The public demo remains synthetic-only. No private or controlled-access participant data may be uploaded. DUO/MONDO code does not establish legal consent, DAC authority, organisation status, or institutional approval. The gnomAD tables are empty in the inspected staging candidate; no real 1000 Genomes import is claimed.
+>
+> Outstanding gates include durable production PostgreSQL/storage and backup/restore, verified organisation and commercial-purpose registries, institutional OIDC/SSO/MFA, accredited consent authority and DAC workflows, production key custody, monitoring/incident response, external audit anchoring, independent scientific/privacy/security/legal review, and institutional release approval. Do not infer completion from a passing CI run, a live service badge, or a deployed frontend.
+>
+> The authoritative acceptance ledger is [GitHub issue #124](https://github.com/kaustubhdua/GenomeGuard/issues/124).
 ---
 
 Updated: 2 November 2026
