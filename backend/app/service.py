@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import secrets
 import re
 import time
 from collections.abc import Callable
@@ -1248,11 +1249,13 @@ def _brief(r: dict) -> dict:
 
 
 # ====================================================================== bootstrap
+# Demo API keys are random process-local bootstrap values, never published by persona
+# endpoints, and static-key authentication is disabled by default in demo mode.
 DEMO_REQUESTERS = [
-    ("Dr. Amara Nwosu", "researcher", "registered", "Demo University", "demo-researcher"),
-    ("Probe Account", "researcher", "registered", "Unknown Lab", "demo-attacker"),
-    ("Public Viewer", "visitor", "anonymous", "-", "demo-anonymous"),
-    ("Controlled-Access Lab", "researcher", "controlled", "Demo Hospital", "demo-controlled"),
+    ("Dr. Amara Nwosu", "researcher", "registered", "Demo University", secrets.token_urlsafe(32)),
+    ("Probe Account", "researcher", "registered", "Unknown Lab", secrets.token_urlsafe(32)),
+    ("Public Viewer", "visitor", "anonymous", "-", secrets.token_urlsafe(32)),
+    ("Controlled-Access Lab", "researcher", "controlled", "Demo Hospital", secrets.token_urlsafe(32)),
 ]
 
 
