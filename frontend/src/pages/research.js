@@ -259,7 +259,6 @@ export async function render() {
       question: currentSearch.question,
       department: currentSearch.department,
       source: currentSearch.source,
-      createdAt: new Date().toISOString(),
     };
     const limitReached = savedSearches.length >= MAX_SAVED_SEARCHES;
     const next = [item, ...savedSearches].slice(0, MAX_SAVED_SEARCHES);
