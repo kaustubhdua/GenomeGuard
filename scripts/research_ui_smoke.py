@@ -30,6 +30,7 @@ def main() -> int:
     clinvar_requests: list[dict[str, object]] = []
     gwas_requests: list[dict[str, object]] = []
     ontology_requests: list[dict[str, object]] = []
+    ensembl_requests: list[dict[str, object]] = []
     provider_outages = {"europe": False, "pubmed": False}
 
     def check(label: str, ok: bool, detail: str = "") -> None:
@@ -368,6 +369,31 @@ def main() -> int:
         }
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
+    def handle_ensembl(route) -> None:
+        payload = json.loads(route.request.post_data or "{}")
+        ensembl_requests.append(payload)
+        body = {
+            "provider": "Ensembl REST API",
+            "provider_url": "https://www.ensembl.org",
+            "species": "homo_sapiens",
+            "query_symbol": payload.get("symbol"),
+            "gene": {
+                "stable_id": "ENSG00000139618", "symbol": "BRCA2",
+                "biotype": "protein_coding", "gene_version": 19,
+                "assembly": "GRCh38", "chromosome": "13",
+                "start": 32315086, "end": 32400266, "strand": 1,
+                "canonical_transcript": "ENST00000380152",
+            },
+            "transcript_count_returned": 1,
+            "transcripts": [{
+                "id": "ENST00000380152", "version": 8,
+                "biotype": "protein_coding", "is_canonical": True,
+            }],
+            "retrieved_at": "2026-11-14T10:00:00Z",
+            "interpretation": "source-backed gene identity only",
+        }
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         page = browser.new_page(viewport={"width": 1280, "height": 900})
@@ -378,6 +404,7 @@ def main() -> int:
         page.route("**/research/clinvar/search", handle_clinvar)
         page.route("**/research/gwas/search", handle_gwas)
         page.route("**/research/ontology/search", handle_ontology)
+        page.route("**/research/ensembl/gene", handle_ensembl)
         page.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Research discovery").wait_for()
         page.get_by_role("link", name="Oncology Browse publications →").click()
@@ -604,6 +631,17 @@ def main() -> int:
               len(ontology_requests) == 2 and ontology_requests[1].get("page") == 1
               and page.locator("#ontology-results .ontology-term").count() == 3)
 
+        page.get_by_label("Human gene symbol").fill("BRCA2")
+        page.get_by_role("button", name="Resolve gene").click()
+        page.get_by_text("ENSG00000139618", exact=False).wait_for()
+        check("Ensembl resolves a symbol to stable ID and assembly-aware coordinates",
+              len(ensembl_requests) == 1
+              and ensembl_requests[0].get("symbol") == "BRCA2"
+              and "GRCh38" in page.locator(".ensembl-panel").inner_text())
+        page.get_by_role("button", name="Use this ID in Open Targets").click()
+        check("resolved Ensembl ID transfers explicitly into Open Targets search",
+              page.locator("#ot-ensembl-id").input_value() == "ENSG00000139618")
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
@@ -616,6 +654,7 @@ def main() -> int:
         mobile.route("**/research/clinvar/search", handle_clinvar)
         mobile.route("**/research/gwas/search", handle_gwas)
         mobile.route("**/research/ontology/search", handle_ontology)
+        mobile.route("**/research/ensembl/gene", handle_ensembl)
         mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         mobile.get_by_role("heading", name="Research discovery").wait_for()
         no_horizontal_overflow = mobile.evaluate(
@@ -646,6 +685,11 @@ def main() -> int:
         mobile.get_by_role("button", name="Find matching phenotype terms").click()
         mobile.locator("#ontology-results .ontology-term").first.wait_for()
         check("mobile ontology results have no horizontal overflow at 375px",
+              mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
+        mobile.get_by_label("Human gene symbol").fill("BRCA2")
+        mobile.get_by_role("button", name="Resolve gene").click()
+        mobile.get_by_text("ENSG00000139618", exact=False).wait_for()
+        check("mobile Ensembl gene resolver has no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
         browser.close()
