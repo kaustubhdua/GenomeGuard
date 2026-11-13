@@ -591,6 +591,11 @@ def main() -> int:
         check("ontology term selection adds label and source synonyms as a visible, editable OR expansion",
               '"Ataxia"' in expanded_query and '"coordination abnormality"' in expanded_query
               and "BRCA1 ovarian cancer symptoms" in expanded_query)
+        page.get_by_role("button", name="Find research papers for this term").first.click()
+        page.get_by_text("Showing", exact=False).first.wait_for(timeout=args.timeout)
+        check("symptom-to-research action launches live publication search with selected phenotype terms",
+              "\\"Ataxia\\"" in page.locator("#research-question").input_value()
+              and page.locator("#research-results .research-paper").count() > 0)
         page.get_by_role("button", name="Load more terms").click()
         page.wait_for_function(
             "document.querySelectorAll('#ontology-results .ontology-term').length === 3"
