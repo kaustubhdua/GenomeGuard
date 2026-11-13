@@ -134,10 +134,42 @@ def _reported_consent_provenance(
     return reported, matched, scoped, consistent
 
 
+MAX_JSON_BODY_BYTES = 1_048_576
+
+
 async def _body(request: Request) -> dict:
+    """Read a bounded JSON object without buffering an attacker-controlled body.
+
+    Content-Length is an early rejection hint only: the streaming limit is authoritative
+    because clients can omit or lie about that header. Binary VCF uploads use their own
+    separately bounded streaming parser and do not pass through this helper.
+    """
+    declared_length = request.headers.get("content-length")
+    if declared_length is not None:
+        try:
+            declared = int(declared_length)
+        except (TypeError, ValueError):
+            raise ServiceError(400, "invalid_content_length", "invalid Content-Length header") from None
+        if declared < 0:
+            raise ServiceError(400, "invalid_content_length", "invalid Content-Length header")
+        if declared > MAX_JSON_BODY_BYTES:
+            raise ServiceError(
+                413, "request_body_too_large",
+                f"JSON request bodies must not exceed {MAX_JSON_BODY_BYTES} bytes",
+            )
+
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_JSON_BODY_BYTES:
+            raise ServiceError(
+                413, "request_body_too_large",
+                f"JSON request bodies must not exceed {MAX_JSON_BODY_BYTES} bytes",
+            )
+        body.extend(chunk)
+
     try:
-        data = await request.json()
-    except Exception:
+        data = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         raise ServiceError(400, "bad_json", "body must be a JSON object") from None
     if not isinstance(data, dict):
         raise ServiceError(400, "bad_json", "body must be a JSON object")
