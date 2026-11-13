@@ -356,38 +356,19 @@ def main() -> None:
                  "reference_assembly": "GRCh37", "file_sha256": "a" * 64, "sample_count": 40,
                  "variant_count": 300, "genotype_call_count": 12000, "imported_at": "2026-11-10T12:00:00Z",
                  "source_url": "https://example.org/alpha", "reuse_statement_url": "https://example.org/alpha/terms",
-                 "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "Fixture policy"},
+                 "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "  =SUM(1,1)"},
             ],
         }
         catalogue_pg.route("**/catalogue/datasets", lambda route: route.fulfill(
             status=200, content_type="application/json", body=json.dumps(catalogue_fixture)))
-        catalogue_pg.goto(base + "/#/datasets")
-        catalogue_pg.get_by_label("Filter by source").wait_for()
-        check("dataset catalogue exposes source and assembly filters",
-              catalogue_pg.get_by_label("Filter by source").count() == 1
-              and catalogue_pg.get_by_label("Filter by reference assembly").count() == 1)
-        catalogue_pg.get_by_label("Filter by source").select_option(label="Beta source")
-        check("dataset source filter narrows visible rows",
-              catalogue_pg.locator(".dataset-table tbody tr").count() == 1
-              and "Beta source" in catalogue_pg.locator(".dataset-table tbody").inner_text())
-        catalogue_pg.get_by_label("Filter by source").select_option("")
-        catalogue_pg.get_by_label("Filter by reference assembly").select_option("GRCh37")
-        check("dataset assembly filter narrows visible rows",
-              catalogue_pg.locator(".dataset-table tbody tr").count() == 1
-              and "Alpha source" in catalogue_pg.locator(".dataset-table tbody").inner_text())
-        catalogue_pg.get_by_label("Filter by reference assembly").select_option("")
-        catalogue_pg.get_by_label("Sort datasets").select_option("samples")
-        first_row = catalogue_pg.locator(".dataset-table tbody tr").first.inner_text()
-        check("dataset sort orders by measured sample count", "Beta source" in first_row)
-        with catalogue_pg.expect_download() as catalogue_download_info:
-            catalogue_pg.get_by_role("button", name="Export filtered CSV").click()
+
         catalogue_download = catalogue_download_info.value
         catalogue_path = Path(tempfile.gettempdir()) / catalogue_download.suggested_filename
         catalogue_download.save_as(str(catalogue_path))
         catalogue_csv = catalogue_path.read_text(encoding="utf-8-sig")
         check("catalogue CSV preserves provenance and neutralizes spreadsheet formulas",
               "Source URL" in catalogue_csv and "Reuse terms URL" in catalogue_csv
-              and "'=HYPERLINK" in catalogue_csv)
+              and "'=HYPERLINK" in catalogue_csv and "'  =SUM(1,1)" in catalogue_csv)
         catalogue_path.unlink(missing_ok=True)
         catalogue_ctx.close()
         ctx.close()

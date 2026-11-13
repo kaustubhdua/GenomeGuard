@@ -1,42 +1,76 @@
 # Hosted deployment record
 
-Last audited: 13 November 2026 (after merges of PRs #143 and #144).
+Last audited: 14 November 2026.
+
+> **Re-verification note — 14 November 2026:** the Render service IDs, deployment SHAs, settings and staging-service inventory below are the last recorded provider snapshot from the prior audit. They were not re-queried in this execution because no Render workspace was selected; the user must confirm the `kaustubh dua` workspace before service configuration or database-connection targets can be treated as current. Do not infer the live service's Neon branch from project names alone.
+
+## Neon database evidence (read-only)
+
+- Project `genomeguard-free-demo` default branch has schema migrations 1–12.
+- Project `genomeguard-staging` default branch has only migrations 1–2.
+- Its existing child branch `gg-render-staging-2026-11-10` has migrations 1–12 and 600 synthetic donors, 600 genotype rows and 3,000 variants. Its cohort metadata reports `genotypes_real=false` and `consent_simulated=true`.
+- On that child branch, public dataset sample/variant tables and gnomAD reference manifest/frequency tables each have zero rows. This is a synthetic staging candidate, not evidence of a 1000 Genomes or gnomAD production import.
+- The actual Render service-to-Neon branch mapping remains unverified. The default staging branch and the child staging candidate must not be treated as interchangeable.
+- Attempts to protect both Neon default branches were rejected because the current plan has reached its protected-branch limit. No plan upgrade, branch deletion or live/default-branch migration was performed.
+- No paid infrastructure or controlled-data import was performed.
 
 
-## Environment separation and current live status (13 November 2026)
+## Current live status (14 November 2026)
 
 ### Public synthetic demo
 
-- Image contract: the public service's `Dockerfile` is synthetic-only and sets `GG_DEMO_MODE=true` with `GG_DATASET_ID=synthetic-cohort-1`; it must not download or embed a real cohort. `Dockerfile.staging` is also synthetic-only.
-- Public URL: https://genomeguard.onrender.com
-- Render service: srv-dbev1ka9lscs738813t0 — https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0
-- Hosting: Render Free plan, Singapore region, Dockerfile ./Dockerfile; repository branch main; auto-deploy reports enabled.
-- Latest provider-reported live deployment: dep-dbr3gpou01pc738prrh0, source commit 10fb08dcc11ca09282cc1085fd86e3c73708281a, deployment trigger api, status live.
-- Security fix: PR #142 merged as 10c429d393afd474e806939e80212e8182635e08, but that commit is not the live deployment. Render's event history showed no deployment event for the merge. PR #143 (Open Targets UI/provenance exports) and PR #144 (deployment separation) are also merged; mainline now includes merge commits 8487ac67e51e6ef67899ab8cad67cdbc0c1e1ac1 and 67f64ee16b96dab62399a23f4b8dcb5ed4adafc8. Render's event history showed no deployment event after these merges. The public service therefore still runs the older implementation.
-- Live acceptance: run 43401555435 verified the synthetic cohort and audit chain but failed the requester-credential exposure check. The deployed /demo/requesters response still exposes requester API-key fields. Do not treat the public demo as security-accepted until the merged fix is actually deployed and the exact-commit live smoke passes.
-- Fresh live `GET /health` verification (13 November 2026) reports `demo_mode=true`, `synthetic_data_only=true`, `provenance.genotypes=synthetic`, `dataset_id=synthetic-cohort-1`, 600 samples, 3,000 variants, and `storage_backend=postgresql`. The same response reports `readiness.ready=false`, `durable_storage_verified=false`, `backup_retention_and_restore_verified=false`, `monitoring_and_alerting_verified=false`, and `external_audit_anchor_verified=false`; participant-specific consent is not verified. PostgreSQL backend selection does not prove provider identity, backups, PITR, key custody, durability, or recovery. The connected Render workspace has no Render Postgres instances, so the external database provider remains unverified.
-- The public service is a synthetic demonstration environment. Do not upload private or controlled-access participant data or use it for clinical decisions.
+- Image contract: the root `Dockerfile` is synthetic-only. It must not download, embed, or mount a real participant cohort. The public demo must remain synthetic-only.
+- Primary public URL: https://genomeguard.onrender.com
+- Primary Render service: `srv-dbev1ka9lscs738813t0` — [dashboard](https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0).
+- Provider configuration: branch `main`, auto-deploy `yes`, Render Free plan, Singapore region, Dockerfile `./Dockerfile`. The provider health-check path is currently empty; it should be configured as `/health/live`, not `/health/ready`.
+- Latest provider-reported live deployment: `dep-dbrgucce7ovs73femptg`, commit `3280ebc1924039bcfa19f4c58bb75e83a8c370eb`, status `live`. This is the PR #146 synthetic/research image separation commit, not current GitHub `main` (`50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`).
+- A separate recovery demo service exists at https://genomeguard-demo-recovery.onrender.com, Render service `srv-dbri7fp5efls73amo2q0`, Free plan, root `./Dockerfile`, latest observed live commit `f200b643f05a5f959887ac51accd7e202c424557`. It is also behind current `main`; it is a recovery/demo service, not a research-mode deployment.
+- The primary service's `/health/ready` is expected to fail closed (HTTP 503) while institutional controls are absent. Render application logs contain successful liveness/application requests and readiness 503 responses. Do not configure readiness as the host liveness check or interpret readiness 503 as proof that the process is down.
+- The current `main` commit has not yet been deployed to the primary service. Although auto-deploy is enabled in provider settings, the latest provider deployment is still `3280ebc`. Investigate the missing automatic deployment after subsequent mainline merges; do not manually promote an unvalidated SHA.
+- The current mainline `/demo/requesters` and `/demo/donors` handlers return synthetic persona metadata only. The requester and donor session endpoints issue short-lived, process-local demo tokens. This is code-level evidence; live exact-SHA acceptance of the current mainline is still pending.
+- The connected Render workspace contains **no Render-managed PostgreSQL instances**. The exact external database provider, account/plan, retention, backup/PITR, encryption/key custody and restore guarantees are not established by Render service metadata. A configured PostgreSQL backend alone is not proof of durable production storage.
+- No private or controlled-access participant data may be uploaded to either public demo service. Do not treat a public demo as an institutional research deployment or use it for clinical decisions.
+
+### Staging services and environment sprawl
+
+The connected workspace currently lists three separate GenomeGuard staging services:
+- `genomeguard-staging-pr122` on branch `fix/main-release-acceptance-blockers`, using `Dockerfile.staging`.
+- `genomeguard-staging-pr113` on branch `feat/institutional-production-controls`, using `Dockerfile.staging`.
+- `genomeguard-staging` on branch `feat/remove-supabase-runtime`, using `Dockerfile.staging`.
+
+All three are on the Free plan. They are not interchangeable and must not be treated as a single canonical staging environment. Consolidation requires an explicit owner and retention decision; do not delete or suspend any service as part of this audit.
+
+### GitHub repository protection and CI queue
+
+- The GitHub branch inventory reports `main` as `protected=false`. The connected GitHub integration cannot read or change branch-protection settings (the protection endpoint returns HTTP 403, `Resource not accessible by integration`). Until a repository maintainer configures a ruleset, required checks are not guaranteed to be enforced before a direct push or merge.
+- Required `main` checks should include the backend CI job, Python and JavaScript CodeQL, secret scanning, Python dependency audit, and deployment-configuration checks. Require pull requests, at least one independent approval, dismissal of stale approvals after new commits, no force pushes/deletion, and no administrator bypass for normal releases.
+- As of this audit, the current `main` SHA and open PR heads #152–#156 all have backend/security/deployment check runs reported as `queued`. The integration does not expose the underlying hosted-runner queue reason. A queued check is not a passing check; do not merge or deploy while required checks are pending.
+- The Vercel GitHub integration has returned `api-deployments-free-per-day` (more than 100 deployments/day) on PR preview attempts. This is an external preview quota, not a backend CI result. Do not upgrade a paid plan or change the production deployment target without explicit approval.
 
 ### Separate research-mode service
 
-- `Dockerfile.research` is the dedicated image that downloads/builds the public 1000 Genomes cohort. `render.yaml` explicitly selects `dockerfilePath: ./Dockerfile.research`; it must never use the public synthetic image.
-- render.yaml now describes a separate genomeguard-research service with demo mode disabled, real public-cohort provenance, OIDC, tenant isolation and consent-authority requirements.
-- That service is a blueprint only; it has not been provisioned or accepted. Do not apply it to the existing public synthetic demo service.
-- .github/workflows/live-research-mode-smoke.yml is manual-only and requires an explicit research-mode URL. It refuses the public synthetic-demo URL. Use it only after a separate research-mode service has been provisioned and its secrets and identity provider configured.
-- .github/workflows/live-acceptance.yml remains the automated acceptance workflow for the public synthetic demo. These two modes must never share one deployment URL.
+- `Dockerfile.research` is the dedicated image for building the public 1000 Genomes research evaluation cohort. It is not the public demo image.
+- `render.yaml` describes a separate research-mode service requiring demo mode off, institutional OIDC, tenant isolation and a consent-authority configuration.
+- No separately accepted institutional research-mode Render service is currently present in the workspace service inventory. The research image and blueprint are not proof of a live research deployment.
+- Public-cohort release terms remain dataset-level terms, not participant-specific consent. The high-coverage family cohort and simulated-consent CI artifacts are evaluation-only and must not be promoted into an institutionally governed deployment without separate authority.
 
-### Staging and real-data validation
+### Database and production status
 
-- PR-branch synthetic staging is the separate Render service genomeguard-staging-pr122; staging-acceptance.yml targets that service and branch. It is not the non-demo research-mode deployment.
-- High-coverage family cohort validation run 43401555287 passed. It downloaded the official 1000 Genomes high-coverage chr22 VCF and pedigree/population metadata, built a 600-sample/3,000-variant family-enriched cohort with 355 relative pairs, verified source hashes and produced aggregate evaluation evidence. Its consent records are simulated and dataset_policy_samples_scoped=0, so this family cohort is evaluation-only and must not be loaded into non-demo research mode.
-- The Phase 3 1000 Genomes CI validation run 43401555222 uses simulated consent by design and is an evaluation pipeline, not a hosted research-mode import. The Dockerfile builds the separate research-mode cohort with docs/policies/igsr-1000-genomes-public-release.json, which records a dataset-level public-release policy (not participant-specific consent and not independently legal-reviewed). The live research-mode smoke requires that policy provenance to cover every loaded sample.
+- Render-managed PostgreSQL inventory is empty.
+- No production-grade database target, backup schedule, PITR window, independently held backup key, KMS/HSM key custody, or production restore evidence has been verified.
+- The repository includes native PostgreSQL migrations, restricted runtime/migration roles, RLS, consent event ledger and signed checkpoint code. These are implementation foundations; they do not provision infrastructure or prove live production controls.
+- Institutional OIDC/SSO, organization membership lifecycle, MFA policy, participant-specific consent authority, independent audit anchoring, monitoring/alerting, incident response and independent legal/privacy/scientific/security sign-off remain unaccepted.
+- DUO restrictions NCU/NPU/NPUNCU require verified commercial-use and not-for-profit organisation attributes. The current service has no independently verified organisation/legal-entity registry or DAC-verified commercial-purpose workflow; it passes these attributes as unknown and fails closed. Do not override this by trusting a requester-supplied `is_commercial=false`.
+- Consent records without an explicit `consent_basis` are rejected. Signed consent events require timezone-aware, non-future, strictly increasing effective timestamps; this is an event-integrity control, not proof that the issuing authority's statement is truthful.
 
-### Deployment actions still required
+### Immediate deployment actions
 
-1. Restore or repair the Render GitHub auto-deploy integration. Although auto-deploy is enabled in service settings, no deployment event followed the merge, and the live service remains on commit 10fb08d.
-2. Verify the public demo service is running 10c429d or a later reviewed commit, then rerun live synthetic-demo acceptance and verify that requester/donor endpoints return session metadata only, never API keys.
-3. Provision the separate research-mode service from render.yaml only after its external PostgreSQL target, OIDC issuer/client/JWKS, organization membership, consent authority, master key and operational controls are available.
-4. Run the manual research-mode smoke against that separate service and exact deployed commit. Keep the public synthetic demo and non-demo research instance separate.
+1. Diagnose why the primary Render service has not advanced from `3280ebc` to the current `main` SHA despite auto-deploy being enabled.
+2. Configure the primary service health-check path to `/health/live` through an approved Render service update.
+3. Run public synthetic-demo live acceptance against the exact deployed SHA and verify requester/donor endpoints expose metadata and short-lived sessions only.
+4. Select one canonical staging service and document the intended branch/database pairing before consolidating the other staging services. Do not delete or suspend services without explicit approval.
+5. Provision a dedicated durable production database only after the institution approves provider, plan, retention, backup, key custody and budget.
+6. Provision a separate research-mode service only after institutional identity, consent authority, database, security, privacy and legal release gates are approved.
 
 ## Historical deployment snapshot (10 November 2026; superseded by the live status above)
 
@@ -101,7 +135,7 @@ The frontend rewrites API requests to the Render service. Vercel is not a replac
 6. **Independent assurance:** no independent penetration test, privacy impact assessment, institutional ethics/legal review, clinical validation, or cryptographic review has been completed.
 7. **Manual accessibility:** automated axe/browser checks do not replace manual screen-reader and assistive-technology review.
 8. **Operational controls:** monitoring/alerting, incident response, retention/deletion, recurring recovery drills, and multi-instance consistency are not verified.
-9. **Live acceptance and deployment:** the public service still runs commit `10fb08dcc11ca09282cc1085fd86e3c73708281a`, not the merged security fix `10c429d393afd474e806939e80212e8182635e08`. Render auto-deploy is enabled but no deploy event followed the merge. Live synthetic acceptance run 43401555435 failed because the old requester endpoint still exposes API-key fields. The Vercel preview status is separately blocked by `build-rate-limit`.
+9. **Live acceptance and deployment:** the primary public Render service reports live commit `3280ebc1924039bcfa19f4c58bb75e83a8c370eb`, behind GitHub `main` at `50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`. A separate recovery service reports `f200b643f05a5f959887ac51accd7e202c424557`, also behind current `main`. The current mainline demo endpoints return persona metadata and short-lived process-local session tokens in source code, but exact-SHA live acceptance is pending. Render auto-deploy is enabled on the primary service, yet the observed deployment has not advanced to current `main`.
 
 ## Data and policy boundary
 
@@ -163,3 +197,25 @@ This addendum supersedes earlier deployment snapshots above where their timestam
 5. Provision a separate research-mode service only after institutional OIDC, authoritative consent, tenant isolation and independent governance/security reviews are available.
 
 A successful image build, a synthetic demo, a PostgreSQL driver setting, or a CI test does not satisfy production acceptance by itself.
+
+
+## Fresh public synthetic-demo acceptance — 14 November 2026
+
+Direct HTTP checks against `https://genomeguard.onrender.com` returned:
+
+| Check | Result | Interpretation |
+|---|---|---|
+| `GET /health/live` | HTTP 200 | ASGI process responds; deployed SHA `3280ebc1924039bcfa19f4c58bb75e83a8c370eb` |
+| `GET /health` | HTTP 200 | `demo_mode=true`, synthetic-only, 600 donors, 3,000 variants, PostgreSQL backend |
+| `GET /audit/verify` | HTTP 200, `ok=true`, length 4 | Current audit chain verifies; this is only the current chain, not an external immutable anchor |
+| `GET /demo/requesters`, `/demo/donors` | HTTP 200 | Demo personas are listed without exposing API keys |
+| Demo requester session → `GET /me` | HTTP 200 | Short-lived scoped demo session works |
+| Demo donor session → donor profile | HTTP 200 | Short-lived donor session is scoped to the selected demo donor |
+| `GET /health/ready` | HTTP 503, `ready=false` | Expected fail-closed production gate; institutional identity, private cohort provenance, durable storage/restore, monitoring, audit anchoring and participant consent authority remain unverified |
+| `GET /` | HTTP 200 | HTML document served |
+
+The session-flow check created only short-lived public synthetic-demo sessions; tokens were not logged or retained.
+
+**Browser-origin discrepancy remains open:** a separate hosted-browser run loaded the root HTML but displayed the frontend's API-connection error. Browser `fetch()` to `/health` and `/health/live` rejected with `TypeError: Failed to fetch`, while `/demo/requesters` and `/demo/donors` succeeded. Direct HTTP GETs to the health endpoints returned 200. This may be specific to the hosted-browser environment, but it is not explained. Verify the complete first-load and retry flow in a normal user browser and in GitHub-hosted Playwright before declaring the public UI accepted.
+
+The previous mainline live-demo workflow failed at its first health assertion without reporting the actual status/body. PR #158 adds bounded retries and actionable diagnostics; it does not claim to fix the browser-origin discrepancy. A Render deployment status of `live` and a successful direct health response are not substitutes for full browser acceptance or institutional production readiness.
