@@ -49,6 +49,7 @@ _OPEN_TARGETS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _CLINVAR_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _GWAS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _ONTOLOGY_SEARCH_SLOTS = threading.BoundedSemaphore(2)
+_ENSEMBL_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -1549,6 +1550,59 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 return response
         finally:
             _ONTOLOGY_SEARCH_SLOTS.release()
+        response = _j(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+    @route("POST", "/research/ensembl/gene", "Resolve a human gene symbol to Ensembl identifiers and coordinates", "public")
+    async def ensembl_gene_lookup(request):
+        """Resolve a gene symbol to source-backed Ensembl identity metadata."""
+        from app.literature.ensembl import (
+            EnsemblEntityNotFound,
+            EnsemblProviderError,
+            lookup_gene,
+            validate_gene_request,
+        )
+
+        data = await _body(request)
+        symbol = data.get("symbol")
+        species = data.get("species", "homo_sapiens")
+        try:
+            validate_gene_request(symbol, species)
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_ensembl_query", str(exc)) from None
+        if not _ENSEMBL_SEARCH_SLOTS.acquire(blocking=False):
+            response = _j({
+                "error": "ensembl_provider_busy",
+                "message": "Gene lookup is busy. Please retry shortly.",
+            }, 429)
+            response.headers["Retry-After"] = "2"
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        try:
+            try:
+                payload = await run_in_threadpool(
+                    lookup_gene, symbol, species=species,
+                )
+            except ValueError as exc:
+                raise ServiceError(400, "invalid_ensembl_query", str(exc)) from None
+            except EnsemblEntityNotFound:
+                response = _j({
+                    "error": "ensembl_gene_not_found",
+                    "message": "Ensembl did not find that gene symbol for the selected species.",
+                }, 404)
+                response.headers["Cache-Control"] = "no-store"
+                return response
+            except EnsemblProviderError:
+                response = _j({
+                    "error": "ensembl_provider_unavailable",
+                    "message": "Ensembl is temporarily unavailable or returned an invalid response. Please retry.",
+                }, 503)
+                response.headers["Cache-Control"] = "no-store"
+                return response
+        finally:
+            _ENSEMBL_SEARCH_SLOTS.release()
         response = _j(payload)
         response.headers["Cache-Control"] = "no-store"
         return response
