@@ -138,7 +138,7 @@ def _normalize_article(uid: str, record: dict) -> dict:
         "pmid": pmid,
         "pmcid": pmcid,
         "doi": doi,
-        "title": title.strip().rstrip("."),
+        "title": title.strip(),
         "authors": author_names,
         "journal": record.get("fulljournalname") or record.get("source"),
         "publication_date": record.get("pubdate"),
