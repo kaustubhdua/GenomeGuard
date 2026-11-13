@@ -2,7 +2,11 @@
 
 Last audited: 14 November 2026.
 
-> **Re-verification note — 14 November 2026:** the Render service IDs, deployment SHAs, settings and staging-service inventory below are the last recorded provider snapshot from the prior audit. They were not re-queried in this execution because no Render workspace was selected; the user must confirm the `kaustubh dua` workspace before service configuration or database-connection targets can be treated as current. Do not infer the live service's Neon branch from project names alone.
+> **Re-verification note — 14 November 2026:** the user confirmed the `kaustubh dua` Render workspace, and its service and PostgreSQL inventories were queried read-only during this audit. The inventory below now reflects the connected provider snapshot. No service settings, environment variables, deploys, databases, or billing/plan settings were changed. The exact external Neon branch and service-to-database mapping remain unverified; do not infer them from project names.
+>
+> **Fresh Render evidence:** the workspace contains five GenomeGuard web services, all reported live and on the Free plan: `genomeguard` (main, current live commit `3280ebc1924039bcfa19f4c58bb75e83a8c370eb`), `genomeguard-demo-recovery` (main, `f200b643f05a5f959887ac51accd7e202c424557`), `genomeguard-staging-pr122` (branch `fix/main-release-acceptance-blockers`, `c129d496c9008c4740b9af50ea4062c8ff499fc8`), `genomeguard-staging-pr113` (branch `feat/institutional-production-controls`, `caa754ba96dc6c3574b12b754b7ed63e251d76d5`), and `genomeguard-staging` (branch `feat/remove-supabase-runtime`, `60fc7f33c1a971cbca37195f9c41b2eef23ed005`). All are in Singapore. The primary `genomeguard` service and the recovery service have no provider-side health-check path configured; the PR113 staging service uses `/health/live`; the other staging service health-check paths are empty. The connected workspace's Render PostgreSQL inventory is empty.
+>
+> **Fresh log evidence:** the primary service returns HTTP 200 for `/health` and repeatedly returns HTTP 503 for `/health/ready`. The recovery service returns HTTP 200 for `/health/live` and HTTP 503 for `/health/ready`. The PR122 staging service returns HTTP 200 for `/health` and HTTP 503 for `/health/ready`. These readiness failures are consistent with the documented fail-closed production gates and are not evidence that the process is down. No secrets or environment-variable values were read.
 
 ## Neon database evidence (read-only)
 
