@@ -25,7 +25,7 @@ MIN_INTERVAL_SECONDS = 0.2
 MAX_RESULTS = 10
 FIELDS = ",".join((
     "accession", "id", "gene_names", "protein_name", "organism_name",
-    "length", "cc_function", "xref_ensembl",
+    "length", "reviewed", "cc_function", "xref_ensembl",
 ))
 
 _rate_lock = threading.Lock()
