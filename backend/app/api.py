@@ -1541,10 +1541,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             except ValueError as exc:
                 raise ServiceError(400, "invalid_ontology_query", str(exc)) from None
             except OntologyProviderError:
-                raise ServiceError(
-                    503, "ontology_provider_unavailable",
-                    "The ontology provider is temporarily unavailable or returned an invalid response. Please retry.",
-                ) from None
+                response = _j({
+                    "error": "ontology_provider_unavailable",
+                    "message": "The ontology provider is temporarily unavailable or returned an invalid response. Please retry.",
+                }, 503)
+                response.headers["Cache-Control"] = "no-store"
+                return response
         finally:
             _ONTOLOGY_SEARCH_SLOTS.release()
         response = _j(payload)
