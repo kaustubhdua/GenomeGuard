@@ -44,7 +44,7 @@ def payload():
                 "geneName": {"value": "BRCA2"},
                 "synonyms": [{"value": "FANCD1"}],
             }],
-            "organism": {"scientificName": "Homo sapiens"},
+            "organism": {"scientificName": "Homo sapiens", "taxonId": 9606},
             "sequence": {"length": 3418},
             "comments": [{
                 "commentType": "FUNCTION",
@@ -126,3 +126,21 @@ def test_rejects_oversized_response(monkeypatch):
     monkeypatch.setattr(uniprot, "urlopen", lambda *a, **k: Oversized({}))
     with pytest.raises(uniprot.UniProtProviderError, match="2 MB"):
         uniprot.search_proteins("BRCA2")
+
+def test_unreviewed_and_nonhuman_records_are_filtered(monkeypatch):
+    records = payload()["results"]
+    records[0]["entryType"] = "UniProtKB unreviewed (TrEMBL)"
+    mouse = json.loads(json.dumps(payload()["results"][0]))
+    mouse["entryType"] = "UniProtKB reviewed (Swiss-Prot)"
+    mouse["primaryAccession"] = "P00001"
+    mouse["organism"] = {"scientificName": "Mus musculus", "taxonId": 10090}
+
+    monkeypatch.setattr(uniprot, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(
+        uniprot, "urlopen",
+        lambda *a, **k: FakeResponse({"results": [records[0], mouse]}),
+    )
+    result = uniprot.search_proteins("BRCA2")
+    assert result["returned"] == 0
+    assert result["proteins"] == []
+
