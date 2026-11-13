@@ -227,9 +227,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
                 if set_demo is not None:
                     set_demo()
-                r = S().authenticate(session["api_key"])
+                r = S().store.requester(session["requester_id"])
             if not r or r.get("id") != session["requester_id"]:
                 raise ServiceError(401, "demo_session_invalid", "demo session is no longer valid")
+            # Session auth resolves the scoped synthetic persona by internal ID. Never
+            # place the stored API-key hash or a static key into request auth state.
+            r = {key: value for key, value in r.items() if key != "api_key_hash"}
             r = {**r, "_allow_unscoped_demo": True}
             request.state.authenticated_requester = r
             return r
@@ -554,11 +557,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             persona = next((p for p in DEMO_REQUESTERS if p[0] == record["name"]), None)
             if not persona:
                 raise ServiceError(404, "demo_requester_not_found", "demo requester was not found")
-            authenticated = S().authenticate(persona[4])
-        if not authenticated or authenticated.get("id") != requester_id:
-            raise ServiceError(404, "demo_requester_not_found", "demo requester was not found")
         token, _expires_at = issue_demo_session(
-            demo_sessions, {"requester_id": requester_id, "api_key": persona[4]},
+            demo_sessions, {"requester_id": requester_id},
         )
         return _j({
             "session_token": token,
