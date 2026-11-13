@@ -67,6 +67,12 @@ jobs:
             raise "research blueprint must define exactly one service" unless services.length == 1
             service = services.first
             raise "research blueprint must use a distinct service name" unless service["name"] == "genomeguard-research"
+            raise "research blueprint must use the dedicated real-cohort Dockerfile" unless service["dockerfilePath"] == "./Dockerfile.research"
+            public_image = File.read("Dockerfile")
+            raise "public demo image must not build or embed a real cohort" if public_image.match?(/app\.data\.real build|GG_REAL_COHORT_FILE|data_real/)
+            raise "public demo image must explicitly use synthetic demo mode" unless public_image.include?("GG_DEMO_MODE=true") && public_image.include?("GG_DATASET_ID=synthetic-cohort-1")
+            research_image = File.read("Dockerfile.research")
+            raise "research image must build the documented public cohort" unless research_image.include?("app.data.real build") && research_image.include?("GG_REAL_COHORT_FILE=/app/data_real/1000g_phase3_chr22.npz")
             raise "research blueprint must use /health/live" unless service["healthCheckPath"] == "/health/live"
             env = service.fetch("envVars").to_h { |entry| [entry.fetch("key"), entry] }
             raise "research mode must disable demo sessions" unless env.dig("GG_DEMO_MODE", "value") == "false"
