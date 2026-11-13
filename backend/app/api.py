@@ -1317,6 +1317,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         page_index = data.get("page_index", 0)
         page_size = data.get("page_size", 20)
         evidence_size = data.get("evidence_size", 25)
+        evidence_cursor = data.get("evidence_cursor")
         if disease_id == "":
             disease_id = None
         if not _OPEN_TARGETS_SEARCH_SLOTS.acquire(blocking=False):
@@ -1336,6 +1337,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                     page_index=page_index,
                     page_size=page_size,
                     evidence_size=evidence_size,
+                    evidence_cursor=evidence_cursor,
                 )
             except ValueError as exc:
                 raise ServiceError(400, "invalid_open_targets_query", str(exc)) from None
