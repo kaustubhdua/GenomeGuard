@@ -34,20 +34,48 @@ const STEPS = [
 
 let index = 0;
 let dialog = null;
+let returnFocus = null;
 
 function close() {
   if (dialog) dialog.remove();
   dialog = null;
   document.body.classList.remove("tour-open");
   document.removeEventListener("keydown", onKey);
+  const target = returnFocus && returnFocus.isConnected ? returnFocus : document.getElementById("open-cmdk");
+  returnFocus = null;
+  target?.focus();
 }
 function onKey(event) {
-  if (event.key === "Escape") close();
+  if (event.key === "Escape") {
+    close();
+    return;
+  }
+  if (event.key !== "Tab" || !dialog) return;
+  const focusable = Array.from(dialog.querySelectorAll("button:not([disabled])"));
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const heading = dialog.querySelector("h2");
+  const active = document.activeElement;
+  if (!dialog.contains(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && (active === first || active === heading)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || active === heading)) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 async function show(next) {
   index = Math.max(0, Math.min(STEPS.length - 1, next));
   const step = STEPS[index];
   if (!dialog) {
+    returnFocus = document.getElementById("open-cmdk") || document.activeElement;
     dialog = h("section", {
       class: "tour",
       role: "dialog",
