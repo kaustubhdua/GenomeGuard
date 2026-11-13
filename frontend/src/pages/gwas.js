@@ -93,7 +93,7 @@ export function renderGwasPanel() {
       h("p", { class: "eyebrow" }, "GENETIC ASSOCIATIONS · GWAS CATALOG"),
       h("h2", { id: "gwas-heading" }, "GWAS Catalog associations"),
       h("p", { class: "muted" },
-        "Explore literature-curated variant–trait associations by gene, rsID, or ontology trait. The source release, mapped genes, p-values, effect estimates, ancestry-independent metadata, and original study links are retained."),
+        "Explore literature-curated variant–trait associations by gene, rsID, or ontology trait. The source release, mapped genes, p-values, effect estimates, study metadata, and original links are retained."),
       h("p", { class: "fine muted" },
         "The GWAS Catalog REST API v2 exposes curated top associations and metadata—not full genome-wide summary statistics. Association is not causation, clinical validity, or an individual risk estimate.")),
     h("form", { id: "gwas-search-form", class: "research-search-form" },
