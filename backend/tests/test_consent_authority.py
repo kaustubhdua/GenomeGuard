@@ -40,8 +40,20 @@ def signed_event(private, dataset_id, event_type="withdrawn", effective_at=None)
     }
 
 
-def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
+def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent(monkeypatch):
     svc = make_service()
+    # Exercise the PostgreSQL locking path while keeping this unit test on SQLite.
+    original_q = svc.store.q
+    row_locks = []
+
+    def recording_q(sql, args=()):
+        if "FOR UPDATE" in sql:
+            row_locks.append((sql, args))
+            return [{"id": 1}]
+        return original_q(sql, args)
+
+    monkeypatch.setattr(svc.store, "path", "postgresql", raising=False)
+    monkeypatch.setattr(svc.store, "q", recording_q)
     private = Ed25519PrivateKey.generate()
     public = base64.b64encode(private.public_key().public_bytes(
         serialization.Encoding.Raw, serialization.PublicFormat.Raw,
@@ -63,6 +75,8 @@ def test_signed_consent_withdrawal_is_persisted_audited_and_idempotent():
     )
     assert result["withdrawn"] is True
     assert svc.ds.donors[0].withdrawn is True
+    assert len(row_locks) == 1
+    assert "FOR UPDATE" in row_locks[0][0]
     stored = svc.store.one("SELECT event_type,source_record_sha256 FROM consent_events WHERE event_id=?",
                            (event["event_id"],))
     assert stored["event_type"] == "withdrawn"
