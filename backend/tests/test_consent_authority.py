@@ -16,7 +16,7 @@ from app.store import Store
 from tests.helpers import make_service
 
 
-def signed_event(private, dataset_id, event_type="withdrawn", effective_at=None):
+def signed_event(private, dataset_id, event_type="withdrawn", effective_at=None, consent=None):
     payload = {
         "schema_version": "1.0",
         "event_id": str(uuid4()),
@@ -25,7 +25,7 @@ def signed_event(private, dataset_id, event_type="withdrawn", effective_at=None)
         "source_sample_id": "SOURCE-SAMPLE-001",
         "event_type": event_type,
         "effective_at": effective_at or datetime.now(UTC).isoformat(),
-        "consent": {
+        "consent": consent or {
             "use": "GRU",
             "disease": None,
             "modifiers": [],
@@ -241,3 +241,44 @@ def test_signed_consent_rejects_out_of_order_restore_event():
         )
     assert svc.ds.donors[0].withdrawn is True
     assert not svc.store.consent_event_exists(stale_restore["event_id"])
+
+def test_signed_ds_consent_requires_mondo_identifier():
+    svc = make_service()
+    private = Ed25519PrivateKey.generate()
+    public = base64.b64encode(private.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw,
+    )).decode()
+    svc.store.x(
+        "UPDATE donors SET source_sample_id_hash=? WHERE id=1",
+        (hmac.new(
+            svc.master, svc.dataset_id.encode() + b"\\0" + b"SOURCE-SAMPLE-001",
+            hashlib.sha256,
+        ).hexdigest(),),
+    )
+    free_text = signed_event(
+        private, svc.dataset_id, event_type="consent_updated",
+        consent={
+            "use": "DS", "disease": "diabetes", "modifiers": [],
+            "population": None, "consent_date": "2026-10-01",
+        },
+    )
+    with pytest.raises(ServiceError, match="MONDO disease identifier"):
+        svc.apply_signed_consent_event(
+            free_text, public_key_b64=public, trusted_issuer="https://consent.example.edu",
+        )
+
+    mondo = signed_event(
+        private, svc.dataset_id, event_type="consent_updated",
+        consent={
+            "use": "DS", "disease": "MONDO:0005015",
+            "disease_label": "diabetes mellitus", "modifiers": [],
+            "population": None, "consent_date": "2026-10-01",
+        },
+    )
+    svc.apply_signed_consent_event(
+        mondo, public_key_b64=public, trusted_issuer="https://consent.example.edu",
+    )
+    consent = svc.ds.donors[0].consent
+    assert consent["disease"] == "MONDO:0005015"
+    assert consent["disease_label"] == "diabetes mellitus"
+
