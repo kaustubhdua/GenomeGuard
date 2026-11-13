@@ -99,6 +99,10 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/gwas_catalog_provider_smoke.py
+      - name: Verify live OLS4 MONDO, HPO, and Disease Ontology search
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/ontology_provider_smoke.py
       - name: Verify live Europe PMC search and cursor pagination contract
         run: .venv/bin/python scripts/research_provider_smoke.py
       - name: Compile all Python application and script files
