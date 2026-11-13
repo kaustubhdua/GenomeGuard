@@ -18,8 +18,11 @@ function termCard(term, onUse) {
   const termUrl = "https://www.ebi.ac.uk/ols4/ontologies/" + encodeURIComponent(ontology)
     + "/classes?iri=" + encodeURIComponent(term.iri || "");
   const useButton = h("button", { class: "btn secondary", type: "button" },
-    "Add selected term to publication query");
-  useButton.addEventListener("click", () => onUse(term));
+    "Add term to publication query");
+  useButton.addEventListener("click", () => onUse(term, false));
+  const findButton = h("button", { class: "btn", type: "button" },
+    "Find research papers for this term");
+  findButton.addEventListener("click", () => onUse(term, true));
   return h("article", { class: "card research-paper ontology-term" },
     h("div", { class: "source-card-top" },
       h("span", { class: "tag" }, String(term.ontology_prefix || ontology).toUpperCase()),
@@ -30,34 +33,34 @@ function termCard(term, onUse) {
     Array.isArray(term.synonyms) && term.synonyms.length
       ? h("p", { class: "fine muted" }, "Synonyms: " + term.synonyms.join("; ")) : null,
     safeExternal(termUrl, "View source term"),
-    useButton);
+    h("div", { class: "hero-actions" }, useButton, findButton));
 }
 
 export function renderOntologyPanel() {
   const root = h("section", { class: "card stack ontology-panel", "aria-labelledby": "ontology-heading" },
     h("div", {},
-      h("p", { class: "eyebrow" }, "BIOMEDICAL ONTOLOGIES · SOURCE-BACKED TERM DISCOVERY"),
-      h("h2", { id: "ontology-heading" }, "Disease and phenotype terminology"),
+      h("p", { class: "eyebrow" }, "SYMPTOM-TO-RESEARCH DISCOVERY · ONTOLOGY-ASSISTED SEARCH"),
+      h("h2", { id: "ontology-heading" }, "Start with a symptom or phenotype"),
       h("p", { class: "muted" },
-        "Search MONDO disease concepts, Human Phenotype Ontology terms, and Disease Ontology concepts. Results are candidate annotations; similar labels do not establish equivalence or diagnosis.")),
+        "Describe a symptom in plain language. GenomeGuard searches official Human Phenotype Ontology terms, shows candidate matches and their synonyms, then searches live publication indexes when you choose a term. This is explainable terminology-assisted retrieval—not diagnosis or an AI-generated medical conclusion.")),
     h("form", { id: "ontology-search-form", class: "research-search-form" },
-      h("label", { for: "ontology-query" }, "Disease or phenotype term"),
+      h("label", { for: "ontology-query" }, "Symptom, disease, or phenotype"),
       h("input", { id: "ontology-query", type: "search", maxlength: "120",
-        placeholder: "e.g. breast cancer, ataxia, developmental delay", required: true }),
-      h("label", { for: "ontology-filter" }, "Ontology"),
+        placeholder: "e.g. recurring headaches, muscle weakness, ataxia", required: true }),
+      h("label", { for: "ontology-filter" }, "Terminology source"),
       h("select", { id: "ontology-filter" },
+        h("option", { value: "hp", selected: true }, "HPO — Human Phenotype Ontology (recommended for symptoms)"),
         h("option", { value: "all" }, "All supported ontologies"),
         h("option", { value: "mondo" }, "MONDO — Disease Ontology"),
-        h("option", { value: "hp" }, "HPO — Human Phenotype Ontology"),
         h("option", { value: "doid" }, "DOID — Disease Ontology")),
-      h("button", { class: "btn", type: "submit" }, "Search ontology terms")),
+      h("button", { class: "btn", type: "submit" }, "Find matching phenotype terms")),
     h("div", { id: "ontology-status", class: "fine muted", role: "status", "aria-live": "polite" },
-      "Search official ontology terms and inspect their source identifiers."),
+      "Step 1: find source-backed phenotype terms. Step 2: choose a term to retrieve related research papers."),
     h("div", { id: "ontology-results", class: "stack", "aria-live": "polite" }),
     h("button", { id: "ontology-more", class: "btn secondary", type: "button", hidden: true },
       "Load more terms"),
     h("p", { class: "fine muted" },
-      "Source: EMBL-EBI Ontology Lookup Service (OLS4). Query text is sent to this public provider. Do not enter patient identifiers or private clinical information."));
+      "Sources: EMBL-EBI OLS4, Europe PMC, and NCBI PubMed. Search text is sent to public research providers. Do not enter patient names, identifiers, records, or other private clinical information. Retrieved papers are research references, not diagnosis or treatment advice."));
   const form = root.querySelector("#ontology-search-form");
   const queryInput = root.querySelector("#ontology-query");
   const filter = root.querySelector("#ontology-filter");
@@ -65,32 +68,32 @@ export function renderOntologyPanel() {
   const results = root.querySelector("#ontology-results");
   const more = root.querySelector("#ontology-more");
   let query = "";
-  let ontology = "all";
+  let ontology = "hp";
   let page = 0;
   let total = 0;
   let busy = false;
   let generation = 0;
   let seen = new Set();
 
-  function useTerm(term) {
+  function useTerm(term, searchNow) {
     const literatureQuestion = document.getElementById("research-question");
-    if (!literatureQuestion) {
-      status.textContent = "Open the publication search panel to use ontology-based query expansion.";
+    const literatureForm = document.querySelector(".research-search-form:not(#ontology-search-form)");
+    if (!literatureQuestion || !literatureForm) {
+      status.textContent = "The publication search panel is unavailable. Open Research discovery and try again.";
       return;
     }
     const phrases = [...new Set([term.label, ...(Array.isArray(term.synonyms) ? term.synonyms : [])]
       .filter((value) => typeof value === "string" && value.trim()))].slice(0, 4);
     if (!phrases.length) return;
     const expansion = "(" + phrases.map((value) => '"' + value.replace(/"/g, '\\"') + '"').join(" OR ") + ")";
-    const existing = literatureQuestion.value.trim();
-    if (existing.includes(expansion)) {
-      status.textContent = "These source terms are already included in the publication query.";
-      literatureQuestion.focus();
-      return;
-    }
-    literatureQuestion.value = existing ? "(" + existing + ") OR " + expansion : expansion;
+    literatureQuestion.value = expansion;
     literatureQuestion.focus();
-    status.textContent = "Added the selected ontology label and source synonyms to the publication query. Review it, then run Search publications.";
+    if (searchNow) {
+      status.textContent = "Searching Europe PMC and PubMed for publications matching the selected source phenotype and synonyms…";
+      literatureForm.requestSubmit();
+    } else {
+      status.textContent = "Added the selected ontology label and source synonyms to the publication query. Review the query, then select Search publications.";
+    }
   }
 
   function renderMore() {
@@ -115,7 +118,7 @@ export function renderOntologyPanel() {
     const current = ++generation;
     busy = true;
     renderMore();
-    status.textContent = "Searching MONDO, HPO and Disease Ontology through OLS4…";
+    status.textContent = "Searching official phenotype and disease terminology through OLS4…";
     try {
       const response = await fetch(API, {
         method: "POST",
@@ -137,15 +140,15 @@ export function renderOntologyPanel() {
           results.append(termCard(term, useTerm));
         }
       }
-      status.textContent = "Loaded " + seen.size + " of " + total
-        + " matching terms · " + (data.provider || "OLS4")
-        + " · retrieved " + (data.retrieved_at || "time not supplied") + ".";
+      status.textContent = "Found " + seen.size + " candidate terms from " + (data.provider || "OLS4")
+        + " · " + (data.retrieved_at || "retrieval time unavailable")
+        + ". Select a term to search the publication databases.";
       if (!data.terms.length && page === 0) {
-        results.append(h("p", { class: "muted" }, "No matching ontology terms were found."));
+        results.append(h("p", { class: "muted" }, "No matching ontology terms were found. Try a broader symptom phrase or another terminology source."));
       }
     } catch (error) {
       if (current === generation) {
-        status.textContent = "Ontology search unavailable. " + error.message;
+        status.textContent = "Phenotype term search unavailable. " + error.message;
       }
     } finally {
       if (current === generation) {
