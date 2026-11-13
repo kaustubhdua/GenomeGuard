@@ -6,17 +6,22 @@ from tests.helpers import ADMIN, DEMO_REQ, RESEARCHER, H, make_client
 
 
 def donors(c):
-    return c.get("/demo/donors").json()["donors"]
+    personas = c.get("/demo/donors").json()["donors"]
+    for donor in personas:
+        session = c.post("/demo/donor-session", json={"donor_id": donor["id"]})
+        assert session.status_code == 200
+        donor["_session_header"] = {"X-Demo-Donor-Session": session.json()["session_token"]}
+    return personas
 
 
 def DK(d):
-    return {"X-Donor-Key": d["key"]}
+    return d["_session_header"]
 
 
 def test_demo_donors_and_auth():
     svc, c = make_client()
     ds = donors(c)
-    assert len(ds) == 3 and all(d["key"] for d in ds)
+    assert len(ds) == 3 and all("key" not in d for d in ds)
     d = ds[0]
     assert c.get(f"/donor/{d['id']}").status_code == 401
     assert c.get(f"/donor/{d['id']}", headers={"X-Donor-Key": "nope"}).status_code == 401
