@@ -99,3 +99,9 @@ Verification:
 - `backend/tests/test_ontology_api.py` covers API validation, safe upstream errors, no-store headers and API documentation.
 - `scripts/ontology_provider_smoke.py` checks a live public OLS4 search for MONDO/HPO/DOID terms.
 - `frontend/src/pages/ontology.js` provides the researcher-facing search panel and source links.
+
+### User-controlled biomedical query expansion
+
+A researcher can explicitly add a selected ontology term to the publication-search query. The UI combines that term's source label and up to three source synonyms as a visible quoted `OR` expression, preserves the existing query as another `OR` clause, and returns focus to the editable publication query. Nothing is silently expanded or searched until the researcher reviews and submits the resulting query. This is lexical expansion from OLS4 labels/synonyms, not semantic similarity scoring or an asserted cross-ontology mapping.
+
+The desktop browser acceptance verifies that the selected term and source synonym are inserted into the editable query while preserving the researcher's original text.
