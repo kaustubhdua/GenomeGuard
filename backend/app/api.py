@@ -9,7 +9,6 @@ membership: only aggregates, transformed releases, counts and reason codes.
 from __future__ import annotations
 
 import json
-from html import escape
 import logging
 import os
 import re
@@ -17,6 +16,7 @@ import secrets
 import tempfile
 import threading
 import time
+from html import escape
 from pathlib import Path
 from urllib.parse import unquote
 
