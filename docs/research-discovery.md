@@ -154,3 +154,13 @@ Verification:
 Deterministic provider/API contract tests, schema validation, input validation, response normalization, error handling and browser UI tests run on every pull request. Live public-provider smoke tests are not an automatic pull-request or push gate because unrelated upstream outages and rate limits must not make ordinary code validation flaky. The main CI workflow can run the live checks only on an explicit workflow dispatch.
 
 The separate weekly/manual `research-provider-live` workflow currently covers PubMed, Open Targets, ClinVar, GWAS Catalog, OLS4 and Europe PMC. Ensembl and UniProtKB have dedicated live smoke scripts and deterministic provider contract tests; their live checks are manual-only until the scheduled workflow is extended. A live-provider outage is reported as an external acceptance failure; it does not invalidate deterministic unit/API tests. Release acceptance still requires a successful live-provider run on the exact release candidate.
+
+
+## Browser-local saved searches
+
+The publication-search workspace can optionally save a search when the user explicitly presses **Save current search**. It stores only the search text, department and selected publication source in the current browser profile's local storage, with a maximum of ten entries. The user can rerun a saved search, remove one entry, or clear all saved searches.
+
+- Ordinary searches are not automatically recorded.
+- Saved searches are not sent to the GenomeGuard backend and are not synchronized across devices or browser profiles.
+- Users are warned not to save patient-identifying or sensitive information and to clear saved searches before sharing a device.
+- Browser storage may be unavailable or cleared by browser privacy settings; saved searches are convenience data, not a durable institutional workspace or an audit record.
