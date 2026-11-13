@@ -178,6 +178,14 @@ def test_epsilon_budget_is_charged_and_refuses_when_spent():
         [d for d in noised if d["status"] == "released"])) < 1e-9
 
 
+def test_research_mode_requires_signed_authority_for_donor_consent_changes():
+    svc = make_service(demo_mode=False)
+    with pytest.raises(ServiceError, match="signed authoritative consent event"):
+        svc.donor_set_consent(1, {"use": "GRU", "modifiers": []})
+    with pytest.raises(ServiceError, match="authoritative consent source"):
+        svc.donor_set_withdrawn(1, True)
+
+
 def test_research_mode_requires_machine_readable_mondo_disease_identifier():
     svc = make_service(demo_mode=False)
     with pytest.raises(ServiceError, match="requires a MONDO disease identifier"):
