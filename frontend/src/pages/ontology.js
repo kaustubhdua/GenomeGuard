@@ -112,7 +112,7 @@ export function renderOntologyPanel() {
       seen = new Set();
       results.replaceChildren();
     }
-    if (!query) {
+    if (query.length < 2) {
       status.textContent = "Enter at least two characters.";
       return;
     }
