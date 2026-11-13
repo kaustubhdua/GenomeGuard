@@ -1309,7 +1309,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("POST", "/research/open-targets/target", "Retrieve Open Targets gene-disease associations and evidence", "public")
     async def open_targets_target(request):
         """Fetch source-attributed target/disease research evidence by Ensembl ID."""
-        from app.literature.open_targets import OpenTargetsProviderError, search_target
+        from app.literature.open_targets import (
+            OpenTargetsProviderError,
+            search_target,
+            validate_target_request,
+        )
 
         data = await _body(request)
         ensembl_id = data.get("ensembl_id")
@@ -1320,6 +1324,12 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         evidence_cursor = data.get("evidence_cursor")
         if disease_id == "":
             disease_id = None
+        try:
+            validate_target_request(
+                ensembl_id, disease_id, page_index, page_size, evidence_size, evidence_cursor,
+            )
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_open_targets_query", str(exc)) from None
         if not _OPEN_TARGETS_SEARCH_SLOTS.acquire(blocking=False):
             response = _j({
                 "error": "open_targets_provider_busy",
