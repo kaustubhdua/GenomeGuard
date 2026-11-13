@@ -10,7 +10,7 @@ import json
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -63,7 +63,7 @@ def _retry_delay(error: HTTPError, attempt: int) -> float:
             try:
                 retry_at = parsedate_to_datetime(value)
                 if retry_at.tzinfo is None:
-                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                    retry_at = retry_at.replace(tzinfo=UTC)
                 return min(30.0, max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds()))
             except (TypeError, ValueError, OverflowError):
                 pass
