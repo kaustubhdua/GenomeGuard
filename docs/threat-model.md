@@ -1,7 +1,6 @@
 # Threat model
 
-All data is synthetic unless you build the optional real cohort (`make fetch-real`). Nothing here
-claims legal compliance: GenomeGuard is **designed around the ideas of** DPDP, GDPR and HIPAA.
+The local default and public hosted demo are synthetic. The repository also contains an optional public-cohort research build, which must remain separate and is not evidence of an institutionally accepted real-data deployment. Nothing here claims legal compliance: GenomeGuard is **designed around the ideas of** DPDP, GDPR and HIPAA.
 
 ## What we protect
 
@@ -70,9 +69,13 @@ certifications, clinical validity assessments, legal determinations or formal pr
   permissive than the rules, but a model could still write a misleading rationale; only the
   numbers in it are checked against the evidence. A human steward makes the call.
 - **FHIR validation has a limited scope.** A generated synthetic Consent resource passed the pinned HL7 FHIR Validator CLI against R4 4.0.1 and the project's extension definitions. This does not establish legally valid consent or validate a real consent workflow. DUO terms travel in namespaced extensions, and only the two DUO ids confirmed from the official ontology are emitted as ids.
-- **Demo mode is deliberately insecure.** `GG_DEMO_MODE=true` publishes the demo API keys and the
-  steward key at `/demo/requesters` for role switching during local demonstrations. That is only acceptable because
-  the data is synthetic. Turn it off for anything else.
+- **Demo mode is synthetic-only, not an identity system.** `GET /demo/requesters` and
+  `GET /demo/donors` expose synthetic persona metadata only; they do not return reusable
+  requester, donor or steward credentials. `POST /demo/session` and
+  `POST /demo/donor-session` issue short-lived, process-local demo session tokens for
+  explicitly synthetic demo mode. These sessions are not institutional authentication,
+  do not establish researcher affiliation, and must never be enabled for real or
+  controlled-access participant data. The public demo must remain synthetic-only.
 - **Not modelled:** the DUO consent-form-date limit; per-jurisdiction legal tests; insider abuse
   by a steward; side channels such as timing.
 - **DUO fidelity:** NAGR and NCTRL follow the project spec's wording. Run `make fetch-duo` and
