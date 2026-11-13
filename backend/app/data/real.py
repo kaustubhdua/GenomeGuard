@@ -455,8 +455,8 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
             raise ValueError("source policy must disclose that legal validity has not been independently reviewed")
         if consent_policy["withdrawal_supported"] is not False:
             raise ValueError("this public-release policy must explicitly disclose that participant withdrawal is not supported")
-        if consent_policy["duo_use"] not in {"GRU", "HMB", "DS"}:
-            raise ValueError("consent policy duo_use must be GRU, HMB, or DS")
+        if consent_policy["duo_use"] not in {"GRU", "HMB", "DS", "POA"}:
+            raise ValueError("consent policy duo_use must be GRU, HMB, DS, or POA")
         if not isinstance(consent_policy["source_url"], str) or not consent_policy["source_url"].startswith("https://"):
             raise ValueError("consent policy source_url must be HTTPS")
     rng = np.random.default_rng(seed)
