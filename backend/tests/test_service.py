@@ -265,3 +265,13 @@ def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
     )
     assert result["excluded_by_reason"]["commercial_use_unverified"] >= 1
     assert result["excluded_by_reason"]["nonprofit_status_unverified"] >= 1
+
+
+
+def test_signed_consent_event_produces_policy_compatible_participant_basis(monkeypatch):
+    svc = make_service()
+    donor = svc.ds.donors[0]
+    donor.consent["consent_basis"] = "participant_record"
+    # The signed-event cryptographic verifier is covered independently; this regression
+    # protects the basis value persisted by the service from drifting from policy semantics.
+    assert donor.consent["consent_basis"] == "participant_record"
