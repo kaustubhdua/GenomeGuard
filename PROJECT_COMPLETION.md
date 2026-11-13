@@ -1,4 +1,27 @@
-> **Current status (10 November 2026):** The active runtime is the first-party Python/Starlette API; Supabase Auth, browser keys, Edge Functions, and runtime calls are removed. The current reviewed code branch tip before this documentation refresh was `c768a209a254905e60de37d2d1631cf21a74443e`; PostgreSQL provider-restart reconnection is implemented in `0ac6014eba7917b7aec82bcb4d50b23f3ce1687c` and regression-tested. Exact-head validation passed for backend/PostgreSQL integration, encrypted PostgreSQL backup/restore, evaluation smoke/full eval, demo, JavaScript syntax, Python compilation, security scans, Beacon v2, FHIR R4 Consent, deployment configuration, real-data image build, and live synthetic staging API plus browser/mobile acceptance. The staging service is running the reviewed code branch; it contains only 600 synthetic donors, 3,000 synthetic variants, and no normalized public-dataset imports. PR #111 remains open and unmerged. Production remains **not ready**: it uses SQLite on an ephemeral filesystem and still lacks institutional OIDC/organization authorization, participant-consent/withdrawal enforcement, independent audit anchoring, provider-level recovery evidence, least-privilege runtime credentials, and independent security/privacy/governance review. The final docs-only status refresh is at `a013d25cd61f252c91c306d505102b6cc67dbcce`; re-run checks after that docs commit before merging. See [the current status and verification record](docs/current-status-2026-11-10.md). Historical Supabase-specific sections below are archival evidence only and do not describe the active runtime.
+> **Live status refresh — 14 November 2026.** This section supersedes the 10 November snapshot below; historical entries are retained for audit history.
+>
+> Current main: `50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`.
+>
+> **Open PRs (not merged; exact-head checks pending):**
+> - [#153](https://github.com/kaustubhdua/GenomeGuard/pull/153): this documentation reconciliation.
+> - [#154](https://github.com/kaustubhdua/GenomeGuard/pull/154): gnomAD manifest checksum enforcement. This is an importer integrity gate, not evidence that gnomAD data has been imported.
+> - [#164](https://github.com/kaustubhdua/GenomeGuard/pull/164): CI live-provider isolation, research UI smoke correction, dataset catalogue browser reliability, and whitespace-prefixed CSV formula-injection protection.
+> - [#165](https://github.com/kaustubhdua/GenomeGuard/pull/165): consolidated DUO/consent provenance, signed-event chronology and PostgreSQL row locking, MONDO-coded DUO DS restrictions, FHIR R4 disease coding, and demo-only donor self-service consent controls.
+> - [#166](https://github.com/kaustubhdua/GenomeGuard/pull/166): Ensembl gene and UniProtKB protein discovery, research browser acceptance, synthetic-demo health-metadata fallback and bounded cold-start retries.
+>
+> Superseded, closed without merging: #152 → #164; #155 and #156 → #165; #158, #159 and #161 → #166. Their work is carried by the replacement PRs; reopen them if the replacement PR cannot pass or merge.
+>
+> **Neon evidence (read-only audit):** `genomeguard-free-demo` default branch has migrations 1–12. `genomeguard-staging` default branch has migrations 1–2. The existing `gg-render-staging-2026-11-10` child branch has migrations 1–12 and 600 synthetic donors, 600 genotype rows and 3,000 variants; its metadata reports `genotypes_real=false` and `consent_simulated=true`. On that candidate branch, public dataset sample/variant tables and gnomAD reference manifest/frequency tables have zero rows. The child branch is a staging candidate, not proof that the live Render service uses it. The Render-to-Neon connection target remains unverified until the user confirms the Render workspace.
+>
+> Attempts to protect both Neon default branches were rejected because the current plan has reached its protected-branch limit. GitHub `main` is also reported unprotected; this integration cannot configure repository rulesets. No plan upgrade, paid infrastructure, branch deletion, or live/default-branch migration was performed.
+>
+> **Deployment evidence:** the prior Render audit recorded public demo and recovery service SHAs, but they were not re-verified in this session. No claim of exact-SHA staging acceptance or institutional production deployment is made. The user must confirm the Render workspace before its services and environment-to-Neon branch mapping can be inspected.
+>
+> **Release status: NOT PRODUCTION READY.** The public demo remains synthetic-only. No private or controlled-access participant data may be uploaded. DUO/MONDO code does not establish legal consent, DAC authority, organisation status, or institutional approval. The gnomAD tables are empty in the inspected staging candidate; no real 1000 Genomes import is claimed.
+>
+> Outstanding gates include durable production PostgreSQL/storage and backup/restore, verified organisation and commercial-purpose registries, institutional OIDC/SSO/MFA, accredited consent authority and DAC workflows, production key custody, monitoring/incident response, external audit anchoring, independent scientific/privacy/security/legal review, and institutional release approval. Do not infer completion from a passing CI run, a live service badge, or a deployed frontend.
+>
+> The authoritative acceptance ledger is [GitHub issue #124](https://github.com/kaustubhdua/GenomeGuard/issues/124).
 ---
 
 Updated: 2 November 2026

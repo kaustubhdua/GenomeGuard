@@ -19,7 +19,7 @@ from app.data import pedigree as ped
 
 # The scripted demo asks for diabetes-study frequencies; the first two planted variants are
 # carried by at least one donor whose consent allows that request, so the demo is deterministic.
-DEMO_REQUEST = ConsentRequest(purpose="disease_research", disease="diabetes")
+DEMO_REQUEST = ConsentRequest(purpose="disease_research", disease="diabetes", demo_mode=True)
 
 POPULATIONS = ["POP_A", "POP_B", "POP_C", "POP_D", "POP_E"]
 COHORTS = ["BIOBANK-A", "BIOBANK-B", "DIABETES-STUDY", "ONCO-STUDY"]
@@ -64,6 +64,7 @@ def _consent(rng: np.random.Generator, population: str) -> dict:
         "modifiers": sorted(set(mods)),
         "population": population if rng.random() < 0.04 else None,
         "consent_date": day.isoformat(),
+        "consent_basis": "synthetic_demo",
     }
 
 

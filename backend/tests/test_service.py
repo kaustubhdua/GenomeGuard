@@ -1,4 +1,7 @@
+from dataclasses import replace
+
 import numpy as np
+import pytest
 
 from app.service import ServiceError
 from tests.helpers import ANON, ATTACKER, CONTROLLED, DEMO_REQ, RESEARCHER, make_service
@@ -41,7 +44,13 @@ def test_release_matches_true_frequencies_when_no_noise():
     d = svc.submit(U(svc, RESEARCHER), {**DEMO_REQ, "variant_filter": {"min_maf": 0.2, "limit": 5}})
     assert d["outcome"] == "permit" and d["transform"]["steps"] == []
     from app.core.consent import ConsentRequest, eligible_cohort
-    ids = eligible_cohort(ConsentRequest("disease_research", "diabetes"), svc.ds.donors).donor_ids
+    ids = eligible_cohort(
+        ConsentRequest(
+            "disease_research", "diabetes", None, "frequency", None, {},
+            organization_is_nonprofit=None, demo_mode=True,
+        ),
+        svc.ds.donors,
+    ).donor_ids
     cols = [v - 1 for v in d["release"]["variant_ids"]]
     truth = svc.ds.genotypes[np.ix_(np.array(ids) - 1, cols)].sum(axis=0) / (2 * len(ids))
     assert np.allclose(d["release"]["values"], np.round(truth, 4))
@@ -169,6 +178,27 @@ def test_epsilon_budget_is_charged_and_refuses_when_spent():
         [d for d in noised if d["status"] == "released"])) < 1e-9
 
 
+def test_research_mode_requires_signed_authority_for_donor_consent_changes():
+    svc = make_service(demo_mode=False)
+    with pytest.raises(ServiceError, match="signed authoritative consent event"):
+        svc.donor_set_consent(1, {"use": "GRU", "modifiers": []})
+    with pytest.raises(ServiceError, match="authoritative consent source"):
+        svc.donor_set_withdrawn(1, True)
+
+
+def test_research_mode_requires_machine_readable_mondo_disease_identifier():
+    svc = make_service(demo_mode=False)
+    with pytest.raises(ServiceError, match="requires a MONDO disease identifier"):
+        svc._validate({"purpose": "disease_research"})
+    with pytest.raises(ServiceError, match="MONDO identifier"):
+        svc._validate({"purpose": "disease_research", "disease": "diabetes"})
+    accepted = svc._validate({
+        "purpose": "disease_research",
+        "disease": "MONDO:0005015",
+    })
+    assert accepted["disease"] == "MONDO:0005015"
+
+
 def test_validation_errors():
     svc = make_service()
     r = U(svc, RESEARCHER)
@@ -243,3 +273,88 @@ def test_service_agent_explanations_are_offline_and_deterministic():
     assert decision["explanation"].startswith("Your request")
     records = [e for e in svc.audit.entries() if e["action"] == "agent.output"]
     assert records and all(e["payload"]["model"] == "template" for e in records)
+
+
+def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
+    svc = make_service(demo_mode=False)
+    first, second = svc.ds.donors[0], svc.ds.donors[1]
+    svc.ds.donors[0] = replace(
+        first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
+        withdrawn=False,
+    )
+    svc.ds.donors[1] = replace(
+        second, consent={**second.consent, "use": "GRU", "modifiers": ["NPU"]},
+        withdrawn=False,
+    )
+
+    # The requester declares non-commercial use, but the declaration is not verified.
+    result = svc.eligibility(
+        U(svc, RESEARCHER), "general_research", None, False, "frequency", {},
+    )
+    assert result["excluded_by_reason"]["commercial_use_unverified"] >= 1
+    assert result["excluded_by_reason"]["nonprofit_status_unverified"] >= 1
+
+
+
+def test_signed_consent_event_produces_policy_compatible_participant_basis(monkeypatch):
+    import hashlib
+    import hmac
+    from datetime import UTC, datetime
+
+    import app.consent_authority as authority
+
+    svc = make_service()
+    donor = svc.ds.donors[0]
+    sample_id = "SYNTHETIC-SOURCE-TEST-001"
+    digest = hmac.new(
+        svc.master,
+        svc.dataset_id.encode() + b"\\0" + sample_id.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    svc.store.x("UPDATE donors SET source_sample_id_hash=? WHERE id=?", (digest, donor.id))
+
+    payload = {
+        "event_id": "e54e6f0d-7f72-4d74-ae4d-6d9f4f6b6d4a",
+        "issuer": "test-consent-authority",
+        "dataset_id": svc.dataset_id,
+        "source_sample_id": sample_id,
+        "event_type": "consent_updated",
+        "effective_at": datetime.now(UTC).isoformat(),
+        "consent": {
+            "use": "GRU", "disease": None, "modifiers": [],
+            "population": None, "consent_date": "2026-11-14",
+        },
+    }
+    monkeypatch.setattr(
+        authority, "verify_consent_event",
+        lambda *args, **kwargs: (payload, "a" * 64),
+    )
+
+    svc.apply_signed_consent_event(
+        {"signed": "fixture"}, public_key_b64="unused",
+        trusted_issuer="test-consent-authority",
+    )
+    updated = svc.ds.donors[donor.id - 1]
+    assert updated.consent["consent_basis"] == "participant_record"
+    from app.core.consent import ConsentRequest, permitted
+    assert permitted(
+        updated.consent, ConsentRequest("general_research"), updated.withdrawn,
+    ) == (True, "ok")
+
+def test_demo_eligibility_uses_only_explicitly_simulated_consent_facts():
+    svc = make_service(demo_mode=True)
+    first, second = svc.ds.donors[0], svc.ds.donors[1]
+    svc.ds.donors[0] = replace(
+        first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
+        withdrawn=False,
+    )
+    svc.ds.donors[1] = replace(
+        second, consent={**second.consent, "use": "GRU", "modifiers": ["NPU"]},
+        withdrawn=False,
+    )
+    result = svc.eligibility(
+        U(svc, RESEARCHER), "general_research", None, False, "frequency", {},
+    )
+    assert result["excluded_by_reason"].get("commercial_use_unverified", 0) == 0
+    assert result["excluded_by_reason"].get("nonprofit_status_unverified", 0) == 0
+

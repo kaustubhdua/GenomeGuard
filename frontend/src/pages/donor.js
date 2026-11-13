@@ -1,8 +1,8 @@
 import { state, donorApi } from "../api.js";
 import { h, notice, when, errorText } from "../ui.js";
 
-const USE = { gru: "any research", hmb: "health, medical or biomedical research", ds: "research on one named disease" };
-const MOD = { ncu: "no commercial use", npu: "no for-profit use", nmds: "no methods development", nagr: "no aggregate analysis", nctrl: "not as a control group" };
+const USE = { gru: "any research", hmb: "health, medical or biomedical research", ds: "research on one named disease", poa: "population origins or ancestry research only" };
+const MOD = { ncu: "non-commercial use only", npu: "not-for-profit organisations only", npuncu: "not-for-profit and non-commercial use only", nmds: "no methods development", npoa: "no population origins or ancestry research", nagr: "no aggregate analysis", nctrl: "not as a control group" };
 const CHIPS = [["who_used", "Who used my data?"], ["what_allowed", "What did I allow?"], ["how_withdraw", "How do I withdraw?"], ["relatives", "What about my relatives?"], ["security", "Is it secure?"]];
 const plain = (s) => String(s || "").replaceAll("_", " ");
 

@@ -630,8 +630,8 @@ def main() -> int:
               and gwas_requests[-1].get("trait") == "breast cancer"
               and gwas_requests[-1].get("show_child_traits") is True)
 
-        page.get_by_label("Disease or phenotype term").fill("ataxia")
-        page.get_by_label("Ontology", exact=True).select_option("hp")
+        page.get_by_label("Symptom, disease, or phenotype").fill("ataxia")
+        page.get_by_label("Terminology source", exact=True).select_option("hp")
         page.get_by_role("button", name="Find matching phenotype terms").click()
         page.locator("#ontology-results .ontology-term").first.wait_for()
         check("OLS4 ontology search sends explicit query and ontology filter",
@@ -725,8 +725,8 @@ def main() -> int:
         mobile.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
         check("mobile GWAS evidence has no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
-        mobile.get_by_label("Disease or phenotype term").fill("ataxia")
-        mobile.get_by_label("Ontology", exact=True).select_option("hp")
+        mobile.get_by_label("Symptom, disease, or phenotype").fill("ataxia")
+        mobile.get_by_label("Terminology source", exact=True).select_option("hp")
         mobile.get_by_role("button", name="Find matching phenotype terms").click()
         mobile.locator("#ontology-results .ontology-term").first.wait_for()
         check("mobile ontology results have no horizontal overflow at 375px",

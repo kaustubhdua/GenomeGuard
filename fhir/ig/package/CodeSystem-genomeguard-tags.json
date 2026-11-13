@@ -7,15 +7,23 @@
   "title": "GenomeGuard consent provenance tags",
   "status": "active",
   "experimental": true,
-  "date": "2026-10-25",
+  "date": "2026-11-14",
   "publisher": "GenomeGuard demo project",
-  "description": "Tag codes used to mark simulated consent exports. Not a real consent authority.",
+  "description": "GenomeGuard consent provenance labels. These tags distinguish synthetic demonstration records, operator-supplied participant records, and records with unverified provenance; they do not establish legal consent or issuer authority.",
   "content": "complete",
   "caseSensitive": true,
   "concept": [
     {
       "code": "simulated-consent",
-      "display": "Simulated consent record (demo data, not a real person)"
+      "display": "Synthetic demo consent record (not a real person)"
+    },
+    {
+      "code": "participant-consent-record",
+      "display": "Participant consent record; source authority is not independently verified by this export"
+    },
+    {
+      "code": "unverified-consent-provenance",
+      "display": "Consent provenance is not verified"
     }
   ]
 }

@@ -93,7 +93,8 @@ def run_benign(ds: Dataset, sessions: int = 300, seed: int = 11, p: Params = DEF
                 t += float(rng.uniform(5.0, 15.0))
             else:  # seconds between queries
                 t += max(20.0, float(rng.lognormal(math.log(150.0), 0.8)))
-            req = ConsentRequest(purpose, disease, False, level, None, q["filter"])
+            req = ConsentRequest(purpose, disease, False, level, None, q["filter"],
+                                 organization_is_nonprofit=True, demo_mode=True)
             elig = eligible_cohort(req, ds.donors)
             if elig.n == 0:
                 continue

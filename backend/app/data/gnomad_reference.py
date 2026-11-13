@@ -40,6 +40,16 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_manifest_checksum(actual_sha256: str, manifest_sha256: str | None) -> None:
+    """Require the imported artifact to match the steward-reviewed manifest."""
+    if not manifest_sha256:
+        raise ReferenceImportError("registered manifest does not pin an artifact SHA-256")
+    if not re.fullmatch(r"[0-9a-f]{64}", manifest_sha256):
+        raise ReferenceImportError("registered manifest contains an invalid artifact SHA-256")
+    if actual_sha256 != manifest_sha256:
+        raise ReferenceImportError("input TSV SHA-256 does not match the registered manifest")
+
+
 def iter_frequency_rows(path: Path) -> Iterator[tuple]:
     """Stream strict normalized TSV rows; rejects identifiers and unknown columns."""
     with path.open("r", encoding="utf-8-sig", newline="") as stream:
@@ -110,7 +120,7 @@ def import_to_database(args) -> dict:
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute(
-                    """SELECT id, reference_assembly, data_use_review, import_status
+                    """SELECT id, reference_assembly, data_use_review, import_status, file_sha256
                        FROM genomeguard.population_reference_manifest
                        WHERE dataset_key = %s""",
                     (args.dataset_key,),
@@ -118,7 +128,8 @@ def import_to_database(args) -> dict:
                 manifest = cur.fetchone()
                 if not manifest:
                     raise ReferenceImportError("register the dataset manifest before importing")
-                dataset_id, assembly, review, status = manifest
+                dataset_id, assembly, review, status, manifest_sha256 = manifest
+                validate_manifest_checksum(digest, manifest_sha256)
                 if assembly != "GRCh38":
                     raise ReferenceImportError("gnomAD v4 input must use GRCh38")
                 if review != "approved_public_research":
