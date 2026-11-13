@@ -220,6 +220,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             r = {**r, "_allow_unscoped_demo": True}
             request.state.authenticated_requester = r
             return r
+        if settings.demo_mode and not settings.allow_static_demo_keys:
+            raise ServiceError(
+                401, "demo_session_required",
+                "use a short-lived synthetic demo session; static demo API keys are disabled",
+            )
         if settings.oidc_required:
             raise ServiceError(401, "unauthorized", "institutional bearer token required")
         if settings.demo_mode:
@@ -1254,6 +1259,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if not session or session["donor_id"] != did:
                 raise ServiceError(401, "demo_donor_session_invalid", "demo donor session is invalid or expired")
             return did
+        if not settings.allow_static_demo_keys:
+            raise ServiceError(
+                401, "demo_donor_session_required",
+                "use a short-lived synthetic donor session; static donor keys are disabled",
+            )
         if not S().donor_authenticated(did, request.headers.get("x-donor-key")):
             raise ServiceError(401, "unauthorized", "donor key required (X-Donor-Key)")
         return did
