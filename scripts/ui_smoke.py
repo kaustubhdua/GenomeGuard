@@ -396,10 +396,10 @@ def main() -> None:
             pg.goto(base + "/#/overview")
             pg.wait_for_selector("#view h1", timeout=15000)
             pg.locator("#who").wait_for(state="visible", timeout=30000)
-        pg.wait_for_function(
-            "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
-            timeout=30000,
-        )
+            pg.wait_for_function(
+                "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
+                timeout=30000,
+            )
             for hsh in PUBLIC_PAGES:
                 pg.goto(base + "/" + hsh)
                 try:  # pages render after their API calls; wait for the heading, not a fixed time
@@ -496,10 +496,10 @@ def main() -> None:
             if menu_button.is_visible():
                 menu_button.click()
             pg.locator("#who").wait_for(state="visible", timeout=30000)
-        pg.wait_for_function(
-            "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
-            timeout=30000,
-        )
+            pg.wait_for_function(
+                "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
+                timeout=30000,
+            )
             over = []
             for hsh in PAGES:
                 pg.goto(base + "/" + hsh)
