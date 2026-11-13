@@ -30,6 +30,7 @@ def main() -> int:
     clinvar_requests: list[dict[str, object]] = []
     gwas_requests: list[dict[str, object]] = []
     ontology_requests: list[dict[str, object]] = []
+    uniprot_requests: list[dict[str, object]] = []
     provider_outages = {"europe": False, "pubmed": False}
 
     def check(label: str, ok: bool, detail: str = "") -> None:
@@ -368,6 +369,35 @@ def main() -> int:
         }
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
+    def handle_uniprot(route) -> None:
+        payload = json.loads(route.request.post_data or "{}")
+        uniprot_requests.append(payload)
+        body = {
+            "provider": "UniProtKB",
+            "provider_url": "https://www.uniprot.org",
+            "query": {"gene_symbol": payload.get("symbol"), "organism_taxonomy_id": 9606, "reviewed_only": True},
+            "release": "2026_04",
+            "total_results": 1,
+            "returned": 1,
+            "proteins": [{
+                "accession": "P51587",
+                "entry_name": "BRCA2_HUMAN",
+                "protein_name": "Breast cancer type 2 susceptibility protein",
+                "gene_names": ["BRCA2", "FANCD1"],
+                "organism": "Homo sapiens",
+                "length_aa": 3418,
+                "reviewed": True,
+                "function": "Tumor suppressor protein involved in DNA repair.",
+                "ensembl_cross_references": [{
+                    "gene_id": "ENSG00000139618", "protein_id": "ENSP00000369497",
+                }],
+                "source_url": "https://www.uniprot.org/uniprotkb/P51587",
+            }],
+            "retrieved_at": "2026-11-14T10:00:00Z",
+            "interpretation": "reviewed protein annotations only",
+        }
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         page = browser.new_page(viewport={"width": 1280, "height": 900})
@@ -378,6 +408,7 @@ def main() -> int:
         page.route("**/research/clinvar/search", handle_clinvar)
         page.route("**/research/gwas/search", handle_gwas)
         page.route("**/research/ontology/search", handle_ontology)
+        page.route("**/research/uniprot/search", handle_uniprot)
         page.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Research discovery").wait_for()
         page.get_by_role("link", name="Oncology Browse publications →").click()
@@ -604,6 +635,18 @@ def main() -> int:
               len(ontology_requests) == 2 and ontology_requests[1].get("page") == 1
               and page.locator("#ontology-results .ontology-term").count() == 3)
 
+        page.locator("#uniprot-symbol").fill("BRCA2")
+        page.get_by_role("button", name="Find proteins").click()
+        page.locator("#uniprot-results .uniprot-record").first.wait_for()
+        check("UniProtKB renders reviewed protein identity and source release",
+              len(uniprot_requests) == 1
+              and uniprot_requests[0].get("symbol") == "BRCA2"
+              and "P51587" in page.locator("#uniprot-results").inner_text()
+              and "2026_04" in page.locator("#uniprot-status").inner_text())
+        page.get_by_role("button", name="Use Ensembl gene ID in Open Targets").click()
+        check("UniProt Ensembl cross-reference transfers explicitly into Open Targets",
+              page.locator("#ot-ensembl-id").input_value() == "ENSG00000139618")
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
@@ -616,6 +659,7 @@ def main() -> int:
         mobile.route("**/research/clinvar/search", handle_clinvar)
         mobile.route("**/research/gwas/search", handle_gwas)
         mobile.route("**/research/ontology/search", handle_ontology)
+        mobile.route("**/research/uniprot/search", handle_uniprot)
         mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         mobile.get_by_role("heading", name="Research discovery").wait_for()
         no_horizontal_overflow = mobile.evaluate(
@@ -646,6 +690,11 @@ def main() -> int:
         mobile.get_by_role("button", name="Find matching phenotype terms").click()
         mobile.locator("#ontology-results .ontology-term").first.wait_for()
         check("mobile ontology results have no horizontal overflow at 375px",
+              mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
+        mobile.locator("#uniprot-symbol").fill("BRCA2")
+        mobile.get_by_role("button", name="Find proteins").click()
+        mobile.locator("#uniprot-results .uniprot-record").first.wait_for()
+        check("mobile UniProt protein results have no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
         browser.close()
