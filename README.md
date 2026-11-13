@@ -9,7 +9,7 @@
 
 GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Offline advisory agents use deterministic templates and a bounded rules planner to explain evidence for reviewers; no hosted AI provider or API key is used, and deterministic application code remains responsible for access decisions.
 
-> **Research software — not for clinical or production use.** The hosted research instance uses public 1000 Genomes genotype data and a dataset-level public-release policy mapping; local demo mode still uses synthetic data. The policy mapping is not participant-specific consent, and requester API keys are not verified institutional identities. The service has not undergone independent security, privacy, clinical, or legal review. It must not be used for private participant data or clinical decisions.
+> **Research prototype — not for clinical or production use.** The currently hosted public service is a synthetic-only demonstration. The separate real-public-genotype research image is defined in the repository but is not yet deployed as a separately accepted research service. Any public-release policy mapping is not participant-specific consent, and requester API keys are not verified institutional identities. The service has not undergone independent security, privacy, clinical, or legal review. It must not be used for private participant data or clinical decisions.
 
 ## What it does
 
@@ -21,7 +21,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 - **Auditability:** records decisions and events in a hash-chained audit log with verification tooling.
 - **Interoperability experiments:** includes a Beacon v2-style endpoint and export of synthetic FHIR R4 Consent resources for validation.
 - **Research evaluation:** includes repeatable synthetic-data evaluations and optional workflows for public 1000 Genomes genotype data.
-- **Research discovery:** searches live Europe PMC and NCBI PubMed publications, exposes Open Targets gene–disease evidence, retrieves ClinVar variant-level classifications, and explores GWAS Catalog v2 associations by gene, variant, or trait. Source release provenance and research exports are retained; these are research-discovery tools, not clinical decision support.
+- **Research discovery:** searches live Europe PMC and NCBI PubMed publications, exposes Open Targets gene–disease evidence, retrieves ClinVar variant-level classifications, explores GWAS Catalog v2 associations, and searches MONDO, HPO, and Disease Ontology terms through EMBL-EBI OLS4 with user-controlled label/synonym query expansion. Source provenance and research exports are retained; these are research-discovery tools, not clinical decision support.
 
 ## Current scope
 

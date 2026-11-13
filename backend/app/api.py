@@ -48,6 +48,7 @@ _MAX_DEMO_SESSIONS_PER_PERSONA = 5
 _OPEN_TARGETS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _CLINVAR_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _GWAS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
+_ONTOLOGY_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -1501,6 +1502,53 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             ) from None
         finally:
             _GWAS_SEARCH_SLOTS.release()
+        response = _j(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+    @route("POST", "/research/ontology/search", "Search MONDO, HPO, and Disease Ontology terms", "public")
+    async def ontology_search(request):
+        """Search source-backed biomedical ontology terms without asserting mappings."""
+        from app.literature.ontology import (
+            OntologyProviderError,
+            search_ontology,
+            validate_search,
+        )
+
+        data = await _body(request)
+        query = data.get("query")
+        ontology = data.get("ontology", "all")
+        page = data.get("page", 0)
+        size = data.get("size", 10)
+        try:
+            validate_search(query, ontology=ontology, page=page, size=size)
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_ontology_query", str(exc)) from None
+        if not _ONTOLOGY_SEARCH_SLOTS.acquire(blocking=False):
+            response = _j({
+                "error": "ontology_provider_busy",
+                "message": "Ontology search is busy. Please retry shortly.",
+            }, 429)
+            response.headers["Retry-After"] = "2"
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        try:
+            try:
+                payload = await run_in_threadpool(
+                    search_ontology, query, ontology=ontology, page=page, size=size,
+                )
+            except ValueError as exc:
+                raise ServiceError(400, "invalid_ontology_query", str(exc)) from None
+            except OntologyProviderError:
+                response = _j({
+                    "error": "ontology_provider_unavailable",
+                    "message": "The ontology provider is temporarily unavailable or returned an invalid response. Please retry.",
+                }, 503)
+                response.headers["Cache-Control"] = "no-store"
+                return response
+        finally:
+            _ONTOLOGY_SEARCH_SLOTS.release()
         response = _j(payload)
         response.headers["Cache-Control"] = "no-store"
         return response

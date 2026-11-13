@@ -60,6 +60,7 @@ Auth: institution-bound requesters use `Authorization: Bearer`; non-demo API-key
 | POST | `/research/open-targets/target` | Retrieve Open Targets direct target-disease associations and optional source evidence by Ensembl ID | public |
 | POST | `/research/clinvar/search` | Search ClinVar variant-level records by gene and optional ClinVar Properties filter; preserves separate aggregate classifications and review status | public |
 | POST | `/research/gwas/search` | Search GWAS Catalog REST API v2 associations by mapped gene, rsID, and/or EFO trait with data-release provenance | public |
+| POST | `/research/ontology/search` | Search MONDO, HPO, and Disease Ontology classes through EMBL-EBI OLS4; returns candidate terms with stable IDs and source metadata | public |
 | GET | `/catalogue/sources` | Curated public source references with explicit review/import status | public |
 | GET | `/openapi.json` | Machine-readable endpoint list | public |
 | GET | `/docs` | Human-readable endpoint list | public |
