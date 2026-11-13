@@ -1,6 +1,11 @@
 """Shared builders for service/API tests (no pytest fixtures, so tests stay simple)."""
 
+import os
 import warnings
+
+# Unit tests intentionally exercise the legacy static-key compatibility path. The
+# default application setting remains disabled; public demo flows use session tokens.
+os.environ["GG_TEST_ALLOW_STATIC_DEMO_KEYS"] = "true"
 
 from starlette.testclient import TestClient
 
