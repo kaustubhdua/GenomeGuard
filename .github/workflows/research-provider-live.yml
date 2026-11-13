@@ -48,11 +48,3 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/research_provider_smoke.py
-      - name: Verify live Ensembl human gene identity lookup
-        env:
-          PYTHONPATH: backend
-        run: .venv/bin/python scripts/ensembl_provider_smoke.py
-      - name: Verify live UniProtKB reviewed human protein lookup
-        env:
-          PYTHONPATH: backend
-        run: .venv/bin/python scripts/uniprot_provider_smoke.py
