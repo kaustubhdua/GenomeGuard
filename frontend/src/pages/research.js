@@ -1,6 +1,7 @@
 import { h } from "../ui.js";
 import { renderOpenTargetsPanel } from "./open-targets.js";
 import { renderClinVarPanel } from "./clinvar.js";
+import { renderGwasPanel } from "./gwas.js";
 
 const API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
 const PUBMED_API = "/literature/pubmed/search";
@@ -126,6 +127,7 @@ export async function render() {
       h("div", { id: "research-results", class: "stack", "aria-live": "polite" })),
     renderOpenTargetsPanel(),
     renderClinVarPanel(),
+    renderGwasPanel(),
     h("section", { class: "card" },
       h("h2", {}, "How to interpret these results"),
       h("p", { class: "muted" }, "This tool searches publication records and displays source-provided metadata and abstracts. It does not diagnose, rank treatment options, establish causality, or determine whether a paper is clinically applicable. Publication relevance is not evidence quality; review study design, population, limitations, and the original paper before drawing conclusions."),
