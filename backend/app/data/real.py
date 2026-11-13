@@ -600,7 +600,7 @@ def main(argv: list[str] | None = None) -> None:
                    help="operator-declared genotype source label; not independently authenticated")
     b.add_argument("--consent-json",
                    help="operator-authorized JSON mapping source sample IDs to explicit consent "
-                        "records (consent_basis, use, disease, modifiers, population, consent_date, withdrawn)")
+                        "records (consent_basis, use, disease MONDO CURIE for DS, optional disease_label, modifiers, population, consent_date, withdrawn)")
     b.add_argument("--consent-policy-json",
                    help="dataset-level policy profile derived from public source terms; never "
                         "represents participant-specific consent and is not a legal determination")
