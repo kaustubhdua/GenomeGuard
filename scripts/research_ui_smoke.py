@@ -506,6 +506,15 @@ def main() -> int:
               and len(gwas_export["records"]) == 2
               and gwas_export["records"][0]["study_accession"] == "GCST90838669")
 
+        page.get_by_label("Trait / phenotype (optional)").fill("breast cancer")
+        page.get_by_label("Include more specific child ontology traits").check()
+        page.get_by_role("button", name="Search GWAS Catalog").click()
+        page.get_by_text("2026-10-29", exact=False).wait_for()
+        check("GWAS Catalog trait search explicitly includes child ontology terms",
+              len(gwas_requests) == 3
+              and gwas_requests[-1].get("trait") == "breast cancer"
+              and gwas_requests[-1].get("show_child_traits") is True)
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
