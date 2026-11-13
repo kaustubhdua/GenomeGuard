@@ -279,9 +279,9 @@ def test_loaded_cohort_works_with_dataset_and_consent_engine():
         c, _ = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=2)
         ds = Dataset.from_cohort(c, "real-test")
         res = eligible_cohort(ConsentRequest(purpose="general_research"), ds.donors)
-        assert res.considered == 44
+        assert res.considered == len(ds.donors)
         assert res.donor_ids == []
-        assert res.excluded_by_reason["unknown_consent"] == 44
+        assert res.excluded_by_reason["unknown_consent"] == len(ds.donors)
 
 
 def test_dataset_public_release_policy_is_real_source_provenance_not_fake_personal_consent():
