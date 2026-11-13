@@ -7,8 +7,10 @@ GenomeGuard's Research Discovery page provides department-specific entry points 
 - Requests use the public Europe PMC Articles REST search endpoint:
   `https://www.ebi.ac.uk/europepmc/webservices/rest/search`.
 - Search terms are sent to Europe PMC. Results are returned from its publication index; GenomeGuard does not fabricate papers, authors, abstracts, identifiers, or publication dates.
-- The page requests JSON `core` records and displays the source-provided title, author string, journal, publication date, abstract, PMID, PMCID, DOI, and open-access flag when present.
-- Department links preselect a field query. The search form accepts a symptom description, biomedical concept, gene, condition, or research question and combines it with the selected department.
+- The page requests JSON `core` records and displays the source-provided title, author string, journal (including the nested journalInfo field used by core records), publication date, abstract, PMID, PMCID, DOI, and open-access flag when present.
+- Each department hyperlink immediately runs a curated Europe PMC literature query; users can refine it with a symptom description, biomedical concept, gene, condition, or research question. Department terms and user terms are combined with explicit Boolean grouping.
+- The search requests Europe PMC's documented MeSH/UniProt synonym expansion and defaults to the provider's relevance ranking.
+- Results use the documented cursorMark / nextCursorMark pagination contract. The UI appends source records and stops when the provider no longer returns a continuation cursor.
 - Publication links open the original DOI, PubMed, or Europe PMC record. External links use HTTPS and `noopener noreferrer`.
 
 ## Important limitations
@@ -21,4 +23,4 @@ A publication's appearance in search results is not evidence of study quality. R
 
 ## Verification
 
-The route is included in local and deployed UI smoke inventories, including phone-width checks. The route can be opened without a search; the live external literature query is only sent after the user submits the form. A live search requires network access to Europe PMC.
+The route is included in local and deployed UI smoke inventories, including phone-width checks. Opening the route alone does not send a query; selecting a department or submitting the search form does. Local browser acceptance intercepts Europe PMC with provider-shaped fixtures to test department links, result rendering, cursor pagination and symptom/question queries. A separate CI integration smoke test calls the real Europe PMC API and validates its response and cursor pagination contract.
