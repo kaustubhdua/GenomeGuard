@@ -29,7 +29,7 @@ eval-smoke:
 # End-to-end sample workflow. Starts a throwaway server on a fresh database and checks each step.
 demo:
 	rm -f /tmp/gg-demo.sqlite3
-	GG_DB_PATH=/tmp/gg-demo.sqlite3 GG_ALLOW_TAMPER_DEMO=true GG_ADMIN_API_KEY=demo-admin-key GG_EXPOSE_DEMO_ADMIN_KEY=true PYTHONPATH=backend \
+	GG_DB_PATH=/tmp/gg-demo.sqlite3 GG_ALLOW_TAMPER_DEMO=true GG_ADMIN_API_KEY=demo-admin-key PYTHONPATH=backend \
 		$(PY) -m uvicorn app.main:app --port 8765 > /tmp/gg-demo.log 2>&1 & echo $$! > /tmp/gg-demo.pid
 	sleep 8
 	GG_ADMIN_API_KEY=demo-admin-key $(PY) scripts/demo.py --base http://127.0.0.1:8765; code=$$?; kill `cat /tmp/gg-demo.pid`; exit $$code
@@ -69,7 +69,7 @@ deploy-smoke:
 # Drives the real UI in a headless browser (needs: pip install playwright && playwright install chromium)
 ui-smoke:
 	rm -f /tmp/gg-ui-smoke.sqlite3
-	GG_DB_PATH=/tmp/gg-ui-smoke.sqlite3 GG_ALLOW_TAMPER_DEMO=true GG_EXPOSE_DEMO_ADMIN_KEY=true PYTHONPATH=backend \
+	GG_DB_PATH=/tmp/gg-ui-smoke.sqlite3 GG_ALLOW_TAMPER_DEMO=true PYTHONPATH=backend \
 		$(PY) -m uvicorn app.main:app --port 8767 > /tmp/gg-ui-smoke.log 2>&1 & echo $$! > /tmp/gg-ui-smoke.pid
 	sleep 8
 	@set -e; trap 'kill `cat /tmp/gg-ui-smoke.pid`' EXIT; \
