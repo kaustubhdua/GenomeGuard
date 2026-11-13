@@ -1,6 +1,6 @@
 # Hosted deployment record
 
-Last audited: 13 November 2026.
+Last audited: 13 November 2026 (after merges of PRs #143 and #144).
 
 
 ## Environment separation and current live status (13 November 2026)
@@ -13,7 +13,7 @@ Last audited: 13 November 2026.
 - Latest provider-reported live deployment: dep-dbr3gpou01pc738prrh0, source commit 10fb08dcc11ca09282cc1085fd86e3c73708281a, deployment trigger api, status live.
 - Security fix: PR #142 merged as 10c429d393afd474e806939e80212e8182635e08, but that commit is not the live deployment. Render's event history showed no deployment event for the merge. The public service therefore still runs the older implementation.
 - Live acceptance: run 43401555435 verified the synthetic cohort and audit chain but failed the requester-credential exposure check. The deployed /demo/requesters response still exposes requester API-key fields. Do not treat the public demo as security-accepted until the merged fix is actually deployed and the exact-commit live smoke passes.
-- The live monitor reported demo_mode=true, synthetic_data_only=true, 600 samples, 3,000 variants, and storage_backend=postgresql. This is evidence that the application reports a PostgreSQL backend; it does not identify the external database provider, prove which Neon project (if any) is connected, or prove provider-level backup, PITR, key custody, durability, or recovery. Render has no managed PostgreSQL resource attached to this service.
+- The live monitor previously reported demo_mode=true, synthetic_data_only=true, 600 samples, 3,000 variants, and storage_backend=postgresql. This is evidence that the application reported a PostgreSQL backend at that time; it does not identify the external database provider, prove which Neon project (if any) is connected, or prove provider-level backup, PITR, key custody, durability, or recovery. A fresh inspection of the connected Render workspace found no Render Postgres instances.
 - The public service is a synthetic demonstration environment. Do not upload private or controlled-access participant data or use it for clinical decisions.
 
 ### Separate research-mode service
