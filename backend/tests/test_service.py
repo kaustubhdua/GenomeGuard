@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 import numpy as np
+import pytest
 
 from app.service import ServiceError
 from tests.helpers import ANON, ATTACKER, CONTROLLED, DEMO_REQ, RESEARCHER, make_service
