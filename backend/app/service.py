@@ -1251,11 +1251,14 @@ def _brief(r: dict) -> dict:
 # ====================================================================== bootstrap
 # Demo API keys are random process-local bootstrap values, never published by persona
 # endpoints, and static-key authentication is disabled by default in demo mode.
+# Stable compatibility credentials are retained only for isolated local tests. They are
+# never returned by public persona endpoints, and static demo-key authentication is disabled
+# by default; hosted synthetic users authenticate with short-lived server-issued sessions.
 DEMO_REQUESTERS = [
-    ("Dr. Amara Nwosu", "researcher", "registered", "Demo University", secrets.token_urlsafe(32)),
-    ("Probe Account", "researcher", "registered", "Unknown Lab", secrets.token_urlsafe(32)),
-    ("Public Viewer", "visitor", "anonymous", "-", secrets.token_urlsafe(32)),
-    ("Controlled-Access Lab", "researcher", "controlled", "Demo Hospital", secrets.token_urlsafe(32)),
+    ("Dr. Amara Nwosu", "researcher", "registered", "Demo University", "demo-researcher"),
+    ("Probe Account", "researcher", "registered", "Unknown Lab", "demo-attacker"),
+    ("Public Viewer", "visitor", "anonymous", "-", "demo-anonymous"),
+    ("Controlled-Access Lab", "researcher", "controlled", "Demo Hospital", "demo-controlled"),
 ]
 
 
