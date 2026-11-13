@@ -5,7 +5,13 @@
 [![Live acceptance](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-acceptance.yml/badge.svg)](https://github.com/kaustubhdua/GenomeGuard/actions/workflows/live-acceptance.yml)
 [![License: All rights reserved](https://img.shields.io/badge/License-All%20rights%20reserved-red.svg)](LICENSE)
 
-**Legacy live research API:** https://genomeguard.onrender.com — its public health response reports a 1000 Genomes source, 600 donors, and 3,000 variants, but this provenance is operator-declared and has not been independently authenticated. The same response has an unresolved `consent_records_matched=600` discrepancy despite describing dataset-level policy, not participant-specific consent. The current production frontend is behind GitHub mainline. Do not treat these values as verified participant-consent or dataset evidence.
+**Last recorded deployment snapshot (14 November 2026; not re-verified in this session):** the prior Render audit recorded the primary synthetic demo at `3280ebc1924039bcfa19f4c58bb75e83a8c370eb` and the recovery demo at `f200b643f05a5f959887ac51accd7e202c424557`, both behind GitHub `main` (`50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`). These are historical observations, not current exact-SHA acceptance. The Render workspace and service-to-Neon branch mapping must be re-verified before relying on them.
+
+**Database audit (14 November 2026):** the `genomeguard-free-demo` Neon default branch has migrations 1–12. The `genomeguard-staging` default branch has migrations 1–2, while its `gg-render-staging-2026-11-10` child branch has migrations 1–12 and 600 synthetic donors, 600 genotype rows and 3,000 variants (`genotypes_real=false`, `consent_simulated=true`). The inspected staging candidate has zero gnomAD reference manifest/frequency rows. It is not yet confirmed that Render uses this child branch. No private/controlled data or real 1000 Genomes import is claimed.
+
+**Current review queue:** PR #164 (CI/CSV/browser smoke), PR #165 (DUO/consent/MONDO/FHIR), PR #166 (Ensembl/UniProt and synthetic-demo resilience), and PR #154 (gnomAD manifest checksum) are open with exact-head checks pending. PR #153 reconciles documentation. Superseded PRs #152, #155, #156, #158, #159 and #161 are closed without merging in favour of those consolidated PRs.
+
+The project remains a synthetic-only research prototype, not production-ready. Neon branch protection changes were rejected by the current plan's protected-branch limit. No paid infrastructure, plan upgrade, production migration or controlled-data import was performed.
 
 GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Offline advisory agents use deterministic templates and a bounded rules planner to explain evidence for reviewers; no hosted AI provider or API key is used, and deterministic application code remains responsible for access decisions.
 
@@ -28,7 +34,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Area | Current implementation | Important boundary |
 | --- | --- | --- |
 | Consent and requester identity | Public-release dataset policy mapping in hosted research mode; synthetic personas only in local demo mode | No participant-specific consent records in the public dataset, and no institutional identity provider |
-| Genotype data | Hosted cohort built from public 1000 Genomes chromosome 22 VCF; synthetic default for local demo mode | Public genotypes are not private clinical data; source-level terms are not individual consent or legal authorization |
+| Genotype data | Public hosted deployment is configured as a synthetic-only demo; a separate public-cohort research image is defined but is not an accepted institutional service | Public dataset terms are not participant-specific consent or legal authorization |
 | Privacy protections | Risk heuristics, transformations, and a simplified privacy-budget ledger | Not a formally audited differential-privacy implementation |
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |

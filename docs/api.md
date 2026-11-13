@@ -100,7 +100,7 @@ is not a reference-sequence or REF-allele verification.
 
 ## Disease-specific research requests
 
-In institutional/research mode, any request with purpose `disease_research` must supply a MONDO CURIE in the existing `disease` field (for example `MONDO:0005015`); other requests that include a disease restriction must also use a MONDO CURIE. Free-text disease labels are accepted only by the explicitly synthetic demo. Participant consent imports and signed consent events using DUO:0000007 (DS) must likewise supply a MONDO identifier; an optional `disease_label` is display metadata only and never participates in authorization. FHIR R4 Consent exports include the MONDO identifier as a separate `disease-ontology` Coding extension. Use the ontology discovery endpoint to find a candidate term, review it, and explicitly select it; this is research terminology lookup, not diagnosis.
+
 
 ## Donor self-service consent endpoints
 
