@@ -147,3 +147,10 @@ Verification:
 - `backend/tests/test_uniprot.py` covers exact query construction, reviewed-human filters, response normalization, source release, empty results, malformed payloads and size limits.
 - `backend/tests/test_uniprot_api.py` covers validation, no-store responses, safe provider errors, concurrency bounds and OpenAPI documentation.
 - The CI live provider smoke checks the public BRCA2 reviewed record; browser acceptance covers result rendering and the Ensembl/Open Targets hand-off.
+
+
+## Live-provider acceptance and pull-request CI
+
+Deterministic provider/API contract tests, schema validation, input validation, response normalization, error handling and browser UI tests run on every pull request. Live public-provider smoke tests are not used as a per-PR gate because independent PRs can otherwise trigger simultaneous queries and be blocked by unrelated upstream outages or rate limits. They run on pushes to the default branch and through the weekly/manual `research-provider-live` workflow.
+
+The live workflow covers PubMed, Open Targets, ClinVar, GWAS Catalog, OLS4, Europe PMC, Ensembl and UniProtKB. A live-provider outage is reported as an external acceptance failure; it does not invalidate deterministic unit/API tests. Release acceptance still requires a successful live-provider run on the exact release candidate.
