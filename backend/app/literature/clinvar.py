@@ -72,6 +72,8 @@ def validate_search_request(
 def _optional_text(value) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
     return None
 
 
