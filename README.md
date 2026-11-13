@@ -95,6 +95,7 @@ For the curated public-source discovery index and its release-specific reuse-rev
 
 The service applies a deterministic request pipeline: request validation, policy checks, risk assessment, output transformation, anomaly monitoring, decision handling, and audit recording. Advisory agents receive sanitized summaries rather than raw genotypes and do not have authority to approve, deny, freeze, or release data.
 
+- [Research discovery and literature-search boundaries](docs/research-discovery.md)
 - [Architecture](docs/architecture.md)
 - [API reference](docs/api.md)
 - [Configuration](docs/configuration.md)
