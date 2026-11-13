@@ -878,6 +878,12 @@ class GenomeGuardService:
             raise ServiceError(404, "participant_not_found",
                                "source sample is not part of the active cohort")
         donor_id = int(row["id"])
+        # Serialize consent-event ordering per participant in PostgreSQL. Without this
+        # row lock, two concurrent signed events can both observe the same history and
+        # an older event can overwrite a newer event after waiting on the donor UPDATE.
+        # SQLite's BEGIN IMMEDIATE transaction already serializes writers.
+        if getattr(self.store, "path", None) == "postgresql":
+            self.store.q("SELECT id FROM donors WHERE id=? FOR UPDATE", (donor_id,))
         previous_events = self.store.q(
             "SELECT effective_at FROM consent_events WHERE donor_id=? AND dataset_id=?",
             (donor_id, self.dataset_id),
