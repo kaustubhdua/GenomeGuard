@@ -33,7 +33,7 @@ jobs:
       # This dedicated Render service is linked to fix/main-release-acceptance-blockers.
       # It deploys the exact PR branch, so this acceptance job exercises the release candidate itself.
       - name: Verify PR-branch staging API, database, authorization, provenance and audit
-        run: python scripts/staging_smoke.py --timeout 30
+        run: python scripts/staging_smoke.py --timeout 30 --expected-commit "${GITHUB_SHA}"
       - name: Install browser acceptance dependencies
         run: |
           python -m pip install --upgrade pip
