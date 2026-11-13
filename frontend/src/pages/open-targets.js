@@ -29,9 +29,19 @@ function score(value) {
 
 function md(value) {
   return String(value === null || value === undefined || value === "" ? "Not supplied" : value)
-    .replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+    .replace(/\\/g, "\\\\")
+    .replace(/([\x60*_{}\[\]()#+.!|>])/g, "\\$1")
+    .replace(/\r?\n/g, " ");
 }
 
+function markdownUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
 function downloadFile(filename, content, type) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
