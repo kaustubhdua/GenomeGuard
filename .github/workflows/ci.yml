@@ -108,6 +108,16 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/ontology_provider_smoke.py
+      - name: Verify live Ensembl human gene identity lookup
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/ensembl_provider_smoke.py
+      - name: Verify live UniProtKB reviewed human protein lookup
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/uniprot_provider_smoke.py
       - name: Verify live Europe PMC search and cursor pagination contract
 
         run: .venv/bin/python scripts/research_provider_smoke.py

@@ -359,8 +359,6 @@ def main() -> None:
                  "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "  =SUM(1,1)"},
             ],
         }
-        catalogue_pg.route("**/catalogue/datasets", lambda route: route.fulfill(
-            status=200, content_type="application/json", body=json.dumps(catalogue_fixture)))
 
         catalogue_download = catalogue_download_info.value
         catalogue_path = Path(tempfile.gettempdir()) / catalogue_download.suggested_filename

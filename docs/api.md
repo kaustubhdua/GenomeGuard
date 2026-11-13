@@ -61,6 +61,8 @@ Auth: institution-bound requesters use `Authorization: Bearer`; non-demo API-key
 | POST | `/research/clinvar/search` | Search ClinVar variant-level records by gene and optional ClinVar Properties filter; preserves separate aggregate classifications and review status | public |
 | POST | `/research/gwas/search` | Search GWAS Catalog REST API v2 associations by mapped gene, rsID, and/or EFO trait with data-release provenance | public |
 | POST | `/research/ontology/search` | Search MONDO, HPO, and Disease Ontology classes through EMBL-EBI OLS4; returns candidate terms with stable IDs and source metadata | public |
+| POST | `/research/ensembl/gene` | Resolve a human gene symbol to a stable Ensembl gene ID, assembly coordinates, and transcript metadata | public |
+| POST | `/research/uniprot/search` | Search reviewed UniProtKB protein annotations by exact human gene symbol; no protein sequences returned | public |
 | GET | `/catalogue/sources` | Curated public source references with explicit review/import status | public |
 | GET | `/openapi.json` | Machine-readable endpoint list | public |
 | GET | `/docs` | Human-readable endpoint list | public |

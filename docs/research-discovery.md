@@ -117,3 +117,40 @@ This is terminology-assisted literature retrieval, not a trained diagnostic mode
 
 The Research Discovery page provides direct, shareable hyperlinks for Genetics & Genomics, Oncology, Neurology, Cardiology, Immunology, Rare Diseases, Bioinformatics and Pharmacogenomics. Each link opens the publication search with that department selected and runs a live source-backed query scoped to its documented topic terms. The search remains editable so researchers can add a question or symptom, change sources, and inspect the exact resulting records. Department filters are broad discovery entry points, not formal taxonomies or exhaustive specialty coverage.
 
+
+
+## Ensembl gene identity resolution
+
+The Research Discovery workspace includes a server-side Ensembl REST lookup for exact human gene symbols. The `POST /research/ensembl/gene` endpoint resolves a symbol against `homo_sapiens` and returns the stable Ensembl gene ID, approved display symbol, gene biotype/version, assembly, chromosome, 1-based inclusive coordinates, strand, canonical transcript and bounded transcript metadata where supplied by Ensembl.
+
+The adapter uses a fixed Ensembl origin, URL-encodes the validated symbol, caps response size, applies a timeout and per-process request pacing, bounds concurrent API calls, and returns `Cache-Control: no-store`. It does not accept arbitrary provider URLs or arbitrary species. The UI can transfer the resolved stable gene ID into the existing Open Targets panel; the researcher must explicitly submit that second query.
+
+**Scientific boundary:** a gene identifier and reference coordinate are not a disease association, variant interpretation, pathogenicity assessment, clinical diagnosis or treatment recommendation. Assembly and gene version are shown because coordinates and transcript annotations can change between releases. Ensembl data are source annotations and must be cited to the provider record.
+
+Verification:
+- `backend/tests/test_ensembl.py` covers request validation, URL construction, stable-ID validation, assembly/transcript normalization and oversized responses.
+- `backend/tests/test_ensembl_api.py` covers API validation, not-found/provider errors, concurrency limits, no-store headers and OpenAPI documentation.
+- `scripts/ensembl_provider_smoke.py` checks the live public BRCA2 record and stable Ensembl identifier.
+- `scripts/research_ui_smoke.py` intercepts Ensembl with deterministic source-shaped fixtures and verifies symbol resolution and transfer into the Open Targets gene-ID field on desktop and mobile.
+
+## UniProtKB reviewed protein discovery
+
+The Research Discovery workspace includes a server-side UniProtKB search for exact human gene symbols. The adapter queries reviewed UniProtKB (Swiss-Prot) records by `gene_exact` and human taxonomy ID 9606, and returns stable accessions, entry names, gene aliases, protein names, organism, amino-acid length, source-provided function text, Ensembl cross-references, UniProt release metadata and retrieval time. It deliberately does not return amino-acid sequences.
+
+The endpoint is `POST /research/uniprot/search`. Input symbols and result counts are bounded; the provider origin is fixed; response size, timeout, request pacing and concurrent calls are bounded; errors are sanitized; and responses are marked `Cache-Control: no-store`. An empty result set is a valid no-match response, not a provider error.
+
+The UI can transfer a source-provided Ensembl gene cross-reference into the existing Open Targets panel. The user must explicitly launch that separate association query.
+
+**Scientific boundary:** reviewed protein annotations describe protein identity and curated function. They do not establish variant pathogenicity, disease causality, clinical diagnosis or treatment. UniProt release metadata and accession links are shown for reproducibility.
+
+Verification:
+- `backend/tests/test_uniprot.py` covers exact query construction, reviewed-human filters, response normalization, source release, empty results, malformed payloads and size limits.
+- `backend/tests/test_uniprot_api.py` covers validation, no-store responses, safe provider errors, concurrency bounds and OpenAPI documentation.
+- The explicit/manual live provider smoke checks the public BRCA2 reviewed record; browser acceptance covers result rendering and the Ensembl/Open Targets hand-off.
+
+
+## Live-provider acceptance and pull-request CI
+
+Deterministic provider/API contract tests, schema validation, input validation, response normalization, error handling and browser UI tests run on every pull request. Live public-provider smoke tests are not an automatic pull-request or push gate because unrelated upstream outages and rate limits must not make ordinary code validation flaky. The main CI workflow can run the live checks only on an explicit workflow dispatch.
+
+The separate weekly/manual `research-provider-live` workflow currently covers PubMed, Open Targets, ClinVar, GWAS Catalog, OLS4 and Europe PMC. Ensembl and UniProtKB have dedicated live smoke scripts and deterministic provider contract tests; their live checks are manual-only until the scheduled workflow is extended. A live-provider outage is reported as an external acceptance failure; it does not invalidate deterministic unit/API tests. Release acceptance still requires a successful live-provider run on the exact release candidate.
