@@ -162,3 +162,44 @@ def test_pubmed_rejects_malformed_provider_payload(monkeypatch):
     monkeypatch.setattr(pubmed, "_wait_for_rate_slot", lambda: None)
     with pytest.raises(pubmed.PubMedProviderError, match="missing esearchresult"):
         pubmed.search_pubmed("BRCA1")
+
+
+def test_pubmed_api_route_validates_and_disables_caching(monkeypatch):
+    from tests.helpers import make_client
+
+    expected = {
+        "provider": "PubMed",
+        "query": "BRCA1",
+        "count": 1,
+        "retstart": 0,
+        "retmax": 20,
+        "returned": 1,
+        "has_more": False,
+        "papers": [],
+        "retrieved_at": "2026-01-01T00:00:00+00:00",
+        "provenance": {"provider": "NCBI PubMed"},
+    }
+    monkeypatch.setattr(pubmed, "search_pubmed", lambda *args, **kwargs: expected)
+    _, client = make_client()
+    response = client.get("/literature/pubmed/search?q=BRCA1")
+    assert response.status_code == 200
+    assert response.json() == expected
+    assert response.headers["cache-control"] == "no-store"
+
+    invalid = client.get("/literature/pubmed/search?q=BRCA1&retmax=100")
+    assert invalid.status_code == 400
+    assert invalid.json()["error"] == "invalid_literature_query"
+
+
+def test_pubmed_api_route_returns_safe_provider_error(monkeypatch):
+    from tests.helpers import make_client
+
+    def unavailable(*args, **kwargs):
+        raise pubmed.PubMedProviderError("upstream detail must not leak")
+
+    monkeypatch.setattr(pubmed, "search_pubmed", unavailable)
+    _, client = make_client()
+    response = client.get("/literature/pubmed/search?q=BRCA1")
+    assert response.status_code == 503
+    assert response.json()["error"] == "literature_provider_unavailable"
+    assert "upstream detail" not in response.text
