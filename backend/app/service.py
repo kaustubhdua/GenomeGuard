@@ -1000,7 +1000,7 @@ class GenomeGuardService:
             tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
                    "code": "participant-consent-record",
                    "display": "Participant consent record; source authority is not independently verified by this export"}
-            narrative_div = '<div xmlns="http://www.w3.org/1999/xhtml"><p>Participant consent record supplied to GenomeGuard; source authority and legal validity require institutional verification.</p></div>'
+            narrative_div = '<div xmlns="http://www.w3.org/1999/xhtml"><p>Participant consent record supplied to GenomeGuard; source authority is not independently verified and legal validity requires institutional verification.</p></div>'
         else:
             tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
                    "code": "unverified-consent-provenance",
