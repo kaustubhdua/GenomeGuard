@@ -117,3 +117,17 @@ This is terminology-assisted literature retrieval, not a trained diagnostic mode
 
 The Research Discovery page provides direct, shareable hyperlinks for Genetics & Genomics, Oncology, Neurology, Cardiology, Immunology, Rare Diseases, Bioinformatics and Pharmacogenomics. Each link opens the publication search with that department selected and runs a live source-backed query scoped to its documented topic terms. The search remains editable so researchers can add a question or symptom, change sources, and inspect the exact resulting records. Department filters are broad discovery entry points, not formal taxonomies or exhaustive specialty coverage.
 
+
+
+## Ensembl gene identity resolution
+
+The Research Discovery workspace includes a server-side Ensembl REST lookup for exact human gene symbols. The `POST /research/ensembl/gene` endpoint resolves a symbol against `homo_sapiens` and returns the stable Ensembl gene ID, approved display symbol, gene biotype/version, assembly, chromosome, coordinates, strand, canonical transcript and bounded transcript metadata where supplied by Ensembl.
+
+The adapter uses a fixed Ensembl origin, URL-encodes the validated symbol, caps response size, applies a timeout and per-process request pacing, bounds concurrent API calls, and returns `Cache-Control: no-store`. It does not accept arbitrary provider URLs or arbitrary species. The UI can transfer the resolved stable gene ID into the existing Open Targets panel; the researcher must explicitly submit that second query.
+
+**Scientific boundary:** a gene identifier and reference coordinate are not a disease association, variant interpretation, pathogenicity assessment, clinical diagnosis or treatment recommendation. Assembly and gene version are shown because coordinates and transcript annotations can change between releases. Ensembl data are source annotations and must be cited to the provider record.
+
+Verification:
+- `backend/tests/test_ensembl.py` covers request validation, URL construction, stable-ID validation, assembly/transcript normalization and oversized responses.
+- `backend/tests/test_ensembl_api.py` covers API validation, not-found/provider errors, concurrency limits, no-store headers and OpenAPI documentation.
+- Manual/browser acceptance should verify the gene-symbol resolver, source links and transfer into the Open Targets gene-ID field on desktop and mobile.
