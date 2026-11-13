@@ -206,33 +206,6 @@ def test_build_save_load_roundtrip():
         assert np.allclose(c.variants["maf"], c2.variants["maf"])
 
 
-@pytest.mark.parametrize("provenance", ["real", "unknown"])
-def test_demo_bootstrap_refuses_real_or_unknown_genotype_provenance(provenance):
-    """Unscoped public demo sessions must never open real or provenance-unknown cohorts."""
-    with tempfile.TemporaryDirectory() as d:
-        v = Path(d) / "t.vcf.gz"
-        make_vcf(v)
-        cohort, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50,
-                                         keep_prob=1.0, seed=17)
-        from app.store import Store
-        store = Store(":memory:")
-        dataset_id = "real-or-unknown-cohort"
-        stored_meta = meta if provenance == "real" else {
-            "source": "legacy database; provenance unknown", "provenance_unknown": True,
-            "consent_simulated": True, "consent_records_matched": 0,
-        }
-        store.save_cohort(cohort, b"x" * 32, dataset_id, metadata=stored_meta)
-        settings = Settings(
-            db_path=":memory:", demo_mode=True, dataset_id=dataset_id,
-            master_key=base64.b64encode(b"x" * 32).decode(),
-        )
-        with pytest.raises(
-            ValueError,
-            match="demo mode requires an explicitly synthetic cohort",
-        ):
-            bootstrap(settings, store=store)
-
-
 def test_non_demo_bootstrap_refuses_real_genotypes_with_simulated_consent():
     with tempfile.TemporaryDirectory() as d:
         v, out = Path(d) / "t.vcf.gz", Path(d) / "cohort.npz"

@@ -149,6 +149,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             state["svc"] = bootstrap(settings)
         return state["svc"]
 
+    def synthetic_demo_enabled() -> bool:
+        """Public demo identities are available only for explicitly synthetic cohorts."""
+        if not settings.demo_mode:
+            return False
+        provenance = S().provenance or {}
+        return provenance.get("genotypes") == "synthetic" and not provenance.get("provenance_unknown")
+
     demo_sessions: dict[str, dict] = {}
     demo_donor_sessions: dict[str, dict] = {}
     demo_session_lock = threading.RLock()
@@ -216,8 +223,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                                    "this identity is not provisioned for researcher access")
             request.state.authenticated_requester = r
             return r
+        if settings.demo_mode and not synthetic_demo_enabled():
+            raise ServiceError(
+                404, "not_found",
+                "public demo sessions require an explicitly synthetic cohort",
+            )
         demo_token = request.headers.get("x-demo-session")
-        if (settings.demo_mode and not settings.oidc_required
+        if (synthetic_demo_enabled() and not settings.oidc_required
                 and not settings.tenant_isolation_required and demo_token):
             with demo_session_lock:
                 session = demo_sessions.get(demo_token)
@@ -520,8 +532,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("GET", "/demo/requesters", "Synthetic demo personas (no credentials)", "public")
     async def demo_requesters(request):
-        if not settings.demo_mode:
-            raise ServiceError(404, "not_found", "demo mode is off")
+        if not synthetic_demo_enabled():
+            raise ServiceError(404, "not_found", "public demo personas require an explicitly synthetic cohort")
         with S().store.transaction():
             set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
             if set_demo is not None:
@@ -541,7 +553,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("POST", "/demo/session", "Issue a short-lived, in-memory synthetic demo requester session", "public")
     async def demo_session(request):
-        if not settings.demo_mode or settings.oidc_required or settings.tenant_isolation_required:
+        if not synthetic_demo_enabled() or settings.oidc_required or settings.tenant_isolation_required:
             raise ServiceError(404, "not_found", "demo sessions are not enabled on this instance")
         data = await _body(request)
         requester_id = data.get("requester_id")
@@ -1252,8 +1264,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     # ---- donor portal (patient side): authenticated by a per-donor key, never by the steward key
     def donor_auth(request: Request) -> int:
-        if not settings.demo_mode:
-            raise ServiceError(404, "not_found", "participant identity integration is not configured")
+        if not synthetic_demo_enabled():
+            raise ServiceError(
+                404, "not_found",
+                "public donor sessions require an explicitly synthetic cohort",
+            )
         did = request.path_params["id"]
         demo_token = request.headers.get("x-demo-donor-session")
         if demo_token and not settings.oidc_required and not settings.tenant_isolation_required:
@@ -1276,8 +1291,8 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("GET", "/demo/donors", "Synthetic donor personas (no credentials)", "public")
     async def demo_donors(request):
-        if not settings.demo_mode:
-            raise ServiceError(404, "not_found", "demo mode is off")
+        if not synthetic_demo_enabled():
+            raise ServiceError(404, "not_found", "public donor personas require an explicitly synthetic cohort")
         return _j({"donors": [
             {"id": donor["id"], "label": donor["label"]}
             for donor in S().demo_donors()
@@ -1285,7 +1300,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
 
     @route("POST", "/demo/donor-session", "Issue a short-lived synthetic demo donor session", "public")
     async def demo_donor_session(request):
-        if not settings.demo_mode or settings.oidc_required or settings.tenant_isolation_required:
+        if not synthetic_demo_enabled() or settings.oidc_required or settings.tenant_isolation_required:
             raise ServiceError(404, "not_found", "demo sessions are not enabled on this instance")
         data = await _body(request)
         donor_id = data.get("donor_id")

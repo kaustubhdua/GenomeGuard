@@ -1394,16 +1394,6 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
         stored_meta = {"source": "legacy database; provenance unknown", "genotypes_real": False,
                        "consent_simulated": True, "consent_records_matched": 0,
                        "provenance_unknown": True}
-    # Public demo sessions are intentionally unscoped and must never operate on real or
-    # provenance-unknown genotype records, even if a deployment accidentally enables both
-    # demo mode and a real/legacy database. Real cohorts require the non-demo identity,
-    # tenant, consent and release gates above.
-    if s.demo_mode and (
-        stored_meta.get("genotypes_real") is not False or stored_meta.get("provenance_unknown")
-    ):
-        raise ValueError(
-            "demo mode requires an explicitly synthetic cohort; real or unknown genotype provenance is not permitted"
-        )
     if stored_meta.get("dataset_id") != s.dataset_id:
         raise ValueError("database dataset ID does not match GG_DATASET_ID; use a separate database "
                          "or the matching dataset ID")
