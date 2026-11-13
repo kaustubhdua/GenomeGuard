@@ -4,6 +4,7 @@ import json
 from tests.helpers import (
     ADMIN,
     ATTACKER,
+    CONTROLLED,
     DEMO_REQ,
     RESEARCHER,
     H,
@@ -181,7 +182,7 @@ def test_review_endpoint_requires_admin_and_works():
 
     req = {"purpose": "general_research", "data_level": "record",
            "variant_filter": {"min_maf": 0.2, "limit": 5}}
-    d = c.post("/requests", json=req, headers=H("demo-controlled")).json()
+    d = c.post("/requests", json=req, headers=H(CONTROLLED)).json()
     assert d["needs_human"]
     assert_store_lock_released("request submission")
     assert c.post(f"/requests/{d['id']}/review", json={"approve": True}).status_code == 401
@@ -206,7 +207,7 @@ def test_steward_can_request_information_without_releasing():
     _, c = make_client()
     request = {"purpose": "general_research", "data_level": "record",
                "variant_filter": {"min_maf": 0.2, "limit": 5}}
-    submitted = c.post("/requests", json=request, headers=H("demo-controlled")).json()
+    submitted = c.post("/requests", json=request, headers=H(CONTROLLED)).json()
     response = c.post(
         f"/requests/{submitted['id']}/review",
         json={"action": "request_information", "reviewer": "steward"},
@@ -225,7 +226,7 @@ def test_release_is_separately_gated_when_active_data_is_not_linked():
     svc, c = make_client()
     request = {"purpose": "general_research", "data_level": "record",
                "variant_filter": {"min_maf": 0.2, "limit": 5}}
-    submitted = c.post("/requests", json=request, headers=H("demo-controlled")).json()
+    submitted = c.post("/requests", json=request, headers=H(CONTROLLED)).json()
     approved = c.post(
         f"/requests/{submitted['id']}/review", json={"approve": True}, headers=ADMIN,
     )
