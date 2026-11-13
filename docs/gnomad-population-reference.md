@@ -29,7 +29,7 @@ GG_IMPORT_DATABASE_URL='...' python -m app.data.gnomad_reference import \
   --expected-sha256 <64-character-sha256>
 ```
 
-The import streams in batches and is idempotent. It inserts only into `genomeguard.population_variant_frequency`; it does not approve or mark a manifest loaded. A steward must reconcile the database row count and update the manifest using an administrative session after a successful import.
+Before inserting any rows, the importer requires the registered manifest to contain a valid SHA-256 and compares the computed input TSV digest with that manifest value. The optional `--expected-sha256` is an additional operator-supplied check, not a substitute for the manifest pin. A missing or mismatched manifest checksum fails closed before database writes. The import streams in batches and is idempotent. It inserts only into `genomeguard.population_variant_frequency`; it does not approve or mark a manifest loaded. A steward must reconcile the database row count and update the manifest using an administrative session after a successful import.
 
 ## Excel export
 
