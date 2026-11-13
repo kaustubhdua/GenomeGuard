@@ -1398,6 +1398,16 @@ def _encryption_provenance(genotype_kind: str) -> str:
     )
 
 
+def _release_enabled_for_mode(settings) -> bool:
+    """Only the synthetic demo may enable illustrative releases by default.
+
+    Non-demo release requires deployment-level controls that are not yet independently
+    verified by this application. Do not infer release authorization from successful
+    cohort loading, consent metadata, or process readiness.
+    """
+    return bool(settings.demo_mode)
+
+
 def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
               llm: LLM | None = None, **kwargs) -> GenomeGuardService:
     """Open or seed a cohort, preserving its provenance and failing closed for real-data mode."""
@@ -1561,7 +1571,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     # release remains disabled until deployment-level governance, privacy, backup,
     # monitoring, and independent release controls have been verified.
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
-                             admin_key=s.admin_api_key, release_enabled=s.demo_mode,
+                             admin_key=s.admin_api_key, release_enabled=_release_enabled_for_mode(s),
                              demo_mode=s.demo_mode, **kwargs)
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
