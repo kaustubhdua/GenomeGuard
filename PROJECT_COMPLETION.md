@@ -10,12 +10,13 @@
 > - [#154](https://github.com/kaustubhdua/GenomeGuard/pull/154): require gnomAD TSV checksum to match the reviewed manifest before database writes.
 > - [#155](https://github.com/kaustubhdua/GenomeGuard/pull/155): signed-consent policy-basis, timestamp and event-ordering corrections.
 > - [#156](https://github.com/kaustubhdua/GenomeGuard/pull/156): official DUO mappings for POA/NPOA and NCU/NPU/NPUNCU semantics, explicit consent-basis enforcement, signed-event basis alignment, synthetic-demo isolation and truthful FHIR provenance.
-> - [#157](https://github.com/kaustubhdua/GenomeGuard/pull/157): Ensembl human gene-symbol resolution with stable IDs, assembly coordinates, transcript metadata and explicit hand-off to Open Targets.
+> - #157 was superseded and closed in favour of combined PR #161.
 > - [#158](https://github.com/kaustubhdua/GenomeGuard/pull/158): public demo health smoke retries and diagnostics after a cold-start-related live acceptance failure.
 > - [#159](https://github.com/kaustubhdua/GenomeGuard/pull/159): keep the synthetic demo usable when health metadata endpoints are unavailable, with an explicit degraded-provenance label and no institutional-mode fallback.
-> - [#160](https://github.com/kaustubhdua/GenomeGuard/pull/160): reviewed UniProtKB protein discovery by gene symbol, with accession/function metadata and Ensembl/Open Targets hand-off.
+> - #160 was superseded and closed in favour of combined PR #161.
+> - [#161](https://github.com/kaustubhdua/GenomeGuard/pull/161): combined Ensembl gene identity and reviewed UniProtKB protein discovery with API, UI, CI and browser acceptance.
 >
-> Exact-head backend CI, CodeQL, secret scanning, dependency audit and deployment-configuration checks for current `main` and PRs #152–#160 are queued. A queued check is not a passing check; do not merge or deploy until required checks complete successfully. The GitHub branch inventory reports `main` as unprotected, and a maintainer must configure a required-check ruleset.
+> Exact-head backend CI, CodeQL, secret scanning, dependency audit and deployment-configuration checks for current `main` and open PRs #152–#156, #158–#159 and #161 are queued. A queued check is not a passing check; do not merge or deploy until required checks complete successfully. The GitHub branch inventory reports `main` as unprotected, and a maintainer must configure a required-check ruleset.
 >
 > Render currently reports the primary public synthetic demo live at `3280ebc1924039bcfa19f4c58bb75e83a8c370eb` and a separate recovery demo live at `f200b643f05a5f959887ac51accd7e202c424557`; both are behind current `main`. The connected workspace has no Render-managed PostgreSQL instance, and no accepted institutional research-mode deployment. Do not treat a Render `live` status as production acceptance.
 >
