@@ -12,7 +12,7 @@ seed:
 	PYTHONPATH=backend $(PY) -m app.data.seed
 
 run:
-	GG_EXPOSE_DEMO_ADMIN_KEY=true $(PY) -m uvicorn app.main:app --app-dir backend --reload --port 8000
+	$(PY) -m uvicorn app.main:app --app-dir backend --reload --port 8000
 
 test:
 	$(PY) -m pytest -q
@@ -29,10 +29,10 @@ eval-smoke:
 # End-to-end sample workflow. Starts a throwaway server on a fresh database and checks each step.
 demo:
 	rm -f /tmp/gg-demo.sqlite3
-	GG_DB_PATH=/tmp/gg-demo.sqlite3 GG_ALLOW_TAMPER_DEMO=true GG_EXPOSE_DEMO_ADMIN_KEY=true PYTHONPATH=backend \
+	GG_DB_PATH=/tmp/gg-demo.sqlite3 GG_ALLOW_TAMPER_DEMO=true GG_ADMIN_API_KEY=demo-admin-key GG_EXPOSE_DEMO_ADMIN_KEY=true PYTHONPATH=backend \
 		$(PY) -m uvicorn app.main:app --port 8765 > /tmp/gg-demo.log 2>&1 & echo $$! > /tmp/gg-demo.pid
 	sleep 8
-	$(PY) scripts/demo.py --base http://127.0.0.1:8765; code=$$?; kill `cat /tmp/gg-demo.pid`; exit $$code
+	GG_ADMIN_API_KEY=demo-admin-key $(PY) scripts/demo.py --base http://127.0.0.1:8765; code=$$?; kill `cat /tmp/gg-demo.pid`; exit $$code
 
 # --- real open data (run on YOUR machine; needs internet). See backend/app/data/real.py ---
 fetch-real:
@@ -73,7 +73,7 @@ ui-smoke:
 		$(PY) -m uvicorn app.main:app --port 8767 > /tmp/gg-ui-smoke.log 2>&1 & echo $$! > /tmp/gg-ui-smoke.pid
 	sleep 8
 	@set -e; trap 'kill `cat /tmp/gg-ui-smoke.pid`' EXIT; \
-		GG_EXPOSE_DEMO_ADMIN_KEY=true $(PY) scripts/deploy_smoke.py --base http://127.0.0.1:8767; \
+		$(PY) scripts/deploy_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/live_ui_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/ui_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/research_ui_smoke.py --base http://127.0.0.1:8767; \
