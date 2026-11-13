@@ -45,8 +45,8 @@ def test_release_matches_true_frequencies_when_no_noise():
     from app.core.consent import ConsentRequest, eligible_cohort
     ids = eligible_cohort(
         ConsentRequest(
-            "disease_research", "diabetes", False, "frequency", None, {},
-            organization_is_nonprofit=True, demo_mode=True,
+            "disease_research", "diabetes", None, "frequency", None, {},
+            organization_is_nonprofit=None, demo_mode=True,
         ),
         svc.ds.donors,
     ).donor_ids
