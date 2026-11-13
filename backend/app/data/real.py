@@ -386,7 +386,7 @@ def _validated_consent(record: dict, sample: str) -> tuple[dict, bool]:
     disease = record.get("disease")
     if disease is not None and not isinstance(disease, str):
         raise ValueError(f"consent disease for {sample} must be a string or null")
-    if use == "DS" and (not isinstance(disease, str) or not re.fullmatch(r"MONDO:\\d{7}", disease)):
+    if use == "DS" and (not isinstance(disease, str) or not re.fullmatch(r"MONDO:\d{7}", disease)):
         raise ValueError(
             f"disease-specific consent for {sample} requires a MONDO identifier (MONDO:ddddddd)"
         )
@@ -467,7 +467,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
         if consent_policy["duo_use"] not in {"GRU", "HMB", "DS", "POA"}:
             raise ValueError("consent policy duo_use must be GRU, HMB, DS, or POA")
         if consent_policy["duo_use"] == "DS" and not re.fullmatch(
-            r"MONDO:\\d{7}", str(consent_policy.get("disease") or "")
+            r"MONDO:\d{7}", str(consent_policy.get("disease") or "")
         ):
             raise ValueError("DS dataset policy requires disease as a MONDO identifier (MONDO:ddddddd)")
         if not isinstance(consent_policy["source_url"], str) or not consent_policy["source_url"].startswith("https://"):
