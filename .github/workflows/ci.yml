@@ -91,6 +91,10 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/open_targets_provider_smoke.py
+      - name: Verify live UniProtKB reviewed human protein lookup
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/uniprot_provider_smoke.py
       - name: Verify live ClinVar E-utilities search and classification contract
         env:
           PYTHONPATH: backend
