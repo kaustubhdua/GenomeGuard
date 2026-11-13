@@ -136,6 +136,21 @@ def test_gwas_v2_rejects_invalid_search_inputs(kwargs):
         gwas_catalog.validate_search_request(**kwargs)
 
 
+def test_gwas_v2_allows_valid_out_of_range_page_as_empty(monkeypatch):
+    monkeypatch.setattr(gwas_catalog, "_get_metadata", metadata)
+    monkeypatch.setattr(
+        gwas_catalog, "_fetch_json",
+        lambda *args, **kwargs: {
+            "_embedded": {"associations": []},
+            "_links": {"self": {"href": "https://www.ebi.ac.uk/gwas/rest/api/v2/associations?page=99&size=20"}},
+            "page": {"size": 20, "totalElements": 31, "totalPages": 2, "number": 99},
+        },
+    )
+    result = gwas_catalog.search_gwas_catalog(gene_symbol="BRCA1", page=99)
+    assert result["records"] == []
+    assert result["has_more"] is False
+
+
 def test_gwas_v2_rejects_unsafe_pagination_link(monkeypatch):
     monkeypatch.setattr(gwas_catalog, "_get_metadata", metadata)
     payload = association_payload()
