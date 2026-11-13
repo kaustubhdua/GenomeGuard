@@ -474,6 +474,33 @@ def main() -> int:
               page.locator(".research-paper a").first.get_attribute("href", timeout=args.timeout).startswith("https://")
               and page.locator(".research-paper a").first.get_attribute("rel") == "noopener noreferrer")
 
+        check("research searches are not persisted before explicit save",
+              page.evaluate("localStorage.getItem('gg_research_saved_searches_v1') === null"))
+        page.locator("#research-save-search").click()
+        saved_search = page.evaluate("JSON.parse(localStorage.getItem('gg_research_saved_searches_v1') || '[]')")
+        check("explicit save stores only the selected query and source filters locally",
+              len(saved_search) == 1
+              and saved_search[0].get("question") == "BRCA1 ovarian cancer symptoms"
+              and saved_search[0].get("department") == "oncology"
+              and saved_search[0].get("source") == "both")
+        page.reload()
+        page.locator("#research-saved-searches-list [data-action='run']").first.wait_for()
+        check("saved search survives a page reload in the same browser",
+              page.locator("#research-saved-searches-list [data-action='run']").count() == 1)
+        before_saved_run = len(requests)
+        page.locator("#research-saved-searches-list [data-action='run']").first.click()
+        page.locator(".research-paper").first.wait_for()
+        check("running a saved search restores the query and performs a fresh provider request",
+              len(requests) > before_saved_run
+              and "brca1 ovarian cancer symptoms" in requests[-1]["query"].lower())
+        page.locator("#research-saved-searches-list [data-action='remove']").first.click()
+        remaining_saved = page.evaluate("JSON.parse(localStorage.getItem('gg_research_saved_searches_v1') || '[]')")
+        check("a saved search can be removed individually", len(remaining_saved) == 0)
+        page.locator("#research-save-search").click()
+        page.locator("#research-clear-saved").click()
+        check("clear-all removes saved searches from browser storage",
+              page.evaluate("localStorage.getItem('gg_research_saved_searches_v1') === null"))
+
         page.get_by_label("Publication sources").select_option("pubmed")
         page.locator(".research-paper").first.wait_for()
         check("source selector can restrict results to PubMed",
