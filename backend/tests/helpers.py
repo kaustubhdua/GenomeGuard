@@ -26,6 +26,7 @@ DEMO_REQ = {"purpose": "disease_research", "disease": "diabetes", "data_level": 
 
 def make_service(**kw):
     s = Settings()
+    s.demo_mode = True
     s.db_path = ":memory:"
     # Keep per-test service fixtures deliberately small; statistical-scale behavior
     # is covered by dedicated deterministic tests in test_synth/test_redteam.
