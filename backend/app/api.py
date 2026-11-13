@@ -1256,7 +1256,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             raise ServiceError(404, "not_found", "participant identity integration is not configured")
         did = request.path_params["id"]
         demo_token = request.headers.get("x-demo-donor-session")
-        if demo_token:
+        if demo_token and not settings.oidc_required and not settings.tenant_isolation_required:
             with demo_session_lock:
                 session = demo_donor_sessions.get(demo_token)
                 if session and session["expires_at"] <= time.time():
