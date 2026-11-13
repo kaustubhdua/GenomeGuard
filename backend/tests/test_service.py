@@ -180,6 +180,8 @@ def test_epsilon_budget_is_charged_and_refuses_when_spent():
 
 def test_research_mode_requires_machine_readable_mondo_disease_identifier():
     svc = make_service(demo_mode=False)
+    with pytest.raises(ServiceError, match="requires a MONDO disease identifier"):
+        svc._validate({"purpose": "disease_research"})
     with pytest.raises(ServiceError, match="MONDO identifier"):
         svc._validate({"purpose": "disease_research", "disease": "diabetes"})
     accepted = svc._validate({
