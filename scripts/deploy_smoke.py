@@ -69,11 +69,10 @@ def main() -> int:
         status, body, _ = get(base, "/demo/requesters", args.timeout)
         demo = json.loads(body)
         accounts = demo.get("requesters")
-        expose_admin_key = os.getenv("GG_EXPOSE_DEMO_ADMIN_KEY", "false").strip().lower() == "true"
-        check("demo administrator credential exposure matches explicit local opt-in",
+        check("public demo personas contain no static credentials",
               status == 200 and isinstance(accounts, list) and len(accounts) >= 1
-              and bool(demo.get("admin_key")) == expose_admin_key
-              and all(bool(a.get("api_key")) for a in accounts))
+              and "admin_key" not in demo
+              and all("api_key" not in account for account in accounts))
 
         status, body, content_type = get(base, "/openapi.json", args.timeout)
         spec = json.loads(body)
