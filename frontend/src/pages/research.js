@@ -136,7 +136,7 @@ export async function render() {
           h("h3", { id: "research-saved-heading" }, "Saved searches · this browser"),
           h("p", { class: "fine muted" }, "Saving is optional and happens only when you press Save. Saved searches stay in this browser on this device; they are not uploaded to GenomeGuard. Do not save patient-identifying or sensitive information, and clear saved searches before sharing this device.")),
         h("div", { class: "hero-actions" },
-          h("button", { id: "research-save-search", class: "btn secondary", type: "button", disabled: true }, "Save current search"),
+          h("button", { id: "research-save-search", class: "btn ghost", type: "button", disabled: true }, "Save current search"),
           h("button", { id: "research-clear-saved", class: "btn ghost", type: "button", hidden: true }, "Clear saved searches")),
         h("div", { id: "research-saved-searches-list", role: "list", "aria-live": "polite" }))),
     renderOpenTargetsPanel(),
@@ -216,7 +216,7 @@ export async function render() {
           h("span", { class: "fine muted" }, departmentLabel + " · " + sourceLabel)),
         h("div", { class: "hero-actions" },
           h("button", {
-            class: "btn secondary", type: "button", "data-action": "run",
+            class: "btn ghost", type: "button", "data-action": "run",
             "aria-label": "Run saved search",
           }, "Run"),
           h("button", {
