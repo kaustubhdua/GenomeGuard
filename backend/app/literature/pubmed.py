@@ -76,7 +76,7 @@ def _fetch_json(endpoint: str, params: dict[str, str]) -> dict:
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": "GenomeGuard/0.1 (PubMed literature discovery)",
+            "User-Agent": "GenomeGuard/0.1 (NCBI E-utilities research discovery)",
         },
     )
     last_error: Exception | None = None
