@@ -80,3 +80,7 @@ DUO:0000007 (DS) must be paired with a disease ontology term; the EGA DAC guidan
 
 The public synthetic demo remains clearly separated and may continue to use human-readable example labels; those simulated examples are not participant consent and cannot authorize institutional research-mode access. A MONDO identifier is a terminology identifier, not a diagnosis or clinical recommendation. Disease-term discovery must remain source-backed and user-selected.
 
+## Donor self-service boundary
+
+The donor self-service consent-edit and withdrawal/restore endpoints are synthetic-demo controls only. In institutional/research mode, both the API routes and service methods fail closed with `consent_authority_required`; participant consent changes and withdrawals must arrive through the configured signed authoritative consent-event workflow. A donor session token or free-text disease label is not an authority credential.
+
