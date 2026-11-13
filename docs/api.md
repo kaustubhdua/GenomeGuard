@@ -55,6 +55,7 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/catalogue/datasets` | Local dataset catalogue (replaces Supabase Edge Function) | public |
 | GET | `/catalogue/chromosomes` | Local chromosome reference (replaces Supabase Edge Function) | public |
 | POST | `/literature/pubmed/search` | Search public PubMed literature metadata via NCBI E-utilities; query body is not logged | public |
+| POST | `/research/open-targets/target` | Retrieve Open Targets direct target-disease associations and optional source evidence by Ensembl ID | public |
 | GET | `/catalogue/sources` | Curated public source references with explicit review/import status | public |
 | GET | `/openapi.json` | Machine-readable endpoint list | public |
 | GET | `/docs` | Human-readable endpoint list | public |
