@@ -2,6 +2,19 @@
 
 Last audited: 14 November 2026.
 
+> **Re-verification note — 14 November 2026:** the Render service IDs, deployment SHAs, settings and staging-service inventory below are the last recorded provider snapshot from the prior audit. They were not re-queried in this execution because no Render workspace was selected; the user must confirm the `kaustubh dua` workspace before service configuration or database-connection targets can be treated as current. Do not infer the live service's Neon branch from project names alone.
+
+## Neon database evidence (read-only)
+
+- Project `genomeguard-free-demo` default branch has schema migrations 1–12.
+- Project `genomeguard-staging` default branch has only migrations 1–2.
+- Its existing child branch `gg-render-staging-2026-11-10` has migrations 1–12 and 600 synthetic donors, 600 genotype rows and 3,000 variants. Its cohort metadata reports `genotypes_real=false` and `consent_simulated=true`.
+- On that child branch, public dataset sample/variant tables and gnomAD reference manifest/frequency tables each have zero rows. This is a synthetic staging candidate, not evidence of a 1000 Genomes or gnomAD production import.
+- The actual Render service-to-Neon branch mapping remains unverified. The default staging branch and the child staging candidate must not be treated as interchangeable.
+- Attempts to protect both Neon default branches were rejected because the current plan has reached its protected-branch limit. No plan upgrade, branch deletion or live/default-branch migration was performed.
+- No paid infrastructure or controlled-data import was performed.
+
+
 ## Current live status (14 November 2026)
 
 ### Public synthetic demo
