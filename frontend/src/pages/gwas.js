@@ -25,6 +25,14 @@ function displayMeasurement(value) {
     ? "Not reported" : String(value);
 }
 
+function sameRelease(left, right) {
+  const identityFields = [
+    "api_version", "data_release_date", "api_release_date", "dbsnp_build",
+    "gene_build", "efo_version", "ensembl_version", "commit_hash", "license", "license_url",
+  ];
+  return identityFields.every((field) => (left?.[field] ?? null) === (right?.[field] ?? null));
+}
+
 function formatPValue(record) {
   if (Number.isFinite(record.pvalue_mantissa) && Number.isFinite(record.pvalue_exponent)) {
     return record.pvalue_mantissa + " × 10^" + record.pvalue_exponent;
@@ -307,6 +315,13 @@ export function renderGwasPanel() {
     try {
       const data = await fetchPage(current.page.number + 1, requestGeneration);
       if (!data || requestGeneration !== generation) return;
+      if (!sameRelease(current.provenance, data.provenance)) {
+        current.has_more = false;
+        renderAll();
+        status.textContent = "The GWAS Catalog release changed while loading this search. "
+          + "The new page was not appended. Start a new search to retrieve results from one consistent release.";
+        return;
+      }
       const fresh = data.records.filter((record) => {
         if (!record?.association_id || seenIds.has(record.association_id)) return false;
         seenIds.add(record.association_id);
