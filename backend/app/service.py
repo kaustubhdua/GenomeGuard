@@ -320,9 +320,15 @@ class GenomeGuardService:
         pop = clean["cohort_filter"].get("population")
         # Applicant declarations are not verification evidence. Until a DAC-backed
         # commercial-use and organisation registry exists, pass unknown and fail closed.
-        creq = ConsentRequest(clean["purpose"], clean["disease"], None, level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"],
-                              demo_mode=self.demo_mode)
+        # Only the explicitly synthetic demo may use simulated requester/org attributes.
+        # Institutional research mode keeps both attributes unknown and fails closed.
+        creq = ConsentRequest(
+            clean["purpose"], clean["disease"],
+            clean["is_commercial"] if self.demo_mode else None,
+            level, pop if isinstance(pop, str) else None, clean["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         elig = eligible_cohort(creq, self.ds.donors)
         vidx = self.resolve_variants(clean["variant_filter"])
         if not vidx:
@@ -426,9 +432,15 @@ class GenomeGuardService:
 
         # -- consent ----------------------------------------------------------------------
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(clean["purpose"], clean["disease"], None, level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"],
-                              demo_mode=self.demo_mode)
+        # Only the explicitly synthetic demo may use simulated requester/org attributes.
+        # Institutional research mode keeps both attributes unknown and fails closed.
+        creq = ConsentRequest(
+            clean["purpose"], clean["disease"],
+            clean["is_commercial"] if self.demo_mode else None,
+            level, pop if isinstance(pop, str) else None, clean["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         elig = eligible_cohort(creq, self.ds.donors)
         self.audit.append("system:consent", "consent.evaluated", {"request_id": req_id,
                                                                   **elig.counts_only()})
@@ -626,9 +638,14 @@ class GenomeGuardService:
             return block("credential_insufficient")
 
         pop = r["cohort_filter"].get("population")
-        creq = ConsentRequest(r["purpose"], r["disease"], None, r["data_level"],
-                              pop if isinstance(pop, str) else None, r["cohort_filter"],
-                              demo_mode=self.demo_mode)
+        # Re-evaluate using demo-only simulated attributes; research mode remains fail-closed.
+        creq = ConsentRequest(
+            r["purpose"], r["disease"],
+            r["is_commercial"] if self.demo_mode else None,
+            r["data_level"], pop if isinstance(pop, str) else None, r["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         elig = eligible_cohort(creq, self.ds.donors)
         if elig.n < self.p.k_min:
             return block("below_k_min")
