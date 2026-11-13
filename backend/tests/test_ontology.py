@@ -57,6 +57,7 @@ def test_search_normalizes_source_terms_and_pagination(monkeypatch):
     assert params["ontology"] == ["mondo"]
     assert params["start"] == ["10"]
     assert params["obsoletes"] == ["false"]
+    assert params["type"] == ["class"]
     assert result["has_more"] is True
     assert result["terms"][0]["obo_id"] == "MONDO:0007254"
     assert result["terms"][0]["synonyms"] == ["breast cancer"]
