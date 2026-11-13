@@ -41,6 +41,7 @@ EVAL_JSON = Path(os.environ.get("GG_EVAL_JSON")
 # (method, path, summary, who): drives both routing documentation and /docs
 ROUTES_DOC: list[tuple[str, str, str, str]] = []
 _PUBMED_SEARCH_SLOTS = threading.BoundedSemaphore(2)
+_OPEN_TARGETS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -1248,6 +1249,68 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     # ── catalogue endpoints: serve local dataset/chromosome data ──────────────
     # These replace the Supabase Edge Function calls that previously required
     # an external publishable key. All data comes from the local backend.
+
+    @route("POST", "/research/open-targets/target", "Retrieve Open Targets gene-disease associations and evidence", "public")
+    async def open_targets_target(request):
+        """Fetch source-attributed target/disease research evidence by Ensembl ID."""
+        from app.literature.open_targets import (
+            OpenTargetsProviderError,
+            search_target,
+            validate_target_request,
+        )
+
+        data = await _body(request)
+        ensembl_id = data.get("ensembl_id")
+        disease_id = data.get("disease_id")
+        page_index = data.get("page_index", 0)
+        page_size = data.get("page_size", 20)
+        evidence_size = data.get("evidence_size", 25)
+        evidence_cursor = data.get("evidence_cursor")
+        if disease_id == "":
+            disease_id = None
+        try:
+            validate_target_request(
+                ensembl_id, disease_id, page_index, page_size, evidence_size, evidence_cursor,
+            )
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_open_targets_query", str(exc)) from None
+        if not _OPEN_TARGETS_SEARCH_SLOTS.acquire(blocking=False):
+            response = _j({
+                "error": "open_targets_provider_busy",
+                "message": "Open Targets search is busy. Please retry shortly.",
+            }, 429)
+            response.headers["Retry-After"] = "2"
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        try:
+            try:
+                payload = await run_in_threadpool(
+                    search_target,
+                    ensembl_id,
+                    disease_id=disease_id,
+                    page_index=page_index,
+                    page_size=page_size,
+                    evidence_size=evidence_size,
+                    evidence_cursor=evidence_cursor,
+                )
+            except ValueError as exc:
+                raise ServiceError(400, "invalid_open_targets_query", str(exc)) from None
+            except LookupError:
+                raise ServiceError(
+                    404, "open_targets_entity_not_found",
+                    "Open Targets did not find the supplied Ensembl gene identifier.",
+                ) from None
+            except OpenTargetsProviderError:
+                raise ServiceError(
+                    503, "open_targets_provider_unavailable",
+                    "Open Targets is temporarily unavailable or returned an invalid response. Please retry.",
+                ) from None
+        finally:
+            _OPEN_TARGETS_SEARCH_SLOTS.release()
+        response = _j(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
 
     @route("POST", "/literature/pubmed/search", "Search public PubMed literature metadata", "public")
     async def pubmed_literature_search(request):
