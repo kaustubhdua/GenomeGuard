@@ -164,9 +164,14 @@ def _safe_api_link(value) -> str | None:
         parsed = urllib.parse.urlparse(value)
     except ValueError:
         return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
     if (
         parsed.scheme != "https"
         or parsed.hostname != API_ORIGIN
+        or port not in (None, 443)
         or parsed.username
         or parsed.password
         or not parsed.path.startswith(API_PREFIX)
