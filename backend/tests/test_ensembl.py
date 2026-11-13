@@ -96,3 +96,16 @@ def test_rejects_oversized_response(monkeypatch):
     monkeypatch.setattr(ensembl, "urlopen", lambda *a, **k: Oversized({}))
     with pytest.raises(ensembl.EnsemblProviderError, match="1 MB"):
         ensembl.lookup_gene("BRCA2")
+
+@pytest.mark.parametrize(("field", "value", "message"), [
+    ("strand", True, "invalid gene strand"),
+    ("assembly_name", None, "no reference assembly"),
+])
+def test_rejects_invalid_reference_metadata(monkeypatch, field, value, message):
+    bad = payload()
+    bad[field] = value
+    monkeypatch.setattr(ensembl, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(ensembl, "urlopen", lambda *a, **k: FakeResponse(bad))
+    with pytest.raises(ensembl.EnsemblProviderError, match=message):
+        ensembl.lookup_gene("BRCA2")
+
