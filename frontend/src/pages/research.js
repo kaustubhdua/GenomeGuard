@@ -32,7 +32,7 @@ function articleUrl(article) {
 
 function paperCard(article) {
   const authors = article.authorString || "Authors not supplied by source";
-  const journal = [article.journalTitle, article.firstPublicationDate?.slice(0, 4)]
+  const journal = [article.journalTitle || article.journalInfo?.journal?.title, article.firstPublicationDate?.slice(0, 4)]
     .filter(Boolean).join(" · ") || "Publication details unavailable";
   const identifiers = [
     article.pmid ? "PMID " + article.pmid : "",
@@ -71,6 +71,7 @@ function parseSearchResponse(data) {
   return {
     papers: data.resultList.result.filter((paper) => paper && typeof paper === "object"),
     hitCount: Math.max(0, Number(data.hitCount)),
+    nextCursorMark: typeof data.nextCursorMark === "string" ? data.nextCursorMark : "",
   };
 }
 
@@ -127,7 +128,7 @@ export async function render() {
   const submitButton = form.querySelector('button[type="submit"]');
   let activeController = null;
   let activeQuery = "";
-  let currentPage = 0;
+  let nextCursorMark = "*";
   let totalHits = 0;
   let loadedCount = 0;
   let hasMore = false;
@@ -136,13 +137,13 @@ export async function render() {
   if (DEPARTMENTS.some(([, slug]) => slug === initialDepartment)) department.value = initialDepartment;
   question.value = initialQuery.slice(0, 500);
 
-  async function fetchPage(query, pageNumber) {
+  async function fetchPage(query, cursorMark) {
     if (activeController) activeController.abort();
     const controller = new AbortController();
     activeController = controller;
     const timeout = setTimeout(() => controller.abort(), 12000);
     const url = API + "?query=" + encodeURIComponent(query)
-      + "&format=json&resultType=core&pageSize=" + PAGE_SIZE + "&page=" + pageNumber;
+      + "&format=json&resultType=core&pageSize=" + PAGE_SIZE + "&cursorMark=" + encodeURIComponent(cursorMark);
     try {
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
@@ -172,8 +173,8 @@ export async function render() {
     button.textContent = "Loading…";
     const generation = requestGeneration;
     try {
-      const nextPage = currentPage + 1;
-      const data = await fetchPage(activeQuery, nextPage);
+      const requestedCursor = nextCursorMark;
+      const data = await fetchPage(activeQuery, requestedCursor);
       if (generation !== requestGeneration) return;
       if (data.papers.length) {
         results.insertBefore(
@@ -181,10 +182,10 @@ export async function render() {
           button,
         );
       }
-      currentPage = nextPage;
       loadedCount += data.papers.length;
       totalHits = data.hitCount;
-      hasMore = data.papers.length === PAGE_SIZE && loadedCount < totalHits;
+      nextCursorMark = data.nextCursorMark;
+      hasMore = Boolean(data.papers.length && nextCursorMark && nextCursorMark !== requestedCursor);
       status.textContent = data.papers.length
         ? "Showing " + loadedCount + " of " + totalHits
         : "No additional publication records were returned by Europe PMC.";
@@ -220,7 +221,7 @@ export async function render() {
     }
     const generation = ++requestGeneration;
     activeQuery = query;
-    currentPage = 0;
+    nextCursorMark = "*";
     loadedCount = 0;
     totalHits = 0;
     hasMore = false;
@@ -229,12 +230,12 @@ export async function render() {
     submitButton.disabled = true;
     submitButton.textContent = "Searching…";
     try {
-      const data = await fetchPage(query, 1);
+      const data = await fetchPage(query, "*");
       if (generation !== requestGeneration) return;
-      currentPage = 1;
+      nextCursorMark = data.nextCursorMark;
       totalHits = data.hitCount;
       loadedCount = data.papers.length;
-      hasMore = data.papers.length === PAGE_SIZE && loadedCount < totalHits;
+      hasMore = Boolean(data.papers.length && nextCursorMark && nextCursorMark !== "*");
       if (data.papers.length) {
         results.append(h("div", { class: "research-paper-page" }, ...data.papers.map(paperCard)));
         status.textContent = "Showing " + loadedCount + " of " + totalHits
