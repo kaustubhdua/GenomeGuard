@@ -278,7 +278,7 @@ def test_signed_consent_event_produces_policy_compatible_participant_basis(monke
     sample_id = "SYNTHETIC-SOURCE-TEST-001"
     digest = hmac.new(
         svc.master,
-        svc.dataset_id.encode() + b"\\0" + sample_id.encode(),
+        svc.dataset_id.encode() + bytes([0]) + sample_id.encode(),
         hashlib.sha256,
     ).hexdigest()
     svc.store.x("UPDATE donors SET source_sample_id_hash=? WHERE id=?", (digest, donor.id))
