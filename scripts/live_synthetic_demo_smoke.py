@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
@@ -34,6 +35,23 @@ def get(base: str, path: str, timeout: float = 20.0, headers: dict | None = None
     except (URLError, TimeoutError, OSError) as exc:
         return 0, f"{type(exc).__name__}: {str(exc)[:180]}"
 
+
+
+def get_with_retry(
+    base: str, path: str, *, attempts: int = 3, timeout: float = 60.0,
+) -> tuple[int, dict | str]:
+    """Retry only transient cold-start/gateway failures; never hide a stable HTTP error."""
+    last = (0, "no request attempted")
+    for attempt in range(attempts):
+        last = get(base, path, timeout=timeout)
+        status, payload = last
+        if status == 200 and isinstance(payload, dict):
+            return last
+        if status not in (0, 502, 503, 504):
+            return last
+        if attempt + 1 < attempts:
+            time.sleep(2 * (attempt + 1))
+    return last
 
 def post(base: str, path: str, body: dict, headers: dict | None = None, timeout: float = 20.0) -> tuple[int, dict | str]:
     request = Request(
@@ -74,8 +92,16 @@ def main() -> int:
     base = args.base.rstrip("/")
 
     try:
-        status, health = get(base, "/health")
-        require("health endpoint is HTTP 200", status == 200 and isinstance(health, dict))
+        live_status, live = get_with_retry(base, "/health/live")
+        require("live endpoint is HTTP 200",
+                live_status == 200 and isinstance(live, dict) and live.get("status") == "ok")
+        status, health = get_with_retry(base, "/health")
+        health_ok = status == 200 and isinstance(health, dict)
+        health_detail = (
+            f"received HTTP {status}, payload type={type(health).__name__}, "
+            f"body={str(health)[:240]}"
+        )
+        require(f"health endpoint is HTTP 200 ({health_detail})", health_ok)
         require("service reports healthy", health.get("status") == "ok")
         require("public deployment is explicitly demo mode", health.get("demo_mode") is True)
         require("genotypes are explicitly synthetic", health.get("synthetic_data_only") is True
@@ -125,7 +151,7 @@ def main() -> int:
         require("short-lived donor session authenticates only its donor",
                 donor_profile_status == 200 and isinstance(donor_profile, dict))
 
-        status, ready = get(base, "/health/ready")
+        status, ready = get_with_retry(base, "/health/ready")
         checks = ready.get("checks") if isinstance(ready, dict) else {}
         require("production readiness correctly remains blocked",
                 status == 503 and ready.get("status") == "not_ready" and ready.get("ready") is False)
