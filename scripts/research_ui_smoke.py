@@ -347,8 +347,8 @@ def main() -> int:
             },
             *([{
                 "label": "Cerebellar ataxia",
-                "iri": "http://purl.obolibrary.org/obo/HP_0001251",
-                "obo_id": "HP:0001251",
+                "iri": "http://purl.obolibrary.org/obo/HP_0001252",
+                "obo_id": "HP:0001252",
                 "ontology": "hp", "ontology_prefix": "HP",
                 "description": "A source fixture term.",
                 "synonyms": [], "is_obsolete": False,
