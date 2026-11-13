@@ -2,7 +2,7 @@
 
 Generated from `backend/app/api.py` (also served live at `/docs` and `/openapi.json`).
 
-Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`; donors send `X-Donor-Key`. Demo keys are published at `/demo/requesters` and `/demo/donors` in demo mode only.
+Auth: institution-bound requesters use `Authorization: Bearer`; non-demo API-key deployments may use `X-API-Key`; stewards use `X-Admin-Key`; donor integrations use `X-Donor-Key`. Synthetic demo personas never expose static credentials: they use short-lived `X-Demo-Session` and `X-Demo-Donor-Session` tokens issued by the demo session endpoints.
 
 | Method | Path | Purpose | Access |
 |---|---|---|---|
@@ -10,7 +10,8 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/health` | Liveness, dataset facts, and deployment revision when provided by the host | public |
 | GET | `/health/live` | Cheap process liveness and deployment revision; no database or cohort initialization | public |
 | GET | `/health/ready` | Production readiness gate; distinguishes liveness from safe real-data operation | public |
-| GET | `/demo/requesters` | Demo accounts and keys (demo mode only) | public |
+| GET | `/demo/requesters` | Synthetic demo persona metadata; no credentials returned | public |
+| POST | `/demo/session` | Issue a 30-minute in-memory synthetic requester session | public |
 | POST | `/admin/requesters` | Provision a requester identity; API key returned only in API-key mode | admin |
 | POST | `/admin/consent-events` | Apply a signed, source-authority participant consent event | admin |
 | POST | `/admin/oidc-bindings` | Bind an institutional OIDC subject to a provisioned requester and organization | steward/admin |
@@ -43,7 +44,8 @@ Auth: requesters send `X-API-Key`; stewards send the admin key as `X-Admin-Key`;
 | GET | `/reports/compliance` | Plain-language compliance report (from/to ISO dates) | admin |
 | GET | `/reports/compliance/export` | Export full regulatory evidence package (DPDP, GDPR, HIPAA) | admin |
 | GET | `/eval/results` | Stored red-team evaluation metrics | public |
-| GET | `/demo/donors` | Demo donor personas and keys (demo mode only) | public |
+| GET | `/demo/donors` | Synthetic donor persona metadata; no credentials returned | public |
+| POST | `/demo/donor-session` | Issue a 30-minute in-memory synthetic donor session | public |
 | GET | `/donor/{id:int}` | A donor's own consent, status and who used their data | donor |
 | GET | `/donor/{id:int}/consent.fhir.json` | Download your consent as a FHIR R4 Consent resource (pseudonymous; tagged as simulated demo data) | donor |
 | POST | `/donor/{id:int}/withdraw` | Withdraw consent for all future requests | donor |
