@@ -43,7 +43,7 @@ For large-scale systematic work, use official Open Targets data downloads or Big
 
 - Deterministic tests mock GraphQL responses and validate association/evidence normalization, release metadata, identifier and pagination bounds, GraphQL partial-error rejection, malformed rows, retry behavior and API errors.
 - scripts/open_targets_provider_smoke.py performs a low-volume live query for public TP53 target metadata and one disease-specific evidence page.
-- No API key is required by the documented public GraphQL API. Do not add credentials to the client or repository.
+- No API key is required by the documented public GraphQL API. Do not add credentials to the client or repository. Keep live contract checks low-volume and use only public identifiers such as the TP53 fixture.
 
 ## Official references
 
