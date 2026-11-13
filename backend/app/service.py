@@ -182,8 +182,10 @@ class GenomeGuardService:
         if purpose not in RESEARCH_PURPOSES:
             bad(f"purpose must be one of {sorted(RESEARCH_PURPOSES)}")
         disease = req.get("disease")
-        if disease is not None and not (isinstance(disease, str) and DISEASE.match(disease)):
-            bad("disease must be lowercase letters/underscores")
+        is_mondo = isinstance(disease, str) and re.fullmatch(r"MONDO:\\d{7}", disease)
+        is_demo_label = self.demo_mode and isinstance(disease, str) and DISEASE.match(disease)
+        if disease is not None and not (is_mondo or is_demo_label):
+            bad("research-mode disease restrictions must use a MONDO identifier (MONDO:ddddddd)")
         level = req.get("data_level", "frequency")
         if level not in DATA_LEVELS:
             bad(f"data_level must be one of {list(DATA_LEVELS)}")
