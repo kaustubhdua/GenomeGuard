@@ -256,9 +256,14 @@ def main() -> None:
         check("guided tour supports backward navigation",
               keyboard_pg.get_by_role("heading", name="Welcome to GenomeGuard").count() == 1)
         keyboard_pg.keyboard.press("Escape")
-        check("guided tour Escape closes the dialog and restores focus",
+        check("guided tour Escape closes the dialog and restores command-palette focus",
               keyboard_pg.locator('[role="dialog"][aria-label="Guided tour"]').count() == 0
               and keyboard_pg.evaluate("document.activeElement.id === 'open-cmdk'"))
+        keyboard_pg.get_by_role("button", name="Explore platform — Guided walkthrough").click()
+        keyboard_pg.get_by_role("dialog", name="Guided tour").wait_for()
+        keyboard_pg.keyboard.press("Escape")
+        check("guided tour restores focus to the actual overview launcher",
+              keyboard_pg.evaluate("document.activeElement.getAttribute('aria-label') === 'Explore platform — Guided walkthrough'"))
         keyboard_ctx.close()
 
         print("\\n0. Startup resilience when browser storage is blocked")
