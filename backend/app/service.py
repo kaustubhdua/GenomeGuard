@@ -112,9 +112,10 @@ class GenomeGuardService:
     def __init__(self, store: Store, ds: Dataset, p: Params = DEFAULT, *, master: bytes | None = None,
                  llm: LLM | None = None, llm_roles: set[str] | None = None,
                  allow_tamper: bool = False, admin_key: str = "demo-admin-key",
-                 release_enabled: bool = True,
+                 release_enabled: bool = True, demo_mode: bool = False,
                  clock: Callable[[], float] = time.time) -> None:
         self.store, self.ds, self.p, self.clock = store, ds, p, clock
+        self.demo_mode = demo_mode
         self.master = master
         self.dataset_id = ds.dataset_id
         self.release_enabled = release_enabled
@@ -181,8 +182,12 @@ class GenomeGuardService:
         if purpose not in RESEARCH_PURPOSES:
             bad(f"purpose must be one of {sorted(RESEARCH_PURPOSES)}")
         disease = req.get("disease")
-        if disease is not None and not (isinstance(disease, str) and DISEASE.match(disease)):
-            bad("disease must be lowercase letters/underscores")
+        is_mondo = isinstance(disease, str) and re.fullmatch(r"MONDO:\d{7}", disease)
+        is_demo_label = self.demo_mode and isinstance(disease, str) and DISEASE.match(disease)
+        if disease is not None and not (is_mondo or is_demo_label):
+            bad("research-mode disease restrictions must use a MONDO identifier (MONDO:ddddddd)")
+        if not self.demo_mode and purpose == "disease_research" and disease is None:
+            bad("institutional disease research requires a MONDO disease identifier")
         level = req.get("data_level", "frequency")
         if level not in DATA_LEVELS:
             bad(f"data_level must be one of {list(DATA_LEVELS)}")
@@ -282,6 +287,8 @@ class GenomeGuardService:
         return {
             "outcome": outcome, "reasons": reasons, "purpose": clean["purpose"],
             "disease": clean["disease"], "is_commercial": clean["is_commercial"],
+            "commercial_use_declared": clean["is_commercial"], "commercial_use_verified": False,
+            "organization_nonprofit_verified": False,
             "data_level": clean["data_level"], "tier": requester["credential_level"],
             "consent": elig.counts_only() if elig else {}, "steps": tj.get("steps", []),
             "risk_before": rb, "risk_after": ra, "final": tj.get("final", {}),
@@ -315,8 +322,17 @@ class GenomeGuardService:
                     "eligible": 0, "considered": self.ds.n_donors, "variants_requested": 0,
                     "epsilon_cost": 0.0, **self.budget(rid)}
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(clean["purpose"], clean["disease"], clean["is_commercial"], level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"])
+        # Applicant declarations are not verification evidence. Until a DAC-backed
+        # commercial-use and organisation registry exists, pass unknown and fail closed.
+        # Only the explicitly synthetic demo may use simulated requester/org attributes.
+        # Institutional research mode keeps both attributes unknown and fails closed.
+        creq = ConsentRequest(
+            clean["purpose"], clean["disease"],
+            clean["is_commercial"] if self.demo_mode else None,
+            level, pop if isinstance(pop, str) else None, clean["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         elig = eligible_cohort(creq, self.ds.donors)
         vidx = self.resolve_variants(clean["variant_filter"])
         if not vidx:
@@ -368,7 +384,7 @@ class GenomeGuardService:
         tier = requester["credential_level"]
         self.audit.append(actor, "request.received", {
             "request_id": req_id, "purpose": clean["purpose"], "disease": clean["disease"],
-            "data_level": clean["data_level"], "is_commercial": clean["is_commercial"],
+            "data_level": clean["data_level"], "commercial_use_declared": clean["is_commercial"],
             "tier": tier, "cohort_filter": clean["cohort_filter"]})
         hist = self._history(rid)
 
@@ -420,8 +436,15 @@ class GenomeGuardService:
 
         # -- consent ----------------------------------------------------------------------
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(clean["purpose"], clean["disease"], clean["is_commercial"], level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"])
+        # Only the explicitly synthetic demo may use simulated requester/org attributes.
+        # Institutional research mode keeps both attributes unknown and fails closed.
+        creq = ConsentRequest(
+            clean["purpose"], clean["disease"],
+            clean["is_commercial"] if self.demo_mode else None,
+            level, pop if isinstance(pop, str) else None, clean["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         elig = eligible_cohort(creq, self.ds.donors)
         self.audit.append("system:consent", "consent.evaluated", {"request_id": req_id,
                                                                   **elig.counts_only()})
@@ -619,8 +642,14 @@ class GenomeGuardService:
             return block("credential_insufficient")
 
         pop = r["cohort_filter"].get("population")
-        creq = ConsentRequest(r["purpose"], r["disease"], r["is_commercial"], r["data_level"],
-                              pop if isinstance(pop, str) else None, r["cohort_filter"])
+        # Re-evaluate using demo-only simulated attributes; research mode remains fail-closed.
+        creq = ConsentRequest(
+            r["purpose"], r["disease"],
+            r["is_commercial"] if self.demo_mode else None,
+            r["data_level"], pop if isinstance(pop, str) else None, r["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         elig = eligible_cohort(creq, self.ds.donors)
         if elig.n < self.p.k_min:
             return block("below_k_min")
@@ -695,8 +724,10 @@ class GenomeGuardService:
         def case_summary() -> dict:
             return {"outcome": d["outcome"], "reasons": d["reasons"], "purpose": q["purpose"],
                     "disease": q["disease"], "data_level": q["data_level"],
-                    "is_commercial": q["is_commercial"], "tier": who.get("credential_level"),
-                    "needs_human": d["needs_human"]}
+                    "is_commercial": q["is_commercial"],
+                    "commercial_use_declared": q["is_commercial"], "commercial_use_verified": False,
+                    "organization_nonprofit_verified": False,
+                    "tier": who.get("credential_level"), "needs_human": d["needs_human"]}
 
         def consent_counts() -> dict:
             return {"consent": risk.get("consent") or {}}
@@ -800,6 +831,11 @@ class GenomeGuardService:
 
     @transactional
     def donor_set_withdrawn(self, donor_id: int, withdrawn: bool) -> dict:
+        if not self.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant withdrawal must be recorded by the configured authoritative consent source",
+            )
         d = self._donor(donor_id)
         if d.consent.get("consent_basis") == "dataset_policy":
             raise ServiceError(409, "dataset_policy_withdrawal_unsupported",
@@ -813,13 +849,17 @@ class GenomeGuardService:
                           {"donor_ref": self._donor_ref(donor_id), "effective": "future_requests"})
         return self.donor_profile(donor_id)
 
-    CONSENT_USES = ("GRU", "HMB", "DS")
-    CONSENT_MODS = ("NCU", "NPU", "NMDS", "NAGR", "NCTRL")
+    CONSENT_USES = ("GRU", "HMB", "DS", "POA")
+    CONSENT_MODS = ("NCU", "NPU", "NPUNCU", "NMDS", "NPOA", "NAGR", "NCTRL")
 
     @transactional
     def donor_set_consent(self, donor_id: int, change: dict) -> dict:
-        """The donor edits what they agree to. Only whitelisted DUO-style fields are accepted;
-        the change applies to future requests and is audited without the donor's identity."""
+        """Apply a synthetic-demo consent edit; research mode requires signed authority events."""
+        if not self.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant consent changes must be recorded by a signed authoritative consent event",
+            )
         d = self._donor(donor_id)
         if d.consent.get("consent_basis") == "dataset_policy":
             raise ServiceError(409, "dataset_policy_not_individual_consent",
@@ -866,6 +906,9 @@ class GenomeGuardService:
             raise ServiceError(422, "invalid_consent_authority_event", str(exc)) from None
         if self.store.consent_event_exists(payload["event_id"]):
             raise ServiceError(409, "duplicate_consent_event", "this consent event was already applied")
+        effective_at = datetime.fromisoformat(
+            payload["effective_at"].replace("Z", "+00:00")
+        ).astimezone(UTC)
         row = self.store.donor_by_source_sample_id(
             payload["source_sample_id"], self.master, self.dataset_id,
         )
@@ -873,6 +916,33 @@ class GenomeGuardService:
             raise ServiceError(404, "participant_not_found",
                                "source sample is not part of the active cohort")
         donor_id = int(row["id"])
+        # Serialize consent-event ordering per participant in PostgreSQL. Without this
+        # row lock, two concurrent signed events can both observe the same history and
+        # an older event can overwrite a newer event after waiting on the donor UPDATE.
+        # SQLite's BEGIN IMMEDIATE transaction already serializes writers.
+        if getattr(self.store, "path", None) == "postgresql":
+            self.store.q("SELECT id FROM donors WHERE id=? FOR UPDATE", (donor_id,))
+        previous_events = self.store.q(
+            "SELECT effective_at FROM consent_events WHERE donor_id=? AND dataset_id=?",
+            (donor_id, self.dataset_id),
+        )
+        for previous in previous_events:
+            try:
+                previous_at = datetime.fromisoformat(
+                    previous["effective_at"].replace("Z", "+00:00")
+                )
+                if previous_at.tzinfo is None or previous_at.utcoffset() is None:
+                    raise ValueError("stored effective_at is missing a timezone")
+            except (AttributeError, TypeError, ValueError):
+                raise ServiceError(
+                    409, "consent_history_invalid",
+                    "stored consent event history contains an invalid effective timestamp",
+                ) from None
+            if effective_at <= previous_at.astimezone(UTC):
+                raise ServiceError(
+                    409, "stale_consent_event",
+                    "consent event effective_at must be later than every previously applied event",
+                )
         donor = self._donor(donor_id)
         if donor.consent.get("consent_basis") == "dataset_policy":
             raise ServiceError(409, "dataset_policy_not_individual_consent",
@@ -881,13 +951,19 @@ class GenomeGuardService:
         incoming = payload["consent"]
         use = str(incoming.get("use", "")).upper()
         if use not in self.CONSENT_USES:
-            raise ServiceError(422, "invalid_consent", "signed consent use must be GRU, HMB or DS")
+            raise ServiceError(422, "invalid_consent", "signed consent use must be one of GRU, HMB, DS or POA")
         disease = incoming.get("disease")
+        disease_label = incoming.get("disease_label")
         if use == "DS":
-            if not isinstance(disease, str) or not re.fullmatch(r"[a-z_]{2,32}", disease):
-                raise ServiceError(422, "invalid_consent", "DS consent requires a lowercase disease label")
+            if not isinstance(disease, str) or not re.fullmatch(r"MONDO:\d{7}", disease):
+                raise ServiceError(422, "invalid_consent", "DS consent requires a MONDO disease identifier")
+            if disease_label is not None and (
+                not isinstance(disease_label, str) or not disease_label.strip() or len(disease_label) > 160
+            ):
+                raise ServiceError(422, "invalid_consent", "disease_label must be a non-empty string up to 160 characters")
         else:
             disease = None
+            disease_label = None
         modifiers = incoming.get("modifiers", [])
         if (not isinstance(modifiers, list)
                 or not all(isinstance(item, str) for item in modifiers)
@@ -911,10 +987,11 @@ class GenomeGuardService:
             **donor.consent,
             "use": use,
             "disease": disease,
+            "disease_label": disease_label,
             "modifiers": sorted({item.upper() for item in modifiers}),
             "population": population,
             "consent_date": consent_date,
-            "consent_basis": "participant_records",
+            "consent_basis": "participant_record",
             "consent_simulated": False,
             "consent_authority_issuer": trusted_issuer,
             "consent_event_id": payload["event_id"],
@@ -961,7 +1038,9 @@ class GenomeGuardService:
         are carried in namespaced extensions rather than mapped onto FHIR purpose codes we cannot
         verify. The record is tagged as simulated: no real person consented to this system.
         Structure follows FHIR R4 and is checked in CI with the HL7 FHIR Validator against the
-        project extension package. Structural conformance does not make simulated consent legally valid."""
+        project extension package. Structural conformance does not make consent legally valid or verify
+        the source authority. Synthetic demo, operator-supplied participant, and unknown provenance
+        receive distinct FHIR tags and narratives."""
         d = self._donor(donor_id)
         c = d.consent
         if c.get("consent_basis") == "dataset_policy":
@@ -978,18 +1057,55 @@ class GenomeGuardService:
             return {"system": f"{self.FHIR_BASE}/CodeSystem-consent-use-codes.json",
                     "code": code, "display": info.get("meaning") or code}
 
+        basis = c.get("consent_basis", "unknown")
+        if basis == "synthetic_demo":
+            tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
+                   "code": "simulated-consent",
+                   "display": "Synthetic demo consent record (not a real person)"}
+            narrative_div = (
+                '<div xmlns="http://www.w3.org/1999/xhtml">'
+                '<p>Synthetic demo consent record; this is not actual consent.</p></div>'
+            )
+        elif basis == "participant_record":
+            tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
+                   "code": "participant-consent-record",
+                   "display": "Participant consent record; source authority is not independently verified by this export"}
+            narrative_div = (
+                '<div xmlns="http://www.w3.org/1999/xhtml">'
+                '<p>Participant consent record supplied to GenomeGuard; source authority is '
+                'not independently verified and legal validity requires institutional verification.</p></div>'
+            )
+        else:
+            tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
+                   "code": "unverified-consent-provenance",
+                   "display": "Consent provenance is not verified"}
+            narrative_div = (
+                '<div xmlns="http://www.w3.org/1999/xhtml">'
+                '<p>Consent provenance is not verified; do not treat this export as proof of legal consent.</p></div>'
+            )
         ext = [{"url": f"{self.FHIR_EXT}duo-use.json", "valueCoding": duo(str(c.get("use")))}]
         ext += [{"url": f"{self.FHIR_EXT}duo-modifier.json", "valueCoding": duo(m)}
                 for m in (c.get("modifiers") or [])]
         if c.get("disease"):
-            ext.append({"url": f"{self.FHIR_EXT}disease.json", "valueString": c["disease"]})
+            ext.append({
+                "url": f"{self.FHIR_EXT}disease.json",
+                "valueString": c.get("disease_label") or c["disease"],
+            })
+            if re.fullmatch(r"MONDO:\d{7}", str(c["disease"])):
+                ext.append({
+                    "url": f"{self.FHIR_EXT}disease-ontology.json",
+                    "valueCoding": {
+                        "system": "http://purl.obolibrary.org/obo/mondo.owl",
+                        "code": c["disease"],
+                        **({"display": c["disease_label"]} if c.get("disease_label") else {}),
+                    },
+                })
         if c.get("population"):
             ext.append({"url": f"{self.FHIR_EXT}population.json", "valueString": c["population"]})
         res = {
             "resourceType": "Consent", "id": ref,
-            "meta": {"tag": [{"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json", "code": "simulated-consent",
-                              "display": "Simulated consent record (demo data, not a real person)"}]},
-            "text": {"status": "generated", "div": '<div xmlns="http://www.w3.org/1999/xhtml"><p>Simulated consent record; this is not actual consent.</p></div>'},
+            "meta": {"tag": [tag]},
+            "text": {"status": "generated", "div": narrative_div},
             "status": "inactive" if d.withdrawn else "active",
             "scope": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/consentscope",
                                   "code": "research", "display": "Research"}]},
@@ -1000,8 +1116,6 @@ class GenomeGuardService:
             "patient": {"reference": f"Patient/{ref}", "display": "Pseudonymous donor"},
             "provision": {
                 "type": "permit",
-                "purpose": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ActReason",
-                             "code": "HRESCH", "display": "healthcare research"}],
                 "extension": ext},
         }
         if c.get("consent_date"):
@@ -1058,8 +1172,13 @@ class GenomeGuardService:
         clean = self._validate({"purpose": purpose, "disease": disease, "is_commercial": commercial,
                                 "data_level": level, "cohort_filter": cohort_filter})
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(purpose, clean["disease"], commercial, level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"])
+        creq = ConsentRequest(
+            purpose, clean["disease"],
+            clean["is_commercial"] if self.demo_mode else None,
+            level, pop if isinstance(pop, str) else None, clean["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         return eligible_cohort(creq, self.ds.donors).counts_only()
 
     def anomalies(self) -> dict:
@@ -1438,7 +1557,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     # cohorts must have verified real-genotype and consent/data-use provenance.
     # Record-level rows are separately prohibited by release_approved().
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
-                             admin_key=s.admin_api_key, release_enabled=True, **kwargs)
+                             admin_key=s.admin_api_key, release_enabled=True, demo_mode=s.demo_mode, **kwargs)
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:

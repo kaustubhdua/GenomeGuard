@@ -149,7 +149,7 @@ function formSection(out) {
   const form = h("div", { class: "form" },
     sel("purpose", "Purpose", PURPOSES, st.purpose),
     state.demo ? sel("disease", "Disease area", DISEASES, st.disease || "")
-      : inp("disease", "Research topic label (metadata only; no disease phenotype data in this cohort)", st.disease || ""),
+      : inp("disease", "Disease identifier (MONDO:ddddddd)", st.disease || ""),
     sel("level", "Data level", levels, st.data_level), inp("pop", "Population filter", ""), inp("coh", "Cohort filter", ""),
     inp("maf", "Minimum allele frequency", st.variant_filter.min_maf, "number"), inp("lim", "Number of variants", st.variant_filter.limit, "number"),
     state.demo ? inp("pl", "Rare demo variants to include", st.variant_filter.include_planted || 0, "number") : null,

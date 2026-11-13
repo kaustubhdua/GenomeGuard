@@ -1,0 +1,48 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "disease-ontology",
+  "url": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-disease-ontology.json",
+  "version": "0.1.0",
+  "name": "GenomeGuardDiseaseOntology",
+  "title": "GenomeGuard disease ontology extension",
+  "status": "active",
+  "experimental": true,
+  "date": "2026-11-14",
+  "publisher": "GenomeGuard",
+  "description": "Machine-readable disease ontology identifier paired with DUO disease-specific research permission. MONDO is recommended for automated policy evaluation.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "context": [
+    {
+      "type": "element",
+      "expression": "Consent.provision"
+    }
+  ],
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://raw.githubusercontent.com/kaustubhdua/GenomeGuard/main/fhir/ig/package/StructureDefinition-disease-ontology.json"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ]
+      }
+    ]
+  }
+}

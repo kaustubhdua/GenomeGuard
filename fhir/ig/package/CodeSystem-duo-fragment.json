@@ -7,17 +7,45 @@
   "status": "active",
   "experimental": true,
   "publisher": "GenomeGuard demo project",
-  "description": "A terminology fragment containing only the two externally verified DUO modifier codes used by the synthetic demo. This is not the complete DUO ontology.",
+  "description": "A terminology fragment containing the official DUO permission and modifier identifiers used by GenomeGuard. This is not the complete DUO ontology.",
   "content": "fragment",
   "caseSensitive": true,
   "concept": [
     {
+      "code": "DUO:0000042",
+      "display": "General research use"
+    },
+    {
+      "code": "DUO:0000006",
+      "display": "Health or medical or biomedical research"
+    },
+    {
+      "code": "DUO:0000007",
+      "display": "Disease-specific research"
+    },
+    {
+      "code": "DUO:0000011",
+      "display": "Population origins or ancestry research only"
+    },
+    {
+      "code": "DUO:0000018",
+      "display": "Not-for-profit and non-commercial use only"
+    },
+    {
+      "code": "DUO:0000045",
+      "display": "Not-for-profit organisation use only"
+    },
+    {
       "code": "DUO:0000046",
-      "display": "No commercial use"
+      "display": "Non-commercial use only"
     },
     {
       "code": "DUO:0000015",
-      "display": "No methods development research"
+      "display": "No general methods research"
+    },
+    {
+      "code": "DUO:0000044",
+      "display": "Population origins or ancestry research prohibited"
     }
   ]
 }

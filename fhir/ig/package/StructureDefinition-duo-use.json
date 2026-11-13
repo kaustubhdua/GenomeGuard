@@ -9,7 +9,7 @@
   "experimental": true,
   "date": "2026-10-25",
   "publisher": "GenomeGuard demo project",
-  "description": "Demo-only duo-use extension used in GenomeGuard FHIR R4 Consent exports. This extension describes simulated data, not real participant consent.",
+  "description": "DUO use-permission coding carried by GenomeGuard FHIR R4 Consent exports. Provenance tags distinguish synthetic demo records from source-supplied participant records; this extension does not verify legal consent.",
   "fhirVersion": "4.0.1",
   "kind": "complex-type",
   "abstract": false,

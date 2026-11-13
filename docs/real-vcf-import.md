@@ -12,6 +12,10 @@ Before import, a responsible data steward must inspect the exact collection's da
 
 The VCF header must identify an assembly that exactly matches the command-line assembly. In particular, 1000 Genomes Phase 3 data commonly uses GRCh37; it must not be labelled GRCh38 without a separately validated liftover and allele reconciliation.
 
+## Disease-specific source policy
+
+When the reviewed source terms use DUO:0000007 (DS), the consent JSON or dataset-policy manifest must set `disease` to a valid MONDO CURIE such as `MONDO:0005015`. A separate `disease_label` may be supplied for display. Free-text labels alone are rejected for real-genotype imports; the public synthetic demo is the only path that retains free-text disease examples. The MONDO code is the machine-readable authorization key and must be reviewed against the source's actual restriction; GenomeGuard does not infer or choose a disease term on behalf of the data steward.
+
 ## Validation performed
 
 - SHA-256 must exactly match the operator-provided expected checksum.
@@ -157,3 +161,10 @@ The normalized VCF tables are not currently an input adapter for `GenomeGuardSer
 ## Test coverage
 
 The VCF parser tests use tiny synthetic fixtures only to exercise parser correctness; they are test data, not production genomic data and are never loaded into the live database.
+
+
+Every record in a per-sample `--consent-json` mapping must explicitly include
+`"consent_basis": "participant_record"`. Do not rely on an importer default to
+infer participant-specific consent. The separate `--consent-policy-json` path
+must explicitly identify `dataset_policy` and its source terms; it never creates
+participant-level consent.

@@ -93,7 +93,6 @@ def test_download_retries_digest_mismatch_and_never_publishes_corrupt_bytes(tmp_
     assert not target.with_suffix(target.suffix + ".part").exists()
 
 
-
 def test_high_coverage_population_pedigree_panel_format():
     text = "\n".join([
         "FamilyID SampleID FatherID MotherID Sex Population Superpopulation",
@@ -241,7 +240,8 @@ def test_build_cohort_uses_explicit_source_matched_consent_records():
         make_vcf(v)
         records = {
             sample: {"use": "GRU", "disease": None, "modifiers": [],
-                     "population": None, "consent_date": "2024-01-15", "withdrawn": False}
+                     "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+                     "consent_basis": "participant_record"}
             for sample in SAMPLES
         }
         c, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
@@ -261,7 +261,8 @@ def test_build_cohort_refuses_missing_or_malformed_consent_records():
             real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
                               consent_records={"dad": {"use": "GRU"}})
         bad = {sample: {"use": "GRU", "disease": None, "modifiers": [],
-                        "population": None, "consent_date": "not-a-date", "withdrawn": False}
+                        "population": None, "consent_date": "not-a-date", "withdrawn": False,
+                        "consent_basis": "participant_record"}
                for sample in SAMPLES}
         with pytest.raises(ValueError, match="invalid consent_date"):
             real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
@@ -278,7 +279,10 @@ def test_loaded_cohort_works_with_dataset_and_consent_engine():
         c, _ = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=2)
         ds = Dataset.from_cohort(c, "real-test")
         res = eligible_cohort(ConsentRequest(purpose="general_research"), ds.donors)
-        assert res.considered == 44
+        assert res.considered == len(ds.donors)
+        assert res.donor_ids == []
+        assert (res.excluded_by_reason["unknown_consent"]
+                + res.excluded_by_reason.get("withdrawn", 0)) == len(ds.donors)
 
 
 def test_dataset_public_release_policy_is_real_source_provenance_not_fake_personal_consent():
@@ -474,3 +478,134 @@ def test_unrelated_phase3_style_panel_does_not_claim_family_enrichment():
                                     seed=7, family_first=True)
         assert meta["relative_pairs"] == 0
         assert meta["family_enriched"] is False
+
+
+def test_build_cohort_accepts_official_npoa_consent_modifier():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {
+                "use": "GRU", "disease": None, "modifiers": ["NPOA"],
+                "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+                "consent_basis": "participant_record",
+            }
+            for sample in SAMPLES
+        }
+        cohort, _meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+            seed=3, consent_records=records,
+        )
+        assert all("NPOA" in donor["consent"]["modifiers"] for donor in cohort.donors)
+
+
+def test_build_cohort_accepts_poa_and_npuncu_consent_terms():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {
+                "use": "POA", "disease": None, "modifiers": ["NPUNCU"],
+                "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+                "consent_basis": "participant_record",
+            }
+            for sample in SAMPLES
+        }
+        cohort, _meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+            seed=3, consent_records=records,
+        )
+        assert all(d["consent"]["use"] == "POA" for d in cohort.donors)
+        assert all("NPUNCU" in d["consent"]["modifiers"] for d in cohort.donors)
+
+
+def test_build_cohort_rejects_source_consent_without_explicit_basis():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {
+                "use": "GRU", "disease": None, "modifiers": [],
+                "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+            }
+            for sample in SAMPLES
+        }
+        with pytest.raises(ValueError, match="must explicitly declare consent_basis"):
+            real.build_cohort(
+                v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                seed=3, consent_records=records,
+            )
+
+
+
+def test_dataset_policy_accepts_poa_without_claiming_participant_consent():
+    from app.core.consent import ConsentRequest, eligible_cohort
+    from app.core.dataset import Dataset
+
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        # This is an explicitly synthetic test policy, not an assertion about IGSR terms.
+        policy = {
+            "policy_id": "test-only-poa-policy",
+            "source_dataset": "synthetic POA policy fixture",
+            "source_url": "https://example.org/test-only-poa-policy",
+            "scope": "dataset",
+            "duo_use": "POA",
+            "disease": None,
+            "duo_modifiers": [],
+            "population": None,
+            "withdrawal_supported": False,
+            "review_status": "source_documented_not_legal_review",
+            "limitations": ["Synthetic fixture only; not a real dataset policy."],
+        }
+        policy_path = Path(d) / "poa-policy.json"
+        policy_path.write_text(__import__("json").dumps(policy), encoding="utf-8")
+        cohort, meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=9,
+            consent_policy=policy, consent_source_file=str(policy_path),
+        )
+        assert meta["consent_basis"] == "dataset_policy"
+        ds = Dataset.from_cohort(cohort, "poa-policy-test")
+        allowed = eligible_cohort(
+            ConsentRequest("ancestry_research"), ds.donors,
+        )
+        blocked = eligible_cohort(
+            ConsentRequest("general_research"), ds.donors,
+        )
+        assert allowed.n == 44
+        assert blocked.n == 0
+        assert blocked.excluded_by_reason["purpose_not_population_origins"] == 44
+
+def test_real_disease_specific_consent_requires_mondo_identifier():
+    participant = {
+        "use": "DS", "disease": "diabetes", "modifiers": [],
+        "population": None, "consent_date": "2026-01-15", "withdrawn": False,
+        "consent_basis": "participant_record",
+    }
+    with pytest.raises(ValueError, match="MONDO identifier"):
+        real._validated_consent(participant, "SAMPLE-DS")
+
+    participant["disease"] = "MONDO:0005015"
+    participant["disease_label"] = "diabetes mellitus"
+    consent, withdrawn = real._validated_consent(participant, "SAMPLE-DS")
+    assert consent["disease"] == "MONDO:0005015"
+    assert consent["disease_label"] == "diabetes mellitus"
+    assert withdrawn is False
+
+
+def test_dataset_policy_disease_specific_consent_requires_mondo_identifier():
+    policy = {
+        "use": "DS", "disease": "diabetes", "modifiers": [],
+        "population": None, "consent_date": None, "withdrawn": False,
+        "consent_basis": "dataset_policy", "source_policy_id": "public-policy-v1",
+        "source_policy_url": "https://example.org/policy", "withdrawal_supported": False,
+    }
+    with pytest.raises(ValueError, match="MONDO identifier"):
+        real._validated_consent(policy, "SAMPLE-DS")
+
+    policy["disease"] = "MONDO:0005015"
+    consent, withdrawn = real._validated_consent(policy, "SAMPLE-DS")
+    assert consent["disease"] == "MONDO:0005015"
+    assert withdrawn is False
+

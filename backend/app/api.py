@@ -1324,8 +1324,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def donor_get(request):
         return _j(S().donor_profile(donor_auth(request)))
 
-    @route("GET", "/donor/{id:int}/consent.fhir.json", "Download your consent as a FHIR R4 Consent "
-           "resource (pseudonymous; tagged as simulated demo data)", "donor")
+    @route("GET", "/donor/{id:int}/consent.fhir.json", "Download your consent as a provenance-tagged FHIR R4 Consent resource", "donor")
     async def donor_fhir(request):
         return JSONResponse(jsonable(S().donor_consent_fhir(donor_auth(request))),
                             media_type="application/fhir+json")
@@ -1342,6 +1341,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("PUT", "/donor/{id:int}/consent", "Change what you agree to (use, disease, limits); "
            "applies to future requests", "donor")
     async def donor_consent(request):
+        if not settings.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant consent changes must be recorded by a signed authoritative consent event",
+            )
         did = donor_auth(request)
         return _j(S().donor_set_consent(did, await _body(request)))
 

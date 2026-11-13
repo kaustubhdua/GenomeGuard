@@ -9,7 +9,7 @@
   "experimental": true,
   "date": "2026-10-25",
   "publisher": "GenomeGuard demo project",
-  "description": "Demo-only disease extension used in GenomeGuard FHIR R4 Consent exports. This extension describes simulated data, not real participant consent.",
+  "description": "Human-readable disease label associated with a Consent provision. For machine-readable disease-specific authorization, pair DUO:0000007 with the separate disease-ontology Coding extension.",
   "fhirVersion": "4.0.1",
   "kind": "complex-type",
   "abstract": false,
