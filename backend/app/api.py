@@ -170,7 +170,7 @@ async def _body(request: Request) -> dict:
 
     try:
         data = json.loads(body)
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError, RecursionError):
         raise ServiceError(400, "bad_json", "body must be a JSON object") from None
     if not isinstance(data, dict):
         raise ServiceError(400, "bad_json", "body must be a JSON object")
