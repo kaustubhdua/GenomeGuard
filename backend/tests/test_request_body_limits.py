@@ -33,3 +33,35 @@ def test_json_body_limit_preserves_valid_demo_session_flow():
     assert response.status_code == 200
     assert response.json()["expires_in"] == 1800
     assert response.json()["session_token"]
+
+def test_streaming_limit_cannot_be_bypassed_without_content_length():
+    import asyncio
+
+    from starlette.requests import Request
+
+    from app.api import _body
+    from app.service import ServiceError
+
+    chunks = [
+        {"type": "http.request", "body": b" " * 700_000, "more_body": True},
+        {"type": "http.request", "body": b" " * 400_000, "more_body": False},
+    ]
+
+    async def receive():
+        return chunks.pop(0)
+
+    request = Request(
+        {"type": "http", "method": "POST", "path": "/", "headers": []},
+        receive,
+    )
+
+    async def invoke():
+        try:
+            await _body(request)
+        except ServiceError as error:
+            assert error.status == 413
+            assert error.code == "request_body_too_large"
+        else:
+            raise AssertionError("streaming request limit was bypassed")
+
+    asyncio.run(invoke())
