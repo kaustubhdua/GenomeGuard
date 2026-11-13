@@ -112,7 +112,7 @@ class GenomeGuardService:
     def __init__(self, store: Store, ds: Dataset, p: Params = DEFAULT, *, master: bytes | None = None,
                  llm: LLM | None = None, llm_roles: set[str] | None = None,
                  allow_tamper: bool = False, admin_key: str = "demo-admin-key",
-                 release_enabled: bool = True, demo_mode: bool = True,
+                 release_enabled: bool = True, demo_mode: bool = False,
                  clock: Callable[[], float] = time.time) -> None:
         self.store, self.ds, self.p, self.clock = store, ds, p, clock
         self.demo_mode = demo_mode
