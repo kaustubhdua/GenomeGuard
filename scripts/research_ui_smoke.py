@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Browser acceptance for GenomeGuard's department and symptom literature search.
+"""Browser acceptance for GenomeGuard's department, literature, and variant evidence discovery.
 
 The provider is intercepted with source-shaped fixtures here so the UI test is
 deterministic. A separate CI smoke test exercises the real Europe PMC service.
