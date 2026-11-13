@@ -307,7 +307,7 @@ def main() -> None:
         nav_ctx.close()
 
 
-        print("\n1. Public demo does not expose privileged guided-tour controls")
+        print("\n1. Safe researcher-facing guided tour")
         ctx = browser.new_context(viewport={"width": 1280, "height": 900})
         pg = ctx.new_page()
         errors: list[str] = []
@@ -315,9 +315,20 @@ def main() -> None:
         pg.goto(base + "/#/overview", wait_until="domcontentloaded")
         pg.wait_for_selector("#view h1", timeout=15000)
         pg.locator("#who").wait_for(state="visible", timeout=30000)
-        check("public synthetic demo hides the legacy steward guided tour",
-              pg.get_by_role("button", name="Guided walkthrough").count() == 0)
-        check("no JavaScript errors in public demo boot", not errors, "; ".join(errors)[:120])
+        tour_button = pg.get_by_role("button", name="Guided walkthrough")
+        tour_button.wait_for(state="visible", timeout=30000)
+        tour_button.click()
+        expected_routes = ["#/overview", "#/research", "#/datasets", "#/requests", "#/donor"]
+        for step, expected in enumerate(expected_routes):
+            pg.wait_for_function("(hash) => location.hash === hash", arg=expected, timeout=15000)
+            check(f"guided tour step {step + 1} navigates to its page", pg.locator(".tour").count() == 1)
+            if step < len(expected_routes) - 1:
+                pg.locator(".tour-btns button", has_text="Next").click()
+        pg.locator(".tour-btns button", has_text="Finish").click()
+        check("guided tour closes", pg.locator(".tour").count() == 0)
+        check("guided tour does not change the active demo identity",
+              pg.locator("#who").input_value().isdigit())
+        check("no JavaScript errors during guided tour", not errors, "; ".join(errors)[:120])
         ctx.close()
 
         for theme in ("light", "dark"):
