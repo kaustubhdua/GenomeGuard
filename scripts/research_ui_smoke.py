@@ -45,12 +45,14 @@ def main() -> int:
     def handle_provider(route) -> None:
         parsed = urlparse(route.request.url)
         query = parse_qs(parsed.query)
-        page = int(query.get("page", ["1"])[0])
-        requests.append({"query": query.get("query", [""])[0], "page": str(page)})
+        cursor = query.get("cursorMark", ["*"])[0]
+        page = 1 if cursor == "*" else 2
+        requests.append({"query": query.get("query", [""])[0], "cursorMark": cursor})
         records = ([response_record(1, index) for index in range(PAGE_SIZE)]
                    if page == 1 else [response_record(2, 0)])
         body = {
             "hitCount": PAGE_SIZE + 1,
+            "nextCursorMark": "cursor-page-2" if page == 1 else "cursor-page-2",
             "resultList": {"result": records},
         }
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
@@ -73,7 +75,7 @@ def main() -> int:
         page.get_by_role("button", name="Load more publications").click()
         page.locator(".research-paper").nth(PAGE_SIZE).wait_for()
         check("pagination appends the next provider page",
-              len(requests) == 2 and requests[1]["page"] == "2"
+              len(requests) == 2 and requests[1]["cursorMark"] == "cursor-page-2"
               and page.locator(".research-paper").count() == PAGE_SIZE + 1, str(requests))
 
         page.get_by_label("Research question or symptom description").fill("BRCA1 ovarian cancer symptoms")
