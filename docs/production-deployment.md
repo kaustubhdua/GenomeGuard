@@ -1,6 +1,6 @@
 # Hosted deployment record
 
-Last audited: 13 November 2026.
+Last audited: 13 November 2026 (after merges of PRs #143 and #144).
 
 
 ## Environment separation and current live status (13 November 2026)
@@ -11,9 +11,9 @@ Last audited: 13 November 2026.
 - Render service: srv-dbev1ka9lscs738813t0 — https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0
 - Hosting: Render Free plan, Singapore region, Dockerfile ./Dockerfile; repository branch main; auto-deploy reports enabled.
 - Latest provider-reported live deployment: dep-dbr3gpou01pc738prrh0, source commit 10fb08dcc11ca09282cc1085fd86e3c73708281a, deployment trigger api, status live.
-- Security fix: PR #142 merged as 10c429d393afd474e806939e80212e8182635e08, but that commit is not the live deployment. Render's event history showed no deployment event for the merge. The public service therefore still runs the older implementation.
+- Security fix: PR #142 merged as 10c429d393afd474e806939e80212e8182635e08, but that commit is not the live deployment. Render's event history showed no deployment event for the merge. PR #143 (Open Targets UI/provenance exports) and PR #144 (deployment separation) are also merged; mainline now includes merge commits 8487ac67e51e6ef67899ab8cad67cdbc0c1e1ac1 and 67f64ee16b96dab62399a23f4b8dcb5ed4adafc8. Render's event history showed no deployment event after these merges. The public service therefore still runs the older implementation.
 - Live acceptance: run 43401555435 verified the synthetic cohort and audit chain but failed the requester-credential exposure check. The deployed /demo/requesters response still exposes requester API-key fields. Do not treat the public demo as security-accepted until the merged fix is actually deployed and the exact-commit live smoke passes.
-- The live monitor reported demo_mode=true, synthetic_data_only=true, 600 samples, 3,000 variants, and storage_backend=postgresql. This is evidence that the application reports a PostgreSQL backend; it does not identify the external database provider, prove which Neon project (if any) is connected, or prove provider-level backup, PITR, key custody, durability, or recovery. Render has no managed PostgreSQL resource attached to this service.
+- The live monitor previously reported demo_mode=true, synthetic_data_only=true, 600 samples, 3,000 variants, and storage_backend=postgresql. This is evidence that the application reported a PostgreSQL backend at that time; it does not identify the external database provider, prove which Neon project (if any) is connected, or prove provider-level backup, PITR, key custody, durability, or recovery. A fresh inspection of the connected Render workspace found no Render Postgres instances.
 - The public service is a synthetic demonstration environment. Do not upload private or controlled-access participant data or use it for clinical decisions.
 
 ### Separate research-mode service

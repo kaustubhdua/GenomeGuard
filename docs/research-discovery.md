@@ -1,6 +1,11 @@
-# Multi-source research discovery
+# Multi-source literature and genomic evidence discovery
 
-GenomeGuard's Research Discovery workspace retrieves publication metadata from two independent public sources: Europe PMC and NCBI PubMed.
+GenomeGuard's Research Discovery workspace contains two related but distinct evidence surfaces:
+
+1. **Publication search** retrieves publication metadata from two independent public sources: Europe PMC and NCBI PubMed.
+2. **Gene–disease evidence** retrieves direct target–disease associations and optional source-level evidence from the Open Targets Platform. These records are not publication-search results and their platform scores are not GenomeGuard confidence or clinical validity.
+
+The surfaces share a research workspace but preserve each provider's own response contract, provenance, identifiers, and scientific limitations.
 
 ## Search behavior
 

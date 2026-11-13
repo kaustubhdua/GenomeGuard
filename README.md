@@ -21,7 +21,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 - **Auditability:** records decisions and events in a hash-chained audit log with verification tooling.
 - **Interoperability experiments:** includes a Beacon v2-style endpoint and export of synthetic FHIR R4 Consent resources for validation.
 - **Research evaluation:** includes repeatable synthetic-data evaluations and optional workflows for public 1000 Genomes genotype data.
-- **Research discovery:** searches live Europe PMC publication records by research question or department, with source-linked abstracts and clear non-clinical boundaries.
+- **Research discovery:** searches live Europe PMC and NCBI PubMed publication records by department or research question, deduplicates source records, and exposes Open Targets direct gene–disease associations with source-level evidence, release provenance, and reproducible exports. These are research-discovery tools, not clinical decision support.
 
 ## Current scope
 
@@ -33,9 +33,10 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 | Cryptography | Encryption helpers and an educational Paillier aggregation path | Not independently audited and not a production cryptographic service |
 | Federated analysis | Demonstration workflow | Not a hardened multi-organization deployment |
 | Interoperability | Core Beacon-style response checks and synthetic FHIR R4 validation | Not full Beacon conformance or proof of legally valid consent |
-| Hosting and persistence | The first-party Python/Starlette API serves the frontend and all application routes; SQLite supports local development and PostgreSQL supports durable deployments | No managed backend or hosted authentication service is required. Production still requires operator-managed PostgreSQL, persistent storage, backups, and identity governance. |
+| Research discovery | Europe PMC + PubMed publication retrieval and Open Targets target–disease evidence with provenance-aware exports | Provider retrieval order and Open Targets scores are not evidence-quality rankings, clinical validity, diagnosis, causality, or treatment advice. |
+| Hosting and persistence | The first-party Python/Starlette API serves the frontend and all application routes; SQLite supports local development and PostgreSQL supports durable deployments | The current Render workspace has no managed PostgreSQL instance. Production still requires a dedicated durable database, backups, key custody, identity governance, and live acceptance. |
 
-These boundaries are intentional and should remain visible in the interface and any exported results. See the [current implementation and release status](docs/current-status-2026-11-10.md) and the [detailed release-readiness report](docs/release-readiness-2026-11-10.md) for the latest verified CI evidence and production blockers.
+These boundaries are intentional and should remain visible in the interface and any exported results. See the [current hosted deployment and release blockers](docs/production-deployment.md), [literature discovery behavior](docs/research-discovery.md), and [Open Targets integration and evidence limitations](docs/open-targets-integration.md). The dated November 10 status and release-readiness records are historical snapshots, not the current deployment state.
 
 ## Backend and identity
 
@@ -83,7 +84,7 @@ The CI workflows also exercise API behavior, evaluation scenarios, browser route
 
 For optional public-genotype research evaluation, see [Real-data evaluation](docs/real-data.md). Review the data source, cohort build settings, and provenance before running it.
 
-For the latest read-only check of the hosted API and deployment drift, see the [live-readiness audit (2 November 2026)](docs/live-readiness-audit-2026-11-02.md). For evidence-based hosting, persistence, and release blockers, see the [production-readiness audit (29 October 2026)](docs/production-readiness-audit-2026-10-29.md).
+For the current hosted API, Render deployment, persistence, and release blockers, see the [hosted deployment record](docs/production-deployment.md). Older live-readiness and production-readiness audits are historical evidence and may describe superseded commits.
 
 For the dataset source review, provenance ledger, and safe import acceptance criteria, see [Genomic dataset provenance and import gate](docs/genomic-dataset-provenance-import-gate.md).
 
@@ -96,6 +97,7 @@ For the curated public-source discovery index and its release-specific reuse-rev
 The service applies a deterministic request pipeline: request validation, policy checks, risk assessment, output transformation, anomaly monitoring, decision handling, and audit recording. Advisory agents receive sanitized summaries rather than raw genotypes and do not have authority to approve, deny, freeze, or release data.
 
 - [Research discovery and literature-search boundaries](docs/research-discovery.md)
+- [Open Targets gene–disease evidence integration](docs/open-targets-integration.md)
 - [Architecture](docs/architecture.md)
 - [API reference](docs/api.md)
 - [Configuration](docs/configuration.md)
