@@ -64,7 +64,7 @@ def _retry_delay(error: HTTPError, attempt: int) -> float:
                 retry_at = parsedate_to_datetime(value)
                 if retry_at.tzinfo is None:
                     retry_at = retry_at.replace(tzinfo=UTC)
-                return min(30.0, max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds()))
+                return min(30.0, max(0.0, (retry_at - datetime.now(UTC)).total_seconds()))
             except (TypeError, ValueError, OverflowError):
                 pass
     return min(4.0, 0.5 * (2 ** attempt))
@@ -205,7 +205,7 @@ def search_pubmed(query: str, *, retstart: int = 0, retmax: int = 20) -> dict:
         "returned": len(papers),
         "has_more": retstart + len(ids) < count,
         "papers": papers,
-        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "retrieved_at": datetime.now(UTC).isoformat(),
         "provenance": {
             "provider": "NCBI PubMed",
             "api": "E-utilities ESearch + ESummary",
