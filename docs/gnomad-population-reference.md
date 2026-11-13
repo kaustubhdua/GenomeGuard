@@ -14,6 +14,10 @@ Download the appropriate public gnomAD v4 GRCh38 sites artifact and prepare a no
 
 Optional: `homozygote_count`. No additional columns are accepted; sample identifiers, individual genotype fields, and participant IDs are rejected. Preserve source release, artifact URL, checksum, and documented population labels. The normalizer must map the release's INFO/frequency annotations to AC, AN, AF and homozygote count without deriving sample-level calls.
 
+## Checksum semantics
+
+The manifest `file_sha256` field must pin the exact normalized TSV bytes supplied to this importer. The normalized TSV is the imported artifact; it is not byte-identical to the upstream gnomAD VCF/sites file. If the upstream source artifact has a separate checksum, preserve it separately in manifest metadata (for example `source_artifact_sha256`) alongside the source URL and release. Never put the raw VCF checksum in `file_sha256` and then expect it to match the normalized TSV. The importer always compares the actual TSV digest with the registered `file_sha256` before inserting any rows; `--expected-sha256` is an optional second operator-supplied check, not a replacement for the manifest pin.
+
 ## Import
 
 1. Apply the native migration `backend/migrations/002_normalized_public_references.sql` through the normal reviewed deployment process. It creates the normalized dataset and aggregate-reference tables without Supabase or PostgREST.
@@ -29,7 +33,7 @@ GG_IMPORT_DATABASE_URL='...' python -m app.data.gnomad_reference import \
   --expected-sha256 <64-character-sha256>
 ```
 
-The import streams in batches and is idempotent. It inserts only into `genomeguard.population_variant_frequency`; it does not approve or mark a manifest loaded. A steward must reconcile the database row count and update the manifest using an administrative session after a successful import.
+Before inserting any rows, the importer requires the registered manifest to contain a valid SHA-256 and compares the computed input TSV digest with that manifest value. The optional `--expected-sha256` is an additional operator-supplied check, not a substitute for the manifest pin. A missing or mismatched manifest checksum fails closed before database writes. The import streams in batches and is idempotent. It inserts only into `genomeguard.population_variant_frequency`; it does not approve or mark a manifest loaded. A steward must reconcile the database row count and update the manifest using an administrative session after a successful import.
 
 ## Excel export
 
