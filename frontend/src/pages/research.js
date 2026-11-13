@@ -371,6 +371,7 @@ export async function render() {
   }
 
   form.addEventListener("submit", search);
+  sourceFilter.addEventListener("change", () => { if (activeQuery) search(); });
   if (initialDepartment || initialQuery) {
     if (!question.value && !initialDepartment) {
       status.textContent = "Enter a research question or select a department to begin.";
