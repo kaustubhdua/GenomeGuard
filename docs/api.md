@@ -47,7 +47,7 @@ Auth: institution-bound requesters use `Authorization: Bearer`; non-demo API-key
 | GET | `/demo/donors` | Synthetic donor persona metadata; no credentials returned | public |
 | POST | `/demo/donor-session` | Issue a 30-minute in-memory synthetic donor session | public |
 | GET | `/donor/{id:int}` | A donor's own consent, status and who used their data | donor |
-| GET | `/donor/{id:int}/consent.fhir.json` | Download your consent as a FHIR R4 Consent resource (pseudonymous; tagged as simulated demo data) | donor |
+| GET | `/donor/{id:int}/consent.fhir.json` | Download a FHIR R4 Consent resource with distinct synthetic-demo, participant-record or unverified-provenance tags; export does not verify legal consent | donor |
 | POST | `/donor/{id:int}/withdraw` | Withdraw consent for all future requests | donor |
 | PUT | `/donor/{id:int}/consent` | Change what you agree to (use, disease, limits); applies to future requests | donor |
 | POST | `/donor/{id:int}/restore` | Give consent again after withdrawing | donor |
