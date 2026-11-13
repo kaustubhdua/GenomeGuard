@@ -337,6 +337,11 @@ def test_production_steward_provisions_oidc_bound_requester_without_api_key(monk
     steward_headers = {"Authorization": "Bearer steward-sub"}
 
     assert client.get("/demo/requesters").status_code == 404
+    assert client.put(
+        "/donor/1/consent", json={"use": "GRU", "modifiers": []},
+    ).status_code == 503
+    assert client.post("/donor/1/withdraw").status_code == 503
+    assert client.post("/donor/1/restore").status_code == 503
     assert client.post("/admin/requesters", json={
         "name": "Researcher One", "institution": "Research Institute",
     }).status_code == 401
