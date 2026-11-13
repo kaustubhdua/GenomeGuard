@@ -179,7 +179,13 @@ def search_proteins(symbol: str, *, size: int = 5) -> dict:
         accession = _text(record.get("primaryAccession"))
         if not accession or not ACCESSION_RE.fullmatch(accession):
             continue
+        entry_type = _text(record.get("entryType"))
+        if not entry_type or not entry_type.lower().startswith("uniprotkb reviewed"):
+            continue
         organism = record.get("organism")
+        taxon_id = organism.get("taxonId") if isinstance(organism, dict) else None
+        if isinstance(taxon_id, bool) or taxon_id != TAXONOMY_ID:
+            continue
         organism_name = _text(organism.get("scientificName")) if isinstance(organism, dict) else None
         sequence = record.get("sequence")
         length = sequence.get("length") if isinstance(sequence, dict) else None
@@ -190,7 +196,7 @@ def search_proteins(symbol: str, *, size: int = 5) -> dict:
             "gene_names": _gene_names(record),
             "organism": organism_name,
             "length_aa": length if isinstance(length, int) and not isinstance(length, bool) else None,
-            "reviewed": str(record.get("entryType", "")).lower().startswith("uniprotkb reviewed"),
+            "reviewed": True,
             "function": _function(record),
             "ensembl_cross_references": _ensembl_xrefs(record),
             "source_url": f"{SOURCE_URL}/uniprotkb/{accession}",
