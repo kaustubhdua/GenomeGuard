@@ -1,6 +1,6 @@
 // Tiny API client. Credentials are deliberately kept in tab memory only.
 // Never read or write API keys to localStorage, sessionStorage, URLs, or logs.
-// Donors use their own X-Donor-Key and are also kept in memory only.
+// Synthetic demo personas use short-lived session headers; tokens stay in tab memory only.
 import { beginOidcLogin, completeOidcCallback } from "./oidc.js";
 
 // Defer any remembered identity until the server confirms demo mode.
