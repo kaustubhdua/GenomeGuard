@@ -18,7 +18,7 @@ function termCard(term, onUse) {
   const termUrl = "https://www.ebi.ac.uk/ols4/ontologies/" + encodeURIComponent(ontology)
     + "/classes?iri=" + encodeURIComponent(term.iri || "");
   const useButton = h("button", { class: "btn secondary", type: "button" },
-    "Add term to publication query");
+    "Add selected term to publication query");
   useButton.addEventListener("click", () => onUse(term, false));
   const findButton = h("button", { class: "btn", type: "button" },
     "Find research papers for this term");
@@ -86,7 +86,8 @@ export function renderOntologyPanel() {
       .filter((value) => typeof value === "string" && value.trim()))].slice(0, 4);
     if (!phrases.length) return;
     const expansion = "(" + phrases.map((value) => '"' + value.replace(/"/g, '\\"') + '"').join(" OR ") + ")";
-    literatureQuestion.value = expansion;
+    const existing = literatureQuestion.value.trim();
+    literatureQuestion.value = searchNow || !existing ? expansion : "(" + existing + ") OR " + expansion;
     literatureQuestion.focus();
     if (searchNow) {
       status.textContent = "Searching Europe PMC and PubMed for publications matching the selected source phenotype and synonyms…";
