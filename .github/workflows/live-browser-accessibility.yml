@@ -1,7 +1,7 @@
 name: live-browser-accessibility-acceptance
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [test/live-browser-accessibility-acceptance-20261114]
     paths:
       - "frontend/**"
       - "backend/app/api.py"
