@@ -20,6 +20,11 @@ function display(value) {
   return value === null || value === undefined || value === "" ? "Not reported" : String(value);
 }
 
+function displayMeasurement(value) {
+  return value === "-" || value === null || value === undefined || value === ""
+    ? "Not reported" : String(value);
+}
+
 function formatPValue(record) {
   if (Number.isFinite(record.pvalue_mantissa) && Number.isFinite(record.pvalue_exponent)) {
     return record.pvalue_mantissa + " × 10^" + record.pvalue_exponent;
@@ -39,8 +44,11 @@ function associationCard(record) {
   const alleles = (record.snp_alleles || []).map((allele) => [
     allele.rs_id, allele.effect_allele ? "effect allele " + allele.effect_allele : "",
   ].filter(Boolean).join(" — "));
-  const effect = record.beta || (
-    record.odds_ratio_text ? "Odds ratio " + record.odds_ratio_text
+  const beta = record.beta && record.beta !== "-" ? record.beta : null;
+  const oddsRatioText = record.odds_ratio_text && record.odds_ratio_text !== "-"
+    ? record.odds_ratio_text : null;
+  const effect = beta || (
+    oddsRatioText ? "Odds ratio " + oddsRatioText
       : record.odds_ratio !== null && record.odds_ratio !== undefined
         ? "Odds ratio " + record.odds_ratio : "Not reported"
   );
@@ -67,7 +75,7 @@ function associationCard(record) {
         h("small", {}, "Beta / odds ratio as supplied by the Catalog"))),
     h("p", { class: "fine muted" }, "Risk/effect allele frequency: "
       + display(record.risk_frequency)
-      + " · Confidence interval: " + display(record.confidence_interval?.text)),
+      + " · Confidence interval: " + displayMeasurement(record.confidence_interval?.text)),
     h("div", { class: "source-links" },
       record.source_url ? safeExternal(record.source_url, "GWAS association") : null,
       record.study_url ? safeExternal(record.study_url, "Study record") : null,
