@@ -6,6 +6,7 @@ services:
   - type: web
     name: genomeguard-research
     runtime: docker
+    dockerfilePath: ./Dockerfile.research
     plan: free
     autoDeploy: true
     healthCheckPath: /health/live
