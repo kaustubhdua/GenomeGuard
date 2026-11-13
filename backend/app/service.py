@@ -831,6 +831,11 @@ class GenomeGuardService:
 
     @transactional
     def donor_set_withdrawn(self, donor_id: int, withdrawn: bool) -> dict:
+        if not self.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant withdrawal must be recorded by the configured authoritative consent source",
+            )
         d = self._donor(donor_id)
         if d.consent.get("consent_basis") == "dataset_policy":
             raise ServiceError(409, "dataset_policy_withdrawal_unsupported",
@@ -849,8 +854,12 @@ class GenomeGuardService:
 
     @transactional
     def donor_set_consent(self, donor_id: int, change: dict) -> dict:
-        """The donor edits what they agree to. Only whitelisted DUO-style fields are accepted;
-        the change applies to future requests and is audited without the donor's identity."""
+        """Apply a synthetic-demo consent edit; research mode requires signed authority events."""
+        if not self.demo_mode:
+            raise ServiceError(
+                503, "consent_authority_required",
+                "participant consent changes must be recorded by a signed authoritative consent event",
+            )
         d = self._donor(donor_id)
         if d.consent.get("consent_basis") == "dataset_policy":
             raise ServiceError(409, "dataset_policy_not_individual_consent",
