@@ -942,11 +942,17 @@ class GenomeGuardService:
         if use not in self.CONSENT_USES:
             raise ServiceError(422, "invalid_consent", "signed consent use must be one of GRU, HMB, DS or POA")
         disease = incoming.get("disease")
+        disease_label = incoming.get("disease_label")
         if use == "DS":
-            if not isinstance(disease, str) or not re.fullmatch(r"[a-z_]{2,32}", disease):
-                raise ServiceError(422, "invalid_consent", "DS consent requires a lowercase disease label")
+            if not isinstance(disease, str) or not re.fullmatch(r"MONDO:\\d{7}", disease):
+                raise ServiceError(422, "invalid_consent", "DS consent requires a MONDO disease identifier")
+            if disease_label is not None and (
+                not isinstance(disease_label, str) or not disease_label.strip() or len(disease_label) > 160
+            ):
+                raise ServiceError(422, "invalid_consent", "disease_label must be a non-empty string up to 160 characters")
         else:
             disease = None
+            disease_label = None
         modifiers = incoming.get("modifiers", [])
         if (not isinstance(modifiers, list)
                 or not all(isinstance(item, str) for item in modifiers)
@@ -970,6 +976,7 @@ class GenomeGuardService:
             **donor.consent,
             "use": use,
             "disease": disease,
+            "disease_label": disease_label,
             "modifiers": sorted({item.upper() for item in modifiers}),
             "population": population,
             "consent_date": consent_date,
@@ -1069,7 +1076,19 @@ class GenomeGuardService:
         ext += [{"url": f"{self.FHIR_EXT}duo-modifier.json", "valueCoding": duo(m)}
                 for m in (c.get("modifiers") or [])]
         if c.get("disease"):
-            ext.append({"url": f"{self.FHIR_EXT}disease.json", "valueString": c["disease"]})
+            ext.append({
+                "url": f"{self.FHIR_EXT}disease.json",
+                "valueString": c.get("disease_label") or c["disease"],
+            })
+            if re.fullmatch(r"MONDO:\\d{7}", str(c["disease"])):
+                ext.append({
+                    "url": f"{self.FHIR_EXT}disease-ontology.json",
+                    "valueCoding": {
+                        "system": "http://purl.obolibrary.org/obo/mondo.owl",
+                        "code": c["disease"],
+                        **({"display": c["disease_label"]} if c.get("disease_label") else {}),
+                    },
+                })
         if c.get("population"):
             ext.append({"url": f"{self.FHIR_EXT}population.json", "valueString": c["population"]})
         res = {
