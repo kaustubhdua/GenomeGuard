@@ -54,6 +54,28 @@ def test_use_disease_and_modifiers_are_carried_as_duo_extensions():
     assert ext["disease"][0]["valueString"] == "diabetes"
 
 
+def test_participant_ds_fhir_exports_machine_readable_mondo_identifier():
+    svc = make_service()
+    donor = _donor_with(svc, lambda consent: consent["use"] == "GRU")
+    consent = {
+        **donor.consent,
+        "use": "DS",
+        "disease": "MONDO:0005015",
+        "disease_label": "diabetes mellitus",
+        "consent_basis": "participant_record",
+    }
+    svc.store.set_donor_consent(donor.id, consent)
+    svc.ds.donors[donor.id - 1] = replace(donor, consent=consent)
+
+    resource = svc.donor_consent_fhir(donor.id)
+    extensions = resource["provision"]["extension"]
+    disease_label = next(item for item in extensions if item["url"].endswith("StructureDefinition-disease.json"))
+    disease_code = next(item for item in extensions if item["url"].endswith("StructureDefinition-disease-ontology.json"))
+    assert disease_label["valueString"] == "diabetes mellitus"
+    assert disease_code["valueCoding"]["system"] == "http://purl.obolibrary.org/obo/mondo.owl"
+    assert disease_code["valueCoding"]["code"] == "MONDO:0005015"
+
+
 def test_standard_permission_uses_the_official_duo_identifier():
     svc = make_service()
     d = _donor_with(svc, lambda c: c["use"] == "GRU")
