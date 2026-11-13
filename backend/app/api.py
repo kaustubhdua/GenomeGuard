@@ -1251,7 +1251,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def pubmed_literature_search(request):
         """Retrieve public PubMed metadata; search terms are never persisted."""
         from app.literature.pubmed import (
-            MAX_OFFSET, MAX_PAGE_SIZE, MAX_QUERY_LENGTH, PubMedProviderError, search_pubmed,
+            MAX_OFFSET,
+            MAX_PAGE_SIZE,
+            MAX_QUERY_LENGTH,
+            PubMedProviderError,
+            search_pubmed,
         )
 
         query = request.query_params.get("q", "").strip()
