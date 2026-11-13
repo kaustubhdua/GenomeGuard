@@ -17,15 +17,18 @@ API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 QUERY = "BRCA1 AND breast cancer sort_date:y"
 
 
-def fetch(page: int) -> dict:
+def fetch(cursor_mark: str) -> dict:
     url = API + "?" + urlencode({
         "query": QUERY,
         "format": "json",
         "resultType": "core",
         "pageSize": 3,
-        "page": page,
+        "cursorMark": cursor_mark,
     })
-    request = Request(url, headers={"Accept": "application/json", "User-Agent": "GenomeGuard-research-discovery-smoke/1.0"})
+    request = Request(url, headers={
+        "Accept": "application/json",
+        "User-Agent": "GenomeGuard-research-discovery-smoke/1.0",
+    })
     last_error: Exception | None = None
     for attempt in range(3):
         try:
@@ -43,10 +46,10 @@ def fetch(page: int) -> dict:
     raise RuntimeError(f"Europe PMC unavailable after 3 attempts: {last_error}") from last_error
 
 
-def validate(payload: dict, page: int) -> list[dict]:
+def validate(payload: dict, label: str) -> tuple[list[dict], str]:
     results = payload.get("resultList", {}).get("result")
     if not isinstance(results, list):
-        raise AssertionError(f"page {page}: resultList.result is not an array")
+        raise AssertionError(f"{label}: resultList.result is not an array")
     try:
         hits = int(payload["hitCount"])
     except (KeyError, TypeError, ValueError) as exc:
@@ -55,29 +58,35 @@ def validate(payload: dict, page: int) -> list[dict]:
         raise AssertionError(f"expected a broad BRCA1 literature result set, got {hits} hits")
     for record in results:
         if not isinstance(record, dict) or not isinstance(record.get("title"), str) or not record["title"].strip():
-            raise AssertionError(f"page {page}: record is missing a source-provided title")
+            raise AssertionError(f"{label}: record is missing a source-provided title")
         for field in ("authorString", "journalTitle", "firstPublicationDate", "pmid", "pmcid", "doi", "abstractText"):
             value = record.get(field)
             if value is not None and not isinstance(value, str):
-                raise AssertionError(f"page {page}: {field} is not a string")
-    return results
+                raise AssertionError(f"{label}: {field} is not a string")
+    cursor = payload.get("nextCursorMark")
+    if not isinstance(cursor, str):
+        raise AssertionError(f"{label}: nextCursorMark is missing or invalid")
+    return results, cursor
 
 
 def main() -> int:
-    first = validate(fetch(1), 1)
-    second = validate(fetch(2), 2)
+    first, next_cursor = validate(fetch("*"), "first cursor page")
     if not first:
         raise AssertionError("Europe PMC returned no first-page records for the smoke query")
+    if not next_cursor or next_cursor == "*":
+        raise AssertionError("Europe PMC did not provide a continuation cursor")
+    second, following_cursor = validate(fetch(next_cursor), "second cursor page")
     if not second:
-        raise AssertionError("Europe PMC returned no second-page records; pagination contract failed")
+        raise AssertionError("Europe PMC returned no second-page records; cursor pagination failed")
     first_ids = {r.get("pmid") or r.get("doi") for r in first}
     second_ids = {r.get("pmid") or r.get("doi") for r in second}
     first_ids.discard(None)
     second_ids.discard(None)
     if first_ids and second_ids and first_ids.intersection(second_ids):
-        raise AssertionError("Europe PMC returned duplicate identifiers across pages")
+        raise AssertionError("Europe PMC returned duplicate identifiers across cursor pages")
     print(f"[PASS] Europe PMC live search returned {len(first)} first-page and {len(second)} second-page records")
-    print("[PASS] source metadata types and pagination contract validated")
+    print(f"[PASS] cursor pagination advanced; next cursor present={bool(following_cursor)}")
+    print("[PASS] source metadata types validated")
     return 0
 
 
