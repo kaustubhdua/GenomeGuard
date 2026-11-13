@@ -988,6 +988,22 @@ class GenomeGuardService:
             return {"system": f"{self.FHIR_BASE}/CodeSystem-consent-use-codes.json",
                     "code": code, "display": info.get("meaning") or code}
 
+        basis = c.get("consent_basis", "unknown")
+        if basis == "synthetic_demo":
+            tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
+                   "code": "simulated-consent",
+                   "display": "Synthetic demo consent record (not a real person)"}
+            narrative = "Synthetic demo consent record; this is not actual consent."
+        elif basis == "participant_record":
+            tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
+                   "code": "participant-consent-record",
+                   "display": "Participant consent record; source authority is not independently verified by this export"}
+            narrative = "Participant consent record supplied to GenomeGuard; source authority and legal validity require institutional verification."
+        else:
+            tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
+                   "code": "unverified-consent-provenance",
+                   "display": "Consent provenance is not verified"}
+            narrative = "Consent provenance is not verified; do not treat this export as proof of legal consent."
         ext = [{"url": f"{self.FHIR_EXT}duo-use.json", "valueCoding": duo(str(c.get("use")))}]
         ext += [{"url": f"{self.FHIR_EXT}duo-modifier.json", "valueCoding": duo(m)}
                 for m in (c.get("modifiers") or [])]
@@ -997,9 +1013,8 @@ class GenomeGuardService:
             ext.append({"url": f"{self.FHIR_EXT}population.json", "valueString": c["population"]})
         res = {
             "resourceType": "Consent", "id": ref,
-            "meta": {"tag": [{"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json", "code": "simulated-consent",
-                              "display": "Simulated consent record (demo data, not a real person)"}]},
-            "text": {"status": "generated", "div": '<div xmlns="http://www.w3.org/1999/xhtml"><p>Simulated consent record; this is not actual consent.</p></div>'},
+            "meta": {"tag": [tag]},
+            "text": {"status": "generated", "div": f'<div xmlns="http://www.w3.org/1999/xhtml"><p>{narrative}</p></div>'},
             "status": "inactive" if d.withdrawn else "active",
             "scope": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/consentscope",
                                   "code": "research", "display": "Research"}]},
@@ -1010,8 +1025,6 @@ class GenomeGuardService:
             "patient": {"reference": f"Patient/{ref}", "display": "Pseudonymous donor"},
             "provision": {
                 "type": "permit",
-                "purpose": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ActReason",
-                             "code": "HRESCH", "display": "healthcare research"}],
                 "extension": ext},
         }
         if c.get("consent_date"):
