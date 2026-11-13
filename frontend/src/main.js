@@ -288,7 +288,7 @@ if (!matchMedia("(prefers-reduced-motion: reduce)").matches && !matchMedia("(hov
   });
 }
 window.addEventListener("hashchange", render);
-window.addEventListener("gg:refresh-who", async () => { await boot(); drawWho(); });
+window.addEventListener("gg:refresh-who", async () => { await boot(); drawWho(); drawNav(location.hash.slice(2)); await render(); });
 function drawConnectionStatus() {
   const el = $("connection-status");
   if (!state.bootError) {
