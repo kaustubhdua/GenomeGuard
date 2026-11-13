@@ -118,3 +118,56 @@ def test_rejects_oversized_response(monkeypatch):
     monkeypatch.setattr(ontology, "urlopen", lambda *a, **k: Oversized({}))
     with pytest.raises(ontology.OntologyProviderError, match="1 MB"):
         ontology.search_ontology("breast cancer")
+
+
+
+def test_retries_transient_ols_http_failure_then_succeeds(monkeypatch):
+    from urllib.error import HTTPError
+
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        if len(calls) == 1:
+            raise HTTPError(request.full_url, 503, "temporarily unavailable", {}, None)
+        return FakeResponse(payload())
+
+    monkeypatch.setattr(ontology, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(ontology.time, "sleep", lambda _delay: None)
+    monkeypatch.setattr(ontology, "urlopen", fake_urlopen)
+    result = ontology.search_ontology("ataxia")
+    assert result["returned"] == 1
+    assert len(calls) == 2
+
+
+def test_ols_persistent_transient_failures_are_bounded(monkeypatch):
+    from urllib.error import HTTPError
+
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        raise HTTPError(request.full_url, 503, "temporarily unavailable", {}, None)
+
+    monkeypatch.setattr(ontology, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(ontology.time, "sleep", lambda _delay: None)
+    monkeypatch.setattr(ontology, "urlopen", fake_urlopen)
+    with pytest.raises(ontology.OntologyProviderError, match="HTTP 503"):
+        ontology.search_ontology("ataxia")
+    assert len(calls) == ontology.MAX_RETRIES + 1
+
+
+def test_ols_does_not_retry_non_retryable_http_failure(monkeypatch):
+    from urllib.error import HTTPError
+
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        raise HTTPError(request.full_url, 400, "bad request", {}, None)
+
+    monkeypatch.setattr(ontology, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(ontology, "urlopen", fake_urlopen)
+    with pytest.raises(ontology.OntologyProviderError, match="HTTP 400"):
+        ontology.search_ontology("ataxia")
+    assert len(calls) == 1
