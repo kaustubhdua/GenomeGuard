@@ -1255,15 +1255,51 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "participant identity integration is not configured")
         did = request.path_params["id"]
+        demo_token = request.headers.get("x-demo-donor-session")
+        if demo_token:
+            with demo_session_lock:
+                session = demo_donor_sessions.get(demo_token)
+                if session and session["expires_at"] <= time.time():
+                    demo_donor_sessions.pop(demo_token, None)
+                    session = None
+            if not session or session["donor_id"] != did:
+                raise ServiceError(401, "demo_donor_session_invalid", "demo donor session is invalid or expired")
+            return did
+        if not settings.allow_static_demo_keys:
+            raise ServiceError(
+                401, "demo_donor_session_required",
+                "use a short-lived synthetic demo donor session; static donor keys are disabled",
+            )
         if not S().donor_authenticated(did, request.headers.get("x-donor-key")):
             raise ServiceError(401, "unauthorized", "donor key required (X-Donor-Key)")
         return did
 
-    @route("GET", "/demo/donors", "Demo donor personas and keys (demo mode only)", "public")
+    @route("GET", "/demo/donors", "Synthetic donor personas (no credentials)", "public")
     async def demo_donors(request):
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "demo mode is off")
-        return _j({"donors": S().demo_donors()})
+        return _j({"donors": [
+            {"id": donor["id"], "label": donor["label"]}
+            for donor in S().demo_donors()
+        ]})
+
+    @route("POST", "/demo/donor-session", "Issue a short-lived synthetic demo donor session", "public")
+    async def demo_donor_session(request):
+        if not settings.demo_mode or settings.oidc_required or settings.tenant_isolation_required:
+            raise ServiceError(404, "not_found", "demo sessions are not enabled on this instance")
+        data = await _body(request)
+        donor_id = data.get("donor_id")
+        if isinstance(donor_id, bool) or not isinstance(donor_id, int) or donor_id < 1:
+            raise ServiceError(400, "invalid_demo_donor", "donor_id must be a positive integer")
+        donor = next((item for item in S().demo_donors() if item["id"] == donor_id), None)
+        if not donor:
+            raise ServiceError(404, "demo_donor_not_found", "demo donor was not found")
+        token, _expires_at = issue_demo_session(demo_donor_sessions, {"donor_id": donor_id})
+        return _j({
+            "session_token": token,
+            "expires_in": _DEMO_SESSION_TTL_SECONDS,
+            "donor": {"id": donor_id, "label": donor["label"]},
+        })
 
     @route("GET", "/donor/{id:int}", "A donor's own consent, status and who used their data",
            "donor")
