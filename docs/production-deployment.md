@@ -250,7 +250,7 @@ This follow-up supersedes earlier Render and Neon status statements above where 
 ### Live UI and accessibility acceptance
 
 - Render application logs include successful requests for the root HTML, static JS/CSS/font assets, `/demo/requesters`, short-lived demo session endpoints, `/me`, `/demo/donors`, `/donor/1`, and `/health`. This is request-log evidence only; it does not establish the response content or a completed Playwright browser run.
-- Existing `scripts/live_ui_smoke.py` and `scripts/live_accessibility_smoke.py` are non-destructive browser checks. A dedicated read-only workflow is proposed in PR #169 so browser route/theme/responsive and accessibility checks do not have to be bundled with the separate live API acceptance workflow, which creates synthetic test requests.
+- Existing `scripts/live_ui_smoke.py` and `scripts/live_accessibility_smoke.py` are non-destructive browser checks. A dedicated read-only workflow now exists on branch `test/live-browser-accessibility-acceptance-20261114`; run `43511953156` was pending when inspected. PR #169 was closed after moving the workflow to a push-triggered verification branch, avoiding another full PR CI matrix. The workflow runs the browser route/theme/responsive and accessibility checks without the separate live API acceptance workflow, which creates synthetic test requests.
 - A hosted browser run could not be executed in this session because the connected browser provider had exhausted its included credits. No paid credits were purchased. Do not infer a browser acceptance pass from request logs alone.
 
 ### GitHub CI and repository protection
