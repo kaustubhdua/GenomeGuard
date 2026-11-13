@@ -96,6 +96,7 @@ def main() -> int:
         page = browser.new_page(viewport={"width": 1280, "height": 900})
         page.set_default_timeout(args.timeout)
         page.route("https://www.ebi.ac.uk/europepmc/webservices/rest/search**", handle_provider)
+        page.route("**/literature/pubmed/search", handle_pubmed)
         page.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Research discovery").wait_for()
         page.get_by_role("link", name="Oncology Browse publications →").click()
@@ -134,6 +135,7 @@ def main() -> int:
         mobile = browser.new_page(viewport={"width": 375, "height": 812})
         mobile.set_default_timeout(args.timeout)
         mobile.route("https://www.ebi.ac.uk/europepmc/webservices/rest/search**", handle_provider)
+        mobile.route("**/literature/pubmed/search", handle_pubmed)
         mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         mobile.get_by_role("heading", name="Research discovery").wait_for()
         no_horizontal_overflow = mobile.evaluate(
