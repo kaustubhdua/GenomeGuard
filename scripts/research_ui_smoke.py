@@ -79,7 +79,7 @@ def main() -> int:
               and page.locator(".research-paper").count() == PAGE_SIZE + 1, str(requests))
 
         page.get_by_label("Research question or symptom description").fill("BRCA1 ovarian cancer symptoms")
-        page.get_by_label("Research department").select_option("oncology")
+        page.get_by_label("Research department", exact=True).select_option("oncology")
         page.get_by_role("button", name="Search publications").click()
         page.locator(".research-paper").first.wait_for()
         latest = requests[-1]["query"].lower()
