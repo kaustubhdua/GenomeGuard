@@ -62,6 +62,7 @@ def test_lookup_gene_normalizes_stable_ids_assembly_and_transcripts(monkeypatch)
     assert calls[0][1] == ensembl.TIMEOUT_SECONDS
     assert result["gene"]["stable_id"] == "ENSG00000139618"
     assert result["gene"]["assembly"] == "GRCh38"
+    assert result["gene"]["coordinate_system"] == "1-based closed (inclusive)"
     assert result["gene"]["gene_version"] == 19
     assert result["transcripts"][0]["is_canonical"] is True
     assert result["transcript_count_returned"] == 2
