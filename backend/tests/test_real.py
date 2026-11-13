@@ -534,3 +534,31 @@ def test_build_cohort_rejects_source_consent_without_explicit_basis():
                 v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
                 seed=3, consent_records=records,
             )
+
+
+
+def test_dataset_policy_accepts_poa_without_claiming_participant_consent():
+    from app.core.consent import ConsentRequest, eligible_cohort
+    from app.core.dataset import Dataset
+
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        policy_path = Path(__file__).resolve().parents[2] / "docs" / "policies" / "igsr-1000-genomes-public-release.json"
+        policy = __import__("json").loads(policy_path.read_text(encoding="utf-8"))
+        policy["duo_use"] = "POA"
+        cohort, meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=9,
+            consent_policy=policy, consent_source_file=str(policy_path),
+        )
+        assert meta["consent_basis"] == "dataset_policy"
+        ds = Dataset.from_cohort(cohort, "poa-policy-test")
+        allowed = eligible_cohort(
+            ConsentRequest("ancestry_research"), ds.donors,
+        )
+        blocked = eligible_cohort(
+            ConsentRequest("general_research"), ds.donors,
+        )
+        assert allowed.n == 44
+        assert blocked.n == 0
+        assert blocked.excluded_by_reason["purpose_not_population_origins"] == 44
