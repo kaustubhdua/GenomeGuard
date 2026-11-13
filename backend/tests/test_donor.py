@@ -31,6 +31,17 @@ def test_demo_donors_and_auth():
     assert c.get(f"/donor/{d['id']}", headers=DK(d)).status_code == 200
 
 
+def test_demo_mode_rejects_static_donor_keys(monkeypatch):
+    monkeypatch.setenv("GG_TEST_ALLOW_STATIC_DEMO_KEYS", "false")
+    svc, client = make_client()
+    donor = svc.demo_donors()[0]
+    response = client.get(
+        f"/donor/{donor['id']}", headers={"X-Donor-Key": donor["key"]},
+    )
+    assert response.status_code == 401
+    assert response.json()["error"] == "demo_donor_session_required"
+
+
 def test_profile_never_contains_genotypes_or_other_donors():
     svc, c = make_client()
     d = donors(c)[0]
