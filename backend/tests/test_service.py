@@ -43,7 +43,13 @@ def test_release_matches_true_frequencies_when_no_noise():
     d = svc.submit(U(svc, RESEARCHER), {**DEMO_REQ, "variant_filter": {"min_maf": 0.2, "limit": 5}})
     assert d["outcome"] == "permit" and d["transform"]["steps"] == []
     from app.core.consent import ConsentRequest, eligible_cohort
-    ids = eligible_cohort(ConsentRequest("disease_research", "diabetes", demo_mode=True), svc.ds.donors).donor_ids
+    ids = eligible_cohort(
+        ConsentRequest(
+            "disease_research", "diabetes", False, "frequency", None, {},
+            organization_is_nonprofit=True, demo_mode=True,
+        ),
+        svc.ds.donors,
+    ).donor_ids
     cols = [v - 1 for v in d["release"]["variant_ids"]]
     truth = svc.ds.genotypes[np.ix_(np.array(ids) - 1, cols)].sum(axis=0) / (2 * len(ids))
     assert np.allclose(d["release"]["values"], np.round(truth, 4))
