@@ -9,7 +9,7 @@
 
 GenomeGuard is a research prototype for governing access to genomic datasets. It evaluates research requests against consent-inspired policy rules, estimates disclosure risk, applies output transformations, monitors suspicious query patterns, and records decisions in a tamper-evident audit chain. Offline advisory agents use deterministic templates and a bounded rules planner to explain evidence for reviewers; no hosted AI provider or API key is used, and deterministic application code remains responsible for access decisions.
 
-> **Research software — not for clinical or production use.** The hosted research instance uses public 1000 Genomes genotype data and a dataset-level public-release policy mapping; local demo mode still uses synthetic data. The policy mapping is not participant-specific consent, and requester API keys are not verified institutional identities. The service has not undergone independent security, privacy, clinical, or legal review. It must not be used for private participant data or clinical decisions.
+> **Research prototype — not for clinical or production use.** The currently hosted public service is a synthetic-only demonstration. The separate real-public-genotype research image is defined in the repository but is not yet deployed as a separately accepted research service. Any public-release policy mapping is not participant-specific consent, and requester API keys are not verified institutional identities. The service has not undergone independent security, privacy, clinical, or legal review. It must not be used for private participant data or clinical decisions.
 
 ## What it does
 
