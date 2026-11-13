@@ -122,7 +122,7 @@ def test_gwas_v2_empty_result_is_a_valid_empty_state(monkeypatch):
             "page": {"size": 20, "totalElements": 0, "totalPages": 0, "number": 0},
         },
     )
-    result = gwas_catalog.search_gwas_catalog(gene_symbol="NO_SUCH_GENE")
+    result = gwas_catalog.search_gwas_catalog(gene_symbol="NOSUCHGENE")
     assert result["count"] == 0
     assert result["records"] == []
     assert result["has_more"] is False
