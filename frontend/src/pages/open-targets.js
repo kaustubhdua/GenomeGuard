@@ -264,7 +264,10 @@ export function renderOpenTargetsPanel() {
         safeExternal(p.endpoint || "https://api.platform.opentargets.org/api/v4/graphql", "Open Targets GraphQL endpoint"),
         safeExternal(API_DOCS, "Open Targets API documentation")),
       h("p", { class: "fine muted" },
-        "Citation metadata: cite Open Targets Platform with this data release, API version, retrieval timestamp and exact query identifiers. Cite original evidence records and publications separately using their source IDs and links. Scores remain source-defined research-prioritisation signals." ));
+        "Citation metadata: cite Open Targets Platform with this data release, API version, retrieval timestamp and exact query identifiers. Cite original evidence records and publications separately using their source IDs and links. Scores remain source-defined research-prioritisation signals."),
+      Array.isArray(current.interpretation?.limitations) && current.interpretation.limitations.length
+        ? h("p", { class: "fine muted" }, "Source limitations: " + current.interpretation.limitations.join(" · "))
+        : null));
   }
 
   function updateFilters() {
@@ -368,6 +371,8 @@ export function renderOpenTargetsPanel() {
       "- Association mode: " + md(payload.query.association_mode),
       "- Page size: " + md(payload.query.page_size),
       "- Evidence page size: " + md(payload.query.evidence_size),
+      "- Associations loaded: " + md(payload.associations.loaded_count) + " of " + md(payload.associations.count),
+      "- Evidence records loaded: " + md(payload.evidence.loaded_count) + " of " + md(payload.evidence.count),
       "",
       "## Provenance",
       "- Provider: " + md(p.provider),
@@ -380,6 +385,7 @@ export function renderOpenTargetsPanel() {
       "- Association score: " + md(payload.interpretation?.association_score),
       "- Evidence score: " + md(payload.interpretation?.evidence_score),
       "- This report is for research exploration; it does not establish diagnosis, causality, clinical validity, treatment suitability, or clinical recommendations.",
+      ...(Array.isArray(payload.interpretation?.limitations) ? payload.interpretation.limitations.map((item) => "- Source limitation: " + md(item)) : []),
       "",
       "## Target–disease associations",
     ];
