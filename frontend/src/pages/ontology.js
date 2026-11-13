@@ -85,7 +85,7 @@ export function renderOntologyPanel() {
     const phrases = [...new Set([term.label, ...(Array.isArray(term.synonyms) ? term.synonyms : [])]
       .filter((value) => typeof value === "string" && value.trim()))].slice(0, 4);
     if (!phrases.length) return;
-    const expansion = "(" + phrases.map((value) => '"' + value.replace(/"/g, '\\"') + '"').join(" OR ") + ")";
+    const expansion = "(" + phrases.map((value) => '"' + value.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"').join(" OR ") + ")";
     const existing = literatureQuestion.value.trim();
     literatureQuestion.value = searchNow || !existing ? expansion : "(" + existing + ") OR " + expansion;
     literatureQuestion.focus();
