@@ -26,6 +26,7 @@ def main() -> int:
     requests: list[dict[str, str]] = []
     failures: list[str] = []
     pubmed_requests: list[dict[str, object]] = []
+    open_targets_requests: list[dict[str, object]] = []
     provider_outages = {"europe": False, "pubmed": False}
 
     def check(label: str, ok: bool, detail: str = "") -> None:
@@ -98,12 +99,91 @@ def main() -> int:
                     "returned": 1, "has_more": False, "papers": papers}
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
+    def handle_open_targets(route) -> None:
+        payload = json.loads(route.request.post_data or "{}")
+        open_targets_requests.append(payload)
+        page_index = int(payload.get("page_index", 0))
+        evidence_cursor = payload.get("evidence_cursor")
+        if page_index == 0:
+            association_rows = [
+                {"score": 0.91, "disease": {"id": "EFO_0000311", "name": "breast carcinoma"},
+                 "datasourceScores": [{"id": "eva", "score": 0.8}],
+                 "datatypeScores": [{"id": "genetic_association", "score": 0.7}]},
+                {"score": 0.42, "disease": {"id": "EFO_0000616", "name": "lung carcinoma"},
+                 "datasourceScores": [{"id": "ot_genetics_portal", "score": 0.4}],
+                 "datatypeScores": [{"id": "genetic_association", "score": 0.3}]},
+            ]
+        else:
+            association_rows = [
+                {"score": 0.33, "disease": {"id": "EFO_0000408", "name": "ovarian carcinoma"},
+                 "datasourceScores": [{"id": "ot_genetics_portal", "score": 0.33}],
+                 "datatypeScores": [{"id": "genetic_association", "score": 0.2}]},
+            ]
+        if evidence_cursor:
+            evidence_rows = [{
+                "id": "evidence-3", "datasourceId": "ot_genetics_portal",
+                "datatypeId": "genetic_association", "score": 0.55,
+                "releaseVersion": "26.06", "releaseDate": "2026-06-01",
+                "publicationDate": "2025-03-01", "publicationFirstAuthor": "Second Author",
+                "literature": ["87654321"],
+                "urls": [{"url": "https://example.org/evidence/3", "niceName": "Second source record"}],
+                "studyId": "study-3", "studySampleSize": 2400,
+                "cohortDescription": "Second public study cohort", "qualityControls": [],
+                "warningMessage": None,
+            }]
+            evidence_next = None
+        else:
+            evidence_rows = [
+                {"id": "evidence-1", "datasourceId": "eva",
+                 "datatypeId": "genetic_association", "score": 0.8,
+                 "releaseVersion": "26.06", "releaseDate": "2026-06-01",
+                 "publicationDate": "2025-02-01", "publicationFirstAuthor": "Example",
+                 "literature": ["12345678"],
+                 "urls": [{"url": "https://example.org/evidence/1", "niceName": "Source record"}],
+                 "studyId": "study-1", "studySampleSize": 1200,
+                 "cohortDescription": "Public study cohort", "qualityControls": [],
+                 "warningMessage": None},
+                {"id": "evidence-2", "datasourceId": "ot_genetics_portal",
+                 "datatypeId": "genetic_association", "score": 0.6,
+                 "releaseVersion": "26.06", "releaseDate": "2026-06-01",
+                 "publicationDate": "2025-02-15", "publicationFirstAuthor": "Another Author",
+                 "literature": ["23456789"],
+                 "urls": [{"url": "https://example.org/evidence/2", "niceName": "Another source record"}],
+                 "studyId": "study-2", "studySampleSize": 1800,
+                 "cohortDescription": "Another public study cohort", "qualityControls": [],
+                 "warningMessage": None},
+            ]
+            evidence_next = "evidence-next"
+        body = {
+            "provider": "Open Targets Platform",
+            "target": {"id": "ENSG00000141510", "approved_symbol": "TP53", "biotype": "protein_coding"},
+            "associations": {"count": 3, "page_index": page_index, "page_size": 20,
+                             "direct_only": True, "rows": association_rows},
+            "evidence": {"disease_id": payload.get("disease_id"), "count": 3,
+                         "cursor": evidence_next, "rows": evidence_rows},
+            "provenance": {
+                "provider": "Open Targets Platform",
+                "api_version": {"x": "4", "y": "0", "z": "0", "suffix": None},
+                "data_version": {"year": "2026", "month": "06", "iteration": "1"},
+                "retrieved_at": "2026-11-13T09:30:00Z",
+                "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+                "association_mode": "direct-only (enableIndirect=false)",
+            },
+            "interpretation": {
+                "association_score": "Open Targets heuristic prioritisation score in [0,1]; not a probability or clinical validity assessment",
+                "evidence_score": "Source/platform evidence score; not an independent GenomeGuard confidence estimate",
+                "limitations": ["Review original evidence sources and publications before drawing conclusions."],
+            },
+        }
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         page = browser.new_page(viewport={"width": 1280, "height": 900})
         page.set_default_timeout(args.timeout)
         page.route("https://www.ebi.ac.uk/europepmc/webservices/rest/search**", handle_provider)
         page.route("**/literature/pubmed/search", handle_pubmed)
+        page.route("**/research/open-targets/target", handle_open_targets)
         page.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Research discovery").wait_for()
         page.get_by_role("link", name="Oncology Browse publications →").click()
@@ -167,6 +247,59 @@ def main() -> int:
         provider_outages["europe"] = False
         provider_outages["pubmed"] = False
 
+        page.get_by_label("Ensembl gene identifier").fill("ENSG00000141510")
+        page.get_by_label("Optional EFO disease identifier").fill("EFO_0000311")
+        page.get_by_role("button", name="Search Open Targets evidence").click()
+        page.locator("#ot-association-results .research-paper").first.wait_for()
+        page.locator("#ot-evidence-results .research-paper").first.wait_for()
+        check("Open Targets query sends explicit Ensembl/EFO IDs and requests direct-only evidence",
+              open_targets_requests[0].get("ensembl_id") == "ENSG00000141510"
+              and open_targets_requests[0].get("disease_id") == "EFO_0000311"
+              and open_targets_requests[0].get("page_index") == 0,
+              str(open_targets_requests[0]))
+        provenance_text = page.locator("#ot-provenance").inner_text()
+        check("Open Targets UI shows API version, data release, retrieval timestamp and docs link",
+              "4.0.0" in provenance_text and "2026.06.1" in provenance_text
+              and "2026-11-13T09:30:00Z" in provenance_text
+              and page.locator('#ot-provenance a[href="https://platform-docs.opentargets.org/data-access/graphql-api"]').count() == 1,
+              provenance_text)
+        page.get_by_label("Association source filter").select_option("eva")
+        page.get_by_label("Evidence source filter").select_option("eva")
+        check("Open Targets source filters isolate the selected datasource",
+              page.locator("#ot-association-results .research-paper").count() == 1
+              and page.locator("#ot-evidence-results .research-paper").count() == 1)
+        source_link = page.locator("#ot-evidence-results a").first
+        check("Open Targets evidence links are HTTPS and open safely",
+              source_link.get_attribute("href", timeout=args.timeout).startswith("https://")
+              and source_link.get_attribute("rel") == "noopener noreferrer")
+        page.get_by_label("Association source filter").select_option("all")
+        page.get_by_label("Evidence source filter").select_option("all")
+        page.get_by_role("button", name="Load more associations").click()
+        page.wait_for_function("document.querySelectorAll('#ot-association-results .research-paper').length === 3")
+        page.get_by_role("button", name="Load more evidence").click()
+        page.wait_for_function("document.querySelectorAll('#ot-evidence-results .research-paper').length === 3")
+        check("Open Targets association and evidence pagination append source records",
+              len(open_targets_requests) == 3
+              and open_targets_requests[1].get("page_index") == 1
+              and open_targets_requests[2].get("evidence_cursor") == "evidence-next")
+        with page.expect_download() as json_download_info:
+            page.get_by_role("button", name="Export evidence JSON").click()
+        json_download = json_download_info.value
+        exported = json.loads(Path(json_download.path()).read_text(encoding="utf-8"))
+        check("Open Targets JSON export includes release, API, query and citation metadata",
+              exported["provenance"]["data_version"]["month"] == "06"
+              and exported["provenance"]["api_version"]["x"] == "4"
+              and exported["associations"]["loaded_count"] == 3
+              and any("Cite Open Targets Platform" in item for item in exported["citation_requirements"]))
+        with page.expect_download() as markdown_download_info:
+            page.get_by_role("button", name="Export Markdown report").click()
+        markdown_download = markdown_download_info.value
+        markdown_report = Path(markdown_download.path()).read_text(encoding="utf-8")
+        check("Open Targets Markdown report includes data release and original evidence links",
+              "Data release: 2026.06.1" in markdown_report
+              and "https://example.org/evidence/1" in markdown_report
+              and "Citation and reuse requirements" in markdown_report)
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
@@ -175,6 +308,7 @@ def main() -> int:
         mobile.set_default_timeout(args.timeout)
         mobile.route("https://www.ebi.ac.uk/europepmc/webservices/rest/search**", handle_provider)
         mobile.route("**/literature/pubmed/search", handle_pubmed)
+        mobile.route("**/research/open-targets/target", handle_open_targets)
         mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         mobile.get_by_role("heading", name="Research discovery").wait_for()
         no_horizontal_overflow = mobile.evaluate(

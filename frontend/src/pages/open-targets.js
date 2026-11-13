@@ -22,6 +22,7 @@ function version(value, keys) {
 }
 
 function score(value) {
+  if (value === null || value === undefined || value === "") return "not supplied";
   const number = Number(value);
   return Number.isFinite(number) ? number.toFixed(3) : "not supplied";
 }
@@ -156,7 +157,8 @@ export function renderOpenTargetsPanel() {
     associationResults.replaceChildren();
     if (!visible.length) {
       associationResults.append(h("p", { class: "fine muted" },
-        associations.length ? "No associations match this source filter." : "No association records were returned."));
+        !current ? "Run an Open Targets search to load associations."
+          : associations.length ? "No associations match this source filter." : "No association records were returned."));
     }
     for (const row of visible) {
       const disease = row.disease || {};
@@ -184,7 +186,9 @@ export function renderOpenTargetsPanel() {
     const selected = evidenceFilter.value || "all";
     const visible = selected === "all" ? evidence : evidence.filter((row) => row.datasourceId === selected);
     evidenceResults.replaceChildren();
-    if (!activeQuery?.disease_id) {
+    if (!current) {
+      evidenceResults.append(h("p", { class: "fine muted" }, "Run an Open Targets search to load source-level evidence."));
+    } else if (!activeQuery?.disease_id) {
       evidenceResults.append(h("p", { class: "fine muted" },
         "Enter an EFO disease identifier to request disease-specific evidence records."));
     } else if (!visible.length) {
@@ -229,7 +233,12 @@ export function renderOpenTargetsPanel() {
   }
 
   function renderProvenance() {
-    if (!current?.provenance) return;
+    if (!current?.provenance) {
+      provenance.replaceChildren(
+        h("h3", {}, "Source provenance and citation metadata"),
+        h("p", { class: "fine muted" }, "The API/data release, retrieval time, query identifiers and original evidence links will appear here after a successful search."));
+      return;
+    }
     const p = current.provenance;
     const apiVersion = version(p.api_version, ["x", "y", "z", "suffix"]);
     const dataVersion = version(p.data_version, ["year", "month", "iteration"]);
@@ -380,8 +389,9 @@ export function renderOpenTargetsPanel() {
       lines.push("  - Publication: " + md(row.publicationFirstAuthor) + " · " + md(row.publicationDate));
       const urls = Array.isArray(row.urls) ? row.urls : [];
       for (const item of urls) {
-        if (item?.url && /^https:\/\//i.test(item.url)) {
-          lines.push("  - Source link: [" + md(item.niceName || "Original source") + "](" + item.url + ")");
+        const safeUrl = item?.url ? markdownUrl(item.url) : null;
+        if (safeUrl) {
+          lines.push("  - Source link: [" + md(item.niceName || "Original source") + "](<" + safeUrl + ">)");
         }
       }
       const literature = Array.isArray(row.literature) ? row.literature : [];
