@@ -69,3 +69,7 @@ Fallback consent generated for a real-genotype evaluation cohort is marked
 `consent_basis=dataset_policy` plus their source-policy identifier, HTTPS URL,
 and withdrawal limitations. Dataset-level terms still cannot authorize
 individual-level record access.
+
+## Signed consent event ordering
+
+Signed participant consent events must carry an explicit timezone and must not be future-effective. GenomeGuard rejects timezone-naive and future-effective events because scheduled consent changes are not implemented. Each event must be strictly later than every previously applied event for the same participant and dataset; stale or out-of-order restores are rejected. PostgreSQL locks the participant row while checking and applying event order so concurrent event submissions cannot race and overwrite a newer consent state. SQLite serializes writers with its immediate transaction. This ordering control is an application safeguard, not proof that the external consent authority is institutionally accredited or that the event is legally valid.
