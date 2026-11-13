@@ -1457,8 +1457,6 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def clinvar_variant_search(request):
         """Retrieve source-attributed ClinVar aggregate variant records by gene symbol."""
         from app.literature.clinvar import (
-            MAX_OFFSET,
-            MAX_PAGE_SIZE,
             ClinVarProviderError,
             search_clinvar,
             validate_search_request,
