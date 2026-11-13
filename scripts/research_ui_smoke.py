@@ -643,7 +643,7 @@ def main() -> int:
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.get_by_label("Disease or phenotype term").fill("ataxia")
         mobile.get_by_label("Ontology", exact=True).select_option("hp")
-        mobile.get_by_role("button", name="Search ontology terms").click()
+        mobile.get_by_role("button", name="Find matching phenotype terms").click()
         mobile.locator("#ontology-results .ontology-term").first.wait_for()
         check("mobile ontology results have no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
