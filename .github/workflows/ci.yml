@@ -87,6 +87,8 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/pubmed_provider_smoke.py
+      - name: Verify live Europe PMC search and cursor pagination contract
+        run: .venv/bin/python scripts/research_provider_smoke.py
       - name: Compile all Python application and script files
         run: .venv/bin/python -m compileall -q backend scripts
       - name: Install browser smoke-test dependencies
