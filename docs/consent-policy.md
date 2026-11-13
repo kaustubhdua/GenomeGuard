@@ -15,3 +15,57 @@ GenomeGuard's public demo uses synthetic donor records and simulated consent att
 ## Scope
 
 This policy URI is included in FHIR exports to make the demo's policy reference explicit. It does not turn simulated consent into legally effective consent.
+
+## Machine-readable DUO mapping
+
+The implementation maps the standard permission/modifier terms to the official DUO identifiers:
+
+| Code | DUO identifier | Meaning |
+|---|---|---|
+| GRU | DUO:0000042 | General research use |
+| HMB | DUO:0000006 | Health/medical/biomedical research |
+| DS | DUO:0000007 | Disease-specific research; pair the disease restriction with a disease ontology identifier |
+| POA | DUO:0000011 | Population origins or ancestry research only |
+| NPU | DUO:0000045 | Not-for-profit organisation use only |
+| NPUNCU | DUO:0000018 | Not-for-profit and non-commercial use only |
+| NCU | DUO:0000046 | Non-commercial use only |
+| NMDS | DUO:0000015 | No general methods research |
+| NPOA | DUO:0000044 | Population origins or ancestry research prohibited |
+
+`NAGR` (no aggregate-level general research) and `NCTRL` (no use as a control set)
+are GenomeGuard-specific policy extensions. They are **not** DUO terms and must
+not be serialized or presented as official DUO identifiers. They require an
+institution-approved mapping or extension governance process before cross-system
+interoperability can claim equivalence. The standard `NPOA` modifier is mapped to
+DUO:0000044 and blocks the `population_genetics` and `ancestry_research` purposes.
+
+DUO describes permitted data uses; it does not itself prove participant consent,
+researcher identity, institutional authority, or access authorization. GenomeGuard
+must retain its separate consent provenance and policy-enforcement controls.
+
+
+## Commercial-use and organisation-type verification
+
+`NCU` and `NPU` are distinct restrictions and must not be collapsed:
+
+- `NCU` (DUO:0000046) requires a verified non-commercial-use classification for the specific research activity. An applicant's self-declared `is_commercial=false` value is not sufficient evidence.
+- `NPU` (DUO:0000045) requires the requesting organisation itself to have a verified not-for-profit status. It is not equivalent to a non-commercial project declaration.
+- `NPUNCU` (DUO:0000018) requires both conditions.
+- `POA` (DUO:0000011) permits only population-origins/ancestry research; `NPOA` (DUO:0000044) prohibits those purposes.
+
+The current application does not yet have an independently verified organisation/legal-entity registry or a DAC-verified commercial-purpose classification. Accordingly, service-level policy evaluation passes these attributes as unknown and fails closed for NCU/NPU/NPUNCU. The pure policy engine can evaluate verified attributes in tests, but this does not mean the production verification workflow exists. Implementing the registry and independent review workflow remains a production release blocker.
+
+
+## Consent-basis fail-closed rule
+
+A consent record must explicitly identify its basis. Missing `consent_basis` is
+malformed and is rejected as `unknown_consent`; the policy engine never infers
+participant-specific consent from an absent field. Synthetic demo records carry
+`consent_basis=synthetic_demo` and are accepted only when the service is explicitly
+in demo mode; this is never participant consent. Operator-supplied per-sample
+consent records must explicitly carry `consent_basis=participant_record`.
+Fallback consent generated for a real-genotype evaluation cohort is marked
+`simulated` and is never accepted for data access. Public source terms must explicitly carry
+`consent_basis=dataset_policy` plus their source-policy identifier, HTTPS URL,
+and withdrawal limitations. Dataset-level terms still cannot authorize
+individual-level record access.

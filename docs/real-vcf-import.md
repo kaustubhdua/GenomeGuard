@@ -157,3 +157,10 @@ The normalized VCF tables are not currently an input adapter for `GenomeGuardSer
 ## Test coverage
 
 The VCF parser tests use tiny synthetic fixtures only to exercise parser correctness; they are test data, not production genomic data and are never loaded into the live database.
+
+
+Every record in a per-sample `--consent-json` mapping must explicitly include
+`"consent_basis": "participant_record"`. Do not rely on an importer default to
+infer participant-specific consent. The separate `--consent-policy-json` path
+must explicitly identify `dataset_policy` and its source terms; it never creates
+participant-level consent.

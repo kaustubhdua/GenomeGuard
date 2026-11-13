@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 
 from app.service import ServiceError
@@ -41,7 +43,7 @@ def test_release_matches_true_frequencies_when_no_noise():
     d = svc.submit(U(svc, RESEARCHER), {**DEMO_REQ, "variant_filter": {"min_maf": 0.2, "limit": 5}})
     assert d["outcome"] == "permit" and d["transform"]["steps"] == []
     from app.core.consent import ConsentRequest, eligible_cohort
-    ids = eligible_cohort(ConsentRequest("disease_research", "diabetes"), svc.ds.donors).donor_ids
+    ids = eligible_cohort(ConsentRequest("disease_research", "diabetes", demo_mode=True), svc.ds.donors).donor_ids
     cols = [v - 1 for v in d["release"]["variant_ids"]]
     truth = svc.ds.genotypes[np.ix_(np.array(ids) - 1, cols)].sum(axis=0) / (2 * len(ids))
     assert np.allclose(d["release"]["values"], np.round(truth, 4))
@@ -243,3 +245,23 @@ def test_service_agent_explanations_are_offline_and_deterministic():
     assert decision["explanation"].startswith("Your request")
     records = [e for e in svc.audit.entries() if e["action"] == "agent.output"]
     assert records and all(e["payload"]["model"] == "template" for e in records)
+
+
+def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
+    svc = make_service()
+    first, second = svc.ds.donors[0], svc.ds.donors[1]
+    svc.ds.donors[0] = replace(
+        first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
+        withdrawn=False,
+    )
+    svc.ds.donors[1] = replace(
+        second, consent={**second.consent, "use": "GRU", "modifiers": ["NPU"]},
+        withdrawn=False,
+    )
+
+    # The requester declares non-commercial use, but the declaration is not verified.
+    result = svc.eligibility(
+        U(svc, RESEARCHER), "general_research", None, False, "frequency", {},
+    )
+    assert result["excluded_by_reason"]["commercial_use_unverified"] >= 1
+    assert result["excluded_by_reason"]["nonprofit_status_unverified"] >= 1

@@ -112,9 +112,10 @@ class GenomeGuardService:
     def __init__(self, store: Store, ds: Dataset, p: Params = DEFAULT, *, master: bytes | None = None,
                  llm: LLM | None = None, llm_roles: set[str] | None = None,
                  allow_tamper: bool = False, admin_key: str = "demo-admin-key",
-                 release_enabled: bool = True,
+                 release_enabled: bool = True, demo_mode: bool = True,
                  clock: Callable[[], float] = time.time) -> None:
         self.store, self.ds, self.p, self.clock = store, ds, p, clock
+        self.demo_mode = demo_mode
         self.master = master
         self.dataset_id = ds.dataset_id
         self.release_enabled = release_enabled
@@ -282,6 +283,8 @@ class GenomeGuardService:
         return {
             "outcome": outcome, "reasons": reasons, "purpose": clean["purpose"],
             "disease": clean["disease"], "is_commercial": clean["is_commercial"],
+            "commercial_use_declared": clean["is_commercial"], "commercial_use_verified": False,
+            "organization_nonprofit_verified": False,
             "data_level": clean["data_level"], "tier": requester["credential_level"],
             "consent": elig.counts_only() if elig else {}, "steps": tj.get("steps", []),
             "risk_before": rb, "risk_after": ra, "final": tj.get("final", {}),
@@ -315,8 +318,11 @@ class GenomeGuardService:
                     "eligible": 0, "considered": self.ds.n_donors, "variants_requested": 0,
                     "epsilon_cost": 0.0, **self.budget(rid)}
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(clean["purpose"], clean["disease"], clean["is_commercial"], level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"])
+        # Applicant declarations are not verification evidence. Until a DAC-backed
+        # commercial-use and organisation registry exists, pass unknown and fail closed.
+        creq = ConsentRequest(clean["purpose"], clean["disease"], None, level,
+                              pop if isinstance(pop, str) else None, clean["cohort_filter"],
+                              demo_mode=self.demo_mode)
         elig = eligible_cohort(creq, self.ds.donors)
         vidx = self.resolve_variants(clean["variant_filter"])
         if not vidx:
@@ -368,7 +374,7 @@ class GenomeGuardService:
         tier = requester["credential_level"]
         self.audit.append(actor, "request.received", {
             "request_id": req_id, "purpose": clean["purpose"], "disease": clean["disease"],
-            "data_level": clean["data_level"], "is_commercial": clean["is_commercial"],
+            "data_level": clean["data_level"], "commercial_use_declared": clean["is_commercial"],
             "tier": tier, "cohort_filter": clean["cohort_filter"]})
         hist = self._history(rid)
 
@@ -420,8 +426,9 @@ class GenomeGuardService:
 
         # -- consent ----------------------------------------------------------------------
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(clean["purpose"], clean["disease"], clean["is_commercial"], level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"])
+        creq = ConsentRequest(clean["purpose"], clean["disease"], None, level,
+                              pop if isinstance(pop, str) else None, clean["cohort_filter"],
+                              demo_mode=self.demo_mode)
         elig = eligible_cohort(creq, self.ds.donors)
         self.audit.append("system:consent", "consent.evaluated", {"request_id": req_id,
                                                                   **elig.counts_only()})
@@ -619,8 +626,9 @@ class GenomeGuardService:
             return block("credential_insufficient")
 
         pop = r["cohort_filter"].get("population")
-        creq = ConsentRequest(r["purpose"], r["disease"], r["is_commercial"], r["data_level"],
-                              pop if isinstance(pop, str) else None, r["cohort_filter"])
+        creq = ConsentRequest(r["purpose"], r["disease"], None, r["data_level"],
+                              pop if isinstance(pop, str) else None, r["cohort_filter"],
+                              demo_mode=self.demo_mode)
         elig = eligible_cohort(creq, self.ds.donors)
         if elig.n < self.p.k_min:
             return block("below_k_min")
@@ -695,8 +703,10 @@ class GenomeGuardService:
         def case_summary() -> dict:
             return {"outcome": d["outcome"], "reasons": d["reasons"], "purpose": q["purpose"],
                     "disease": q["disease"], "data_level": q["data_level"],
-                    "is_commercial": q["is_commercial"], "tier": who.get("credential_level"),
-                    "needs_human": d["needs_human"]}
+                    "is_commercial": q["is_commercial"],
+                    "commercial_use_declared": q["is_commercial"], "commercial_use_verified": False,
+                    "organization_nonprofit_verified": False,
+                    "tier": who.get("credential_level"), "needs_human": d["needs_human"]}
 
         def consent_counts() -> dict:
             return {"consent": risk.get("consent") or {}}
@@ -813,8 +823,8 @@ class GenomeGuardService:
                           {"donor_ref": self._donor_ref(donor_id), "effective": "future_requests"})
         return self.donor_profile(donor_id)
 
-    CONSENT_USES = ("GRU", "HMB", "DS")
-    CONSENT_MODS = ("NCU", "NPU", "NMDS", "NAGR", "NCTRL")
+    CONSENT_USES = ("GRU", "HMB", "DS", "POA")
+    CONSENT_MODS = ("NCU", "NPU", "NPUNCU", "NMDS", "NPOA", "NAGR", "NCTRL")
 
     @transactional
     def donor_set_consent(self, donor_id: int, change: dict) -> dict:
@@ -881,7 +891,7 @@ class GenomeGuardService:
         incoming = payload["consent"]
         use = str(incoming.get("use", "")).upper()
         if use not in self.CONSENT_USES:
-            raise ServiceError(422, "invalid_consent", "signed consent use must be GRU, HMB or DS")
+            raise ServiceError(422, "invalid_consent", "signed consent use must be one of GRU, HMB, DS or POA")
         disease = incoming.get("disease")
         if use == "DS":
             if not isinstance(disease, str) or not re.fullmatch(r"[a-z_]{2,32}", disease):
@@ -1058,8 +1068,9 @@ class GenomeGuardService:
         clean = self._validate({"purpose": purpose, "disease": disease, "is_commercial": commercial,
                                 "data_level": level, "cohort_filter": cohort_filter})
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(purpose, clean["disease"], commercial, level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"])
+        creq = ConsentRequest(purpose, clean["disease"], None, level,
+                              pop if isinstance(pop, str) else None, clean["cohort_filter"],
+                              demo_mode=self.demo_mode)
         return eligible_cohort(creq, self.ds.donors).counts_only()
 
     def anomalies(self) -> dict:
@@ -1438,7 +1449,7 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     # cohorts must have verified real-genotype and consent/data-use provenance.
     # Record-level rows are separately prohibited by release_approved().
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
-                             admin_key=s.admin_api_key, release_enabled=True, **kwargs)
+                             admin_key=s.admin_api_key, release_enabled=True, demo_mode=s.demo_mode, **kwargs)
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:

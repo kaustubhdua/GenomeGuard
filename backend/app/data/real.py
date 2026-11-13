@@ -381,22 +381,27 @@ def _validated_consent(record: dict, sample: str) -> tuple[dict, bool]:
     if not isinstance(record, dict):
         raise ValueError(f"consent record for {sample} must be a JSON object")
     use = record.get("use")
-    if not isinstance(use, str) or use not in {"GRU", "HMB", "DS"}:
-        raise ValueError(f"consent record for {sample} needs use GRU, HMB, or DS")
+    if not isinstance(use, str) or use not in {"GRU", "HMB", "DS", "POA"}:
+        raise ValueError(f"consent record for {sample} needs use GRU, HMB, DS, or POA")
     disease = record.get("disease")
     if disease is not None and not isinstance(disease, str):
         raise ValueError(f"consent disease for {sample} must be a string or null")
     if use == "DS" and (not isinstance(disease, str) or not disease.strip()):
         raise ValueError(f"disease-specific consent for {sample} requires disease")
     modifiers = record.get("modifiers")
-    allowed_modifiers = {"NCU", "NPU", "NMDS", "NAGR", "NCTRL"}
+    allowed_modifiers = {"NCU", "NPU", "NPUNCU", "NMDS", "NPOA", "NAGR", "NCTRL"}
     if not isinstance(modifiers, list) or any(
             not isinstance(m, str) or m not in allowed_modifiers for m in modifiers):
         raise ValueError(f"consent record for {sample} needs a list of recognized modifiers")
     population = record.get("population")
     if population is not None and not isinstance(population, str):
         raise ValueError(f"consent population for {sample} must be a string or null")
-    consent_basis = record.get("consent_basis", "participant_record")
+    consent_basis = record.get("consent_basis")
+    if consent_basis not in {"participant_record", "dataset_policy"}:
+        raise ValueError(
+            f"consent record for {sample} must explicitly declare consent_basis "
+            "as participant_record or dataset_policy"
+        )
     consent_date = record.get("consent_date")
     if consent_basis == "dataset_policy":
         if consent_date is not None:
@@ -492,6 +497,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
         pop = info[sample]["pop"] or "UNK"
         if consent_records is None:
             consent, withdrawn = _consent(rng, pop), bool(rng.random() < withdrawn_rate)
+            consent["consent_basis"] = "simulated"
         else:
             consent, withdrawn = _validated_consent(consent_records[sample], sample)
         donors.append({"id": i, "cohort_id": "1000G-" + pop, "source_sample_id": sample,
@@ -580,7 +586,7 @@ def main(argv: list[str] | None = None) -> None:
                    help="operator-declared genotype source label; not independently authenticated")
     b.add_argument("--consent-json",
                    help="operator-authorized JSON mapping source sample IDs to explicit consent "
-                        "records (use, disease, modifiers, population, consent_date, withdrawn)")
+                        "records (consent_basis, use, disease, modifiers, population, consent_date, withdrawn)")
     b.add_argument("--consent-policy-json",
                    help="dataset-level policy profile derived from public source terms; never "
                         "represents participant-specific consent and is not a legal determination")

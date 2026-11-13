@@ -48,18 +48,31 @@ def test_use_disease_and_modifiers_are_carried_as_duo_extensions():
     ext = {e["url"].rsplit("/", 1)[1].removeprefix("StructureDefinition-").removesuffix(".json"): [] for e in r["provision"]["extension"]}
     for e in r["provision"]["extension"]:
         ext[e["url"].rsplit("/", 1)[1].removeprefix("StructureDefinition-").removesuffix(".json")].append(e)
-    assert ext["duo-use"][0]["valueCoding"]["code"] == "DS"
+    assert ext["duo-use"][0]["valueCoding"]["code"] == "DUO:0000007"
     codes = {e["valueCoding"]["code"] for e in ext["duo-modifier"]}
-    assert codes == {"DUO:0000046", "DUO:0000015"}  # the two ids confirmed from the official DUO
+    assert codes == {"DUO:0000046", "DUO:0000015"}
     assert ext["disease"][0]["valueString"] == "diabetes"
 
 
-def test_unconfirmed_duo_ids_are_not_invented():
+def test_standard_permission_uses_the_official_duo_identifier():
     svc = make_service()
     d = _donor_with(svc, lambda c: c["use"] == "GRU")
     use = svc.donor_consent_fhir(d.id)["provision"]["extension"][0]["valueCoding"]
-    assert use["code"] == "GRU" and not use["code"].startswith("DUO:")
-    assert use["system"].endswith("/CodeSystem-consent-use-codes.json")
+    assert use["code"] == "DUO:0000042"
+    assert use["system"] == "http://purl.obolibrary.org/obo/duo.owl"
+
+
+def test_npoa_modifier_uses_the_official_duo_identifier():
+    svc = make_service()
+    d = _donor_with(svc, lambda c: c["use"] == "GRU")
+    svc.donor_set_consent(d.id, {"use": "GRU", "modifiers": ["NPOA"]})
+    modifier = next(
+        e["valueCoding"]
+        for e in svc.donor_consent_fhir(d.id)["provision"]["extension"]
+        if e["url"].endswith("StructureDefinition-duo-modifier.json")
+    )
+    assert modifier["code"] == "DUO:0000044"
+    assert modifier["system"] == "http://purl.obolibrary.org/obo/duo.owl"
 
 
 def test_withdrawal_makes_the_resource_inactive():
@@ -85,7 +98,6 @@ def test_endpoint_needs_the_donors_own_key_and_is_audited_without_identity():
     assert last["payload"] == {"donor_ref": svc._donor_ref(a.id), "format": "fhir_r4"}
     assert last["actor"] == "donor:" + svc._donor_ref(a.id)
     assert svc.audit.verify()["ok"]
-
 
 
 def test_dataset_policy_does_not_expose_or_mutate_fake_participant_consent():
@@ -119,3 +131,25 @@ def test_dataset_policy_does_not_expose_or_mutate_fake_participant_consent():
         svc.donor_consent_fhir(donor.id)
     assert fhir_error.value.status == 409
     assert fhir_error.value.code == "dataset_policy_not_individual_consent"
+
+
+def test_poa_and_npuncu_are_exported_with_official_duo_identifiers():
+    svc = make_service()
+    d = _donor_with(svc, lambda consent: consent["use"] == "GRU")
+    svc.donor_set_consent(d.id, {"use": "POA", "modifiers": ["NPUNCU"]})
+    resource = svc.donor_consent_fhir(d.id)
+    codings = [
+        extension["valueCoding"]
+        for extension in resource["provision"]["extension"]
+        if "valueCoding" in extension
+    ]
+    assert any(
+        item["code"] == "DUO:0000011"
+        and item["system"] == "http://purl.obolibrary.org/obo/duo.owl"
+        for item in codings
+    )
+    assert any(
+        item["code"] == "DUO:0000018"
+        and item["system"] == "http://purl.obolibrary.org/obo/duo.owl"
+        for item in codings
+    )

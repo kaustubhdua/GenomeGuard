@@ -93,7 +93,6 @@ def test_download_retries_digest_mismatch_and_never_publishes_corrupt_bytes(tmp_
     assert not target.with_suffix(target.suffix + ".part").exists()
 
 
-
 def test_high_coverage_population_pedigree_panel_format():
     text = "\n".join([
         "FamilyID SampleID FatherID MotherID Sex Population Superpopulation",
@@ -241,7 +240,8 @@ def test_build_cohort_uses_explicit_source_matched_consent_records():
         make_vcf(v)
         records = {
             sample: {"use": "GRU", "disease": None, "modifiers": [],
-                     "population": None, "consent_date": "2024-01-15", "withdrawn": False}
+                     "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+                     "consent_basis": "participant_record"}
             for sample in SAMPLES
         }
         c, meta = real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
@@ -261,7 +261,8 @@ def test_build_cohort_refuses_missing_or_malformed_consent_records():
             real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
                               consent_records={"dad": {"use": "GRU"}})
         bad = {sample: {"use": "GRU", "disease": None, "modifiers": [],
-                        "population": None, "consent_date": "not-a-date", "withdrawn": False}
+                        "population": None, "consent_date": "not-a-date", "withdrawn": False,
+                        "consent_basis": "participant_record"}
                for sample in SAMPLES}
         with pytest.raises(ValueError, match="invalid consent_date"):
             real.build_cohort(v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
@@ -279,6 +280,8 @@ def test_loaded_cohort_works_with_dataset_and_consent_engine():
         ds = Dataset.from_cohort(c, "real-test")
         res = eligible_cohort(ConsentRequest(purpose="general_research"), ds.donors)
         assert res.considered == 44
+        assert res.donor_ids == []
+        assert res.excluded_by_reason["unknown_consent"] == 44
 
 
 def test_dataset_public_release_policy_is_real_source_provenance_not_fake_personal_consent():
@@ -474,3 +477,60 @@ def test_unrelated_phase3_style_panel_does_not_claim_family_enrichment():
                                     seed=7, family_first=True)
         assert meta["relative_pairs"] == 0
         assert meta["family_enriched"] is False
+
+
+def test_build_cohort_accepts_official_npoa_consent_modifier():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {
+                "use": "GRU", "disease": None, "modifiers": ["NPOA"],
+                "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+                "consent_basis": "participant_record",
+            }
+            for sample in SAMPLES
+        }
+        cohort, _meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+            seed=3, consent_records=records,
+        )
+        assert all("NPOA" in donor["consent"]["modifiers"] for donor in cohort.donors)
+
+
+def test_build_cohort_accepts_poa_and_npuncu_consent_terms():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {
+                "use": "POA", "disease": None, "modifiers": ["NPUNCU"],
+                "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+                "consent_basis": "participant_record",
+            }
+            for sample in SAMPLES
+        }
+        cohort, _meta = real.build_cohort(
+            v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+            seed=3, consent_records=records,
+        )
+        assert all(d["consent"]["use"] == "POA" for d in cohort.donors)
+        assert all("NPUNCU" in d["consent"]["modifiers"] for d in cohort.donors)
+
+
+def test_build_cohort_rejects_source_consent_without_explicit_basis():
+    with tempfile.TemporaryDirectory() as d:
+        v = Path(d) / "t.vcf.gz"
+        make_vcf(v)
+        records = {
+            sample: {
+                "use": "GRU", "disease": None, "modifiers": [],
+                "population": None, "consent_date": "2024-01-15", "withdrawn": False,
+            }
+            for sample in SAMPLES
+        }
+        with pytest.raises(ValueError, match="must explicitly declare consent_basis"):
+            real.build_cohort(
+                v, PED, n_samples=44, max_variants=50, keep_prob=1.0,
+                seed=3, consent_records=records,
+            )

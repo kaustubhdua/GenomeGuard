@@ -4,8 +4,8 @@ Pure Python: no database or web imports, so every rule is unit-testable in isola
 
 Each donor carries a consent record built from GA4GH Data Use Ontology (DUO) style codes:
 
-    {"use": "GRU" | "HMB" | "DS", "disease": "diabetes" | None,
-     "modifiers": ["NCU", "NPU", "NMDS", "NAGR", "NCTRL"], "population": None | "POP_A",
+    {"use": "GRU" | "HMB" | "DS" | "POA", "disease": "diabetes" | None,
+     "modifiers": ["NCU", "NPU", "NPUNCU", "NMDS", "NPOA", "NAGR", "NCTRL"], "population": None | "POP_A",
      "consent_date": "YYYY-MM-DD"}
 
 `permitted(consent, request, withdrawn)` returns (allowed, reason_code). The FIRST failing rule
@@ -14,9 +14,12 @@ wins, in a fixed order, so the reason in an explanation is deterministic:
     1 withdrawn            donor withdrew: always excluded (DPDP/GDPR: withdrawal must work)
     2 purpose_unknown      the request's purpose is not a recognised research purpose
     3 use rule             GRU: any research | HMB: health/biomedical purposes only |
-                           DS: request.disease must equal consent.disease
-    4 modifiers            NCU/NPU block commercial use; NMDS blocks methods development;
-                           NAGR blocks aggregate-level data levels; NCTRL blocks use as controls
+                           DS: request.disease must equal consent.disease |
+                           POA: population-origins/ancestry research only
+    4 modifiers            NCU/NPUNCU require verified non-commercial use; NPU/NPUNCU require
+                           verified not-for-profit organisation status; NMDS blocks methods
+                           development; NPOA blocks ancestry research; NAGR blocks aggregate
+                           data levels; NCTRL blocks use as controls
     5 population           a population-restricted consent only allows requests that declare
                            that same population
 
@@ -29,17 +32,26 @@ from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-# DUO terms. Only the IDs confirmed from the official ontology are filled in; for any other ID,
-# look it up in the official duo.owl rather than guessing (see `make fetch-real`).
+# Official DUO identifiers are recorded only for terms confirmed against the
+# GA4GH/EBI vocabulary. NAGR and NCTRL are GenomeGuard policy extensions, not DUO.
 DUO_REFERENCE: dict[str, dict[str, str | None]] = {
-    "GRU": {"id": None, "meaning": "General research use"},
-    "HMB": {"id": None, "meaning": "Health / medical / biomedical research only"},
-    "DS": {"id": None, "meaning": "Disease-specific research (named disease only)"},
-    "NPU": {"id": None, "meaning": "Not-for-profit use only"},
-    "NCU": {"id": "DUO:0000046", "meaning": "No commercial use"},
-    "NMDS": {"id": "DUO:0000015", "meaning": "No methods development research"},
-    "NAGR": {"id": None, "meaning": "No aggregate-level general research (spec rule)"},
-    "NCTRL": {"id": None, "meaning": "No use as a control set"},
+    "GRU": {"id": "DUO:0000042", "meaning": "General research use"},
+    "HMB": {"id": "DUO:0000006", "meaning": "Health or medical or biomedical research"},
+    "DS": {"id": "DUO:0000007", "meaning": "Disease-specific research"},
+    "POA": {"id": "DUO:0000011", "meaning": "Population origins or ancestry research only"},
+    "NPU": {"id": "DUO:0000045", "meaning": "Not-for-profit organisation use only"},
+    "NPUNCU": {"id": "DUO:0000018", "meaning": "Not-for-profit and non-commercial use only"},
+    "NCU": {"id": "DUO:0000046", "meaning": "Non-commercial use only"},
+    "NMDS": {"id": "DUO:0000015", "meaning": "No general methods research"},
+    "NPOA": {"id": "DUO:0000044", "meaning": "Population origins or ancestry research prohibited"},
+    "NAGR": {
+        "id": None,
+        "meaning": "GenomeGuard local policy extension: no aggregate-level general research; not a DUO term",
+    },
+    "NCTRL": {
+        "id": None,
+        "meaning": "GenomeGuard local policy extension: no use as a control set; not a DUO term",
+    },
 }
 
 # Request purposes. "Health" purposes satisfy HMB; every purpose here counts as research.
@@ -57,12 +69,18 @@ REASON_TEXT = {
     "purpose_unknown": "request purpose is not a recognised research purpose",
     "purpose_not_health": "consent covers health/biomedical research only (HMB)",
     "disease_mismatch": "consent is limited to a different disease area (DS)",
-    "commercial_use_blocked": "consent forbids commercial / for-profit use (NCU/NPU)",
+    "commercial_use_blocked": "consent forbids commercial use (NCU/NPUNCU)",
+    "commercial_use_unverified": "commercial-use status has not been independently verified for NCU/NPUNCU",
+    "nonprofit_status_unverified": "requesting organisation not-for-profit status has not been verified for NPU/NPUNCU",
+    "nonprofit_use_blocked": "consent is limited to not-for-profit organisations (NPU/NPUNCU)",
+    "purpose_not_population_origins": "consent permits only population origins or ancestry research (POA)",
     "methods_research_blocked": "consent forbids methods-development research (NMDS)",
+    "population_origins_blocked": "consent forbids population origins or ancestry research (NPOA)",
     "aggregate_blocked": "consent forbids aggregate-level research use (NAGR)",
     "controls_blocked": "consent forbids use as a control set (NCTRL)",
     "population_restricted": "consent is restricted to a different population",
     "unknown_consent": "consent record is malformed",
+    "synthetic_consent_not_authorized": "synthetic demo consent cannot authorize research-mode data access",
     "dataset_policy_individual_access_blocked": "dataset-level terms do not authorize individual-level record access",
 }
 
@@ -73,10 +91,12 @@ class ConsentRequest:
 
     purpose: str
     disease: str | None = None
-    is_commercial: bool = False
+    is_commercial: bool | None = None
     data_level: str = "frequency"  # boolean | count | frequency | record
     population: str | None = None  # population the study declares it is about, if any
     cohort_filter: dict = field(default_factory=dict)
+    organization_is_nonprofit: bool | None = None
+    demo_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -115,8 +135,11 @@ def permitted(consent: dict, request: ConsentRequest, withdrawn: bool = False) -
 
     # Dataset-level public-release terms are not participant consent. They may support
     # aggregate research under documented source terms, but never individual-level output.
-    basis = consent.get("consent_basis", "participant_record")
-    if basis == "dataset_policy":
+    basis = consent.get("consent_basis")
+    if basis == "synthetic_demo":
+        if not request.demo_mode:
+            return False, "synthetic_consent_not_authorized"
+    elif basis == "dataset_policy":
         if (consent.get("consent_date") is not None
                 or not isinstance(consent.get("source_policy_id"), str)
                 or not consent.get("source_policy_id", "").strip()
@@ -130,7 +153,7 @@ def permitted(consent: dict, request: ConsentRequest, withdrawn: bool = False) -
         return False, "unknown_consent"
 
     use = consent.get("use")
-    if use not in ("GRU", "HMB", "DS"):
+    if use not in ("GRU", "HMB", "DS", "POA"):
         return False, "unknown_consent"
     if request.purpose not in RESEARCH_PURPOSES:
         return False, "purpose_unknown"
@@ -139,12 +162,24 @@ def permitted(consent: dict, request: ConsentRequest, withdrawn: bool = False) -
         return False, "purpose_not_health"
     if use == "DS" and (request.disease is None or request.disease != consent.get("disease")):
         return False, "disease_mismatch"
+    if use == "POA" and request.purpose not in {"population_genetics", "ancestry_research"}:
+        return False, "purpose_not_population_origins"
 
     mods = set(consent.get("modifiers") or [])
-    if mods & {"NCU", "NPU"} and request.is_commercial:
-        return False, "commercial_use_blocked"
+    if mods & {"NCU", "NPUNCU"}:
+        if request.is_commercial is None:
+            return False, "commercial_use_unverified"
+        if request.is_commercial:
+            return False, "commercial_use_blocked"
+    if mods & {"NPU", "NPUNCU"}:
+        if request.organization_is_nonprofit is None:
+            return False, "nonprofit_status_unverified"
+        if not request.organization_is_nonprofit:
+            return False, "nonprofit_use_blocked"
     if "NMDS" in mods and request.purpose in METHODS_PURPOSES:
         return False, "methods_research_blocked"
+    if "NPOA" in mods and request.purpose in {"population_genetics", "ancestry_research"}:
+        return False, "population_origins_blocked"
     if "NAGR" in mods and request.data_level in AGGREGATE_LEVELS:
         return False, "aggregate_blocked"
     if "NCTRL" in mods and request.purpose in CONTROL_PURPOSES:
