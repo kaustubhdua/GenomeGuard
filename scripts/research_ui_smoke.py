@@ -574,7 +574,7 @@ def main() -> int:
 
         page.get_by_label("Disease or phenotype term").fill("ataxia")
         page.get_by_label("Ontology", exact=True).select_option("hp")
-        page.get_by_role("button", name="Search ontology terms").click()
+        page.get_by_role("button", name="Find matching phenotype terms").click()
         page.locator("#ontology-results .ontology-term").first.wait_for()
         check("OLS4 ontology search sends explicit query and ontology filter",
               len(ontology_requests) == 1
