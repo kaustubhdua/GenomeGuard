@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies",
          "#/audit", "#/donor", "#/redteam", "#/federated", "#/variants", "#/dataset-qc",
-         "#/chromosomes", "#/datasets", "#/sources"]
+         "#/chromosomes", "#/datasets", "#/sources", "#/research"]
 EXPECTED_HEADINGS = {
     "#/overview": "Research access, governed with evidence.",
     "#/variants": "Locus & variant inspector",
@@ -26,8 +26,9 @@ EXPECTED_HEADINGS = {
     "#/chromosomes": "Chromosome explorer",
     "#/datasets": "Dataset catalogue",
     "#/sources": "Public source discovery",
+    "#/research": "Research discovery",
 }
-MOBILE_PAGES = ("#/overview", "#/chromosomes", "#/datasets", "#/sources", "#/variants")
+MOBILE_PAGES = ("#/overview", "#/chromosomes", "#/datasets", "#/sources", "#/research", "#/variants")
 STEWARD_ONLY_PAGES = {"#/family/1", "#/anomalies", "#/audit", "#/dataset-qc"}
 FAILURES: list[str] = []
 
