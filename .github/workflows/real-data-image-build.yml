@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, fix/main-release-acceptance-blockers]
     paths:
-      - "Dockerfile"
+      - "Dockerfile.research"
       - "pyproject.toml"
       - "backend/requirements.txt"
       - "backend/app/data/**"
@@ -12,7 +12,7 @@ on:
       - ".github/workflows/real-data-image-build.yml"
   pull_request:
     paths:
-      - "Dockerfile"
+      - "Dockerfile.research"
       - "pyproject.toml"
       - "backend/requirements.txt"
       - "backend/app/data/**"
@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build image and fetch the official public genotype source
-        run: docker build --build-arg GENOMEGUARD_COHORT_BUILD_REV="$GITHUB_SHA" --tag genomeguard-real-research:ci .
+        run: docker build -f Dockerfile.research --build-arg GENOMEGUARD_COHORT_BUILD_REV="$GITHUB_SHA" --tag genomeguard-real-research:ci .
       - name: Verify image contains real genotype provenance and explicit source policy
         run: |
           docker run --rm --entrypoint python genomeguard-real-research:ci -c '
