@@ -26,6 +26,7 @@ def main() -> int:
     requests: list[dict[str, str]] = []
     failures: list[str] = []
     pubmed_requests: list[dict[str, object]] = []
+    provider_outages = {"europe": False, "pubmed": False}
 
     def check(label: str, ok: bool, detail: str = "") -> None:
         print(f"[{'PASS' if ok else 'FAIL'}] {label}" + (f": {detail}" if detail else ""))
@@ -46,6 +47,9 @@ def main() -> int:
         }
 
     def handle_provider(route) -> None:
+        if provider_outages["europe"]:
+            route.fulfill(status=503, content_type="application/json", body=json.dumps({"error": "fixture outage"}))
+            return
         parsed = urlparse(route.request.url)
         query = parse_qs(parsed.query)
         cursor = query.get("cursorMark", ["*"])[0]
@@ -61,6 +65,9 @@ def main() -> int:
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
     def handle_pubmed(route) -> None:
+        if provider_outages["pubmed"]:
+            route.fulfill(status=503, content_type="application/json", body=json.dumps({"error": "fixture outage"}))
+            return
         payload = json.loads(route.request.post_data or "{}")
         pubmed_requests.append(payload)
         if int(payload.get("retstart", 0)) == 0:
@@ -133,6 +140,25 @@ def main() -> int:
         check("source selector can restrict results to PubMed",
               page.locator(".research-paper .tag").first.inner_text() == "PubMed"
               and page.locator(".research-paper").count() == 3)
+
+        provider_outages["pubmed"] = True
+        page.get_by_label("Publication sources").select_option("both")
+        page.locator(".research-paper").first.wait_for()
+        partial_status = page.locator("#research-status").inner_text()
+        check("one-provider outage preserves the other provider's results",
+              page.locator(".research-paper").count() == PAGE_SIZE
+              and "One source was unavailable" in partial_status
+              and "Europe PMC" in partial_status, partial_status)
+
+        provider_outages["europe"] = True
+        page.get_by_role("button", name="Search publications").click()
+        page.get_by_text("No sample or fabricated papers are shown", exact=False).wait_for()
+        check("both-provider outage shows an explicit failure and no fabricated records",
+              page.locator(".research-paper").count() == 0
+              and "No sample or fabricated papers are shown" in page.locator("#research-status").inner_text())
+
+        provider_outages["europe"] = False
+        provider_outages["pubmed"] = False
 
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
