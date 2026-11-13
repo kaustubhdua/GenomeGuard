@@ -123,7 +123,7 @@ export async function render() {
       status.textContent = "Keep the search under 500 characters.";
       return;
     }
-    const query = buildQuery(text, department.value);
+    const query = buildQuery(text, department.value) + " sort_date:y";
     status.textContent = "Searching Europe PMC for matching publication records…";
     results.replaceChildren();
     const button = form.querySelector("button[type=submit]");
@@ -133,7 +133,7 @@ export async function render() {
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
       const url = API + "?query=" + encodeURIComponent(query)
-        + "&format=json&resultType=core&pageSize=20&sort_date:y";
+        + "&format=json&resultType=core&pageSize=20";
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
         signal: controller.signal,
