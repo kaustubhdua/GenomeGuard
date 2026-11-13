@@ -6,10 +6,9 @@ on:
       - "Dockerfile.research"
       - "pyproject.toml"
       - "backend/requirements.txt"
-      - "backend/app/data/**"
+      - "backend/app/data/real.py"
       - "backend/app/core/**"
       - "docs/policies/igsr-1000-genomes-public-release.json"
-      - ".github/workflows/real-data-image-build.yml"
   pull_request:
     paths:
       - "Dockerfile.research"
