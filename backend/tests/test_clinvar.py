@@ -174,6 +174,15 @@ def test_clinvar_rejects_malformed_esearch_payload(monkeypatch):
         clinvar.search_clinvar("BRCA1")
 
 
+def test_clinvar_rejects_empty_identifier_page_when_count_is_positive(monkeypatch):
+    monkeypatch.setattr(
+        clinvar, "_fetch_json",
+        lambda *args, **kwargs: {"esearchresult": {"count": "1", "idlist": []}},
+    )
+    with pytest.raises(clinvar.ClinVarProviderError, match="no identifiers"):
+        clinvar.search_clinvar("BRCA1")
+
+
 def test_clinvar_rejects_missing_esummary_record(monkeypatch):
     monkeypatch.setattr(
         clinvar, "_fetch_json",
