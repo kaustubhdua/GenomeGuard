@@ -57,7 +57,9 @@ def validate_search_request(
             "gene_symbol must be a valid gene symbol containing 1 to "
             f"{MAX_GENE_SYMBOL_LENGTH} letters, digits, dots, or hyphens"
         )
-    if classification not in (None, "") and classification not in CLASSIFICATION_PROPERTIES:
+    if classification not in (None, "") and (
+        not isinstance(classification, str) or classification not in CLASSIFICATION_PROPERTIES
+    ):
         raise ValueError(
             "classification must be one of: " + ", ".join(CLASSIFICATION_PROPERTIES)
         )
@@ -235,7 +237,7 @@ def search_clinvar(
         if not isinstance(docs, dict) or not isinstance(docs.get("uids"), list):
             raise ClinVarProviderError("ClinVar ESummary response was missing result.uids")
         returned_uids = docs["uids"]
-        if returned_uids != ids:
+        if len(returned_uids) != len(ids) or set(returned_uids) != set(ids):
             raise ClinVarProviderError("ClinVar ESummary returned an unexpected identifier set")
         for uid in ids:
             record = docs.get(uid)
@@ -243,6 +245,7 @@ def search_clinvar(
                 raise ClinVarProviderError("ClinVar ESummary omitted a requested variation")
             records.append(_normalize_record(uid, record))
 
+    retrieved_at = datetime.now(UTC).isoformat()
     return {
         "provider": "NCBI ClinVar",
         "query": {
@@ -258,15 +261,15 @@ def search_clinvar(
         },
         "count": count,
         "returned": len(records),
-        "has_more": retstart + len(ids) < count,
+        "has_more": retstart + len(ids) < min(count, MAX_OFFSET),
         "records": records,
-        "retrieved_at": datetime.now(UTC).isoformat(),
+        "retrieved_at": retrieved_at,
         "provenance": {
             "provider": "NCBI ClinVar",
             "api": "E-utilities ESearch + ESummary v2.0",
             "source_url": "https://www.ncbi.nlm.nih.gov/clinvar/",
             "query": query,
-            "retrieved_at": datetime.now(UTC).isoformat(),
+            "retrieved_at": retrieved_at,
             "classification_note": (
                 "VCV aggregate classifications and review status are displayed as supplied by "
                 "ClinVar. They are not patient-specific interpretations or clinical advice."
