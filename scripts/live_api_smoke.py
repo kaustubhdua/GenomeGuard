@@ -123,15 +123,16 @@ def main() -> int:
 
         if held_id is not None:
             status, _ = call(base, f"/requests/{held_id}", headers=researcher, timeout=args.timeout)
-            check("requester cannot read another account's request", status == 404)
-            status, held_admin = call(base, f"/requests/{held_id}", headers=admin, timeout=args.timeout)
-            check("steward can read the held decision", status == 200
-                  and held_admin.get("outcome") == "escalate")
+            check("researcher cannot read another account's held request", status == 404)
+            status, held_owner = call(base, f"/requests/{held_id}", headers=controlled, timeout=args.timeout)
+            check("controlled requester can read its own held decision", status == 200
+                  and held_owner.get("outcome") == "escalate")
         if permit_id is not None:
-            status, _ = call(base, f"/requests/{permit_id}", headers=admin, timeout=args.timeout)
-            check("steward can read the permitted decision", status == 200)
+            status, permit_owner = call(base, f"/requests/{permit_id}", headers=researcher, timeout=args.timeout)
+            check("researcher can read its own permitted decision", status == 200
+                  and permit_owner.get("outcome") == "permit_with_transform")
 
-        status, verification = call(base, "/audit/verify", headers=admin, timeout=args.timeout)
+        status, verification = call(base, "/audit/verify", timeout=args.timeout)
         check("audit verification endpoint succeeds after requests",
               status == 200 and verification.get("ok") is True)
     except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
