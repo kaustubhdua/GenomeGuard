@@ -27,7 +27,8 @@ function prefetchRoute(hash) {
 const NAV = [
   ["Overview", [["overview", "Overview", "#/overview"]]],
   ["Dataset Explorer", [["datasets", "Datasets", "#/datasets"], ["chromosomes", "Chromosomes", "#/chromosomes"],
-    ["variants", "Variant inspector", "#/variants"], ["sources", "Source discovery", "#/sources"]]],
+    ["variants", "Variant inspector", "#/variants"], ["sources", "Source discovery", "#/sources"],
+    ["research", "Research discovery", "#/research"]]],
   ["Research Requests", [["requests", "Requests", "#/requests"]]],
   ["Steward Review", [["requests", "Request review queue", "#/requests", true],
     ["dataset-qc", "Dataset QC", "#/dataset-qc", true], ["family", "Family exposure", "#/family/1", true]]],
