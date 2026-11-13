@@ -1134,3 +1134,22 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
 }
 .gwas-child-traits-label input { width: auto; margin: 0; }
 .gwas-record .source-links { flex-wrap: wrap; }
+
+
+/* Dataset catalogue explorer controls */
+.dataset-toolbar-expanded { display: grid; gap: 12px; }
+.dataset-filter-row { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(145px, 1fr)); gap: 8px; }
+.dataset-filter { min-width: 0; width: 100%; border: 1px solid var(--control); border-radius: var(--r-ctl); padding: 10px 11px; background: var(--pane); color: var(--ink); font: inherit; }
+.dataset-filter:focus-visible, .dataset-search:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.dataset-toolbar-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.dataset-toolbar-actions .btn { width: auto; }
+@media (max-width: 860px) {
+  .dataset-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dataset-filter-row .dataset-search { grid-column: 1 / -1; width: 100%; }
+}
+@media (max-width: 520px) {
+  .dataset-filter-row { grid-template-columns: minmax(0, 1fr); }
+  .dataset-filter-row .dataset-search { grid-column: auto; }
+  .dataset-toolbar-actions { align-items: stretch; flex-direction: column; }
+  .dataset-toolbar-actions .btn { width: 100%; justify-content: center; }
+}
