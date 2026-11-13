@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 from tests.helpers import make_client
 
 
@@ -88,7 +90,7 @@ def test_clinvar_api_bounds_concurrent_provider_calls(monkeypatch):
     import app.api as api_module
     import app.literature.clinvar as provider
 
-    monkeypatch.setattr(api_module, "_CLINVAR_SEARCH_SLOTS", __import__("threading").BoundedSemaphore(0))
+    monkeypatch.setattr(api_module, "_CLINVAR_SEARCH_SLOTS", threading.BoundedSemaphore(0))
     monkeypatch.setattr(provider, "search_clinvar", lambda *args, **kwargs: payload())
     _, client = make_client()
     response = client.post("/research/clinvar/search", json={"gene_symbol": "BRCA1"})
