@@ -219,7 +219,10 @@ def _normalize_association(record: dict) -> dict:
         "beta_numeric": record.get("beta_num") if isinstance(record.get("beta_num"), (int, float)) else None,
         "beta_unit": _optional_text(record.get("beta_unit")),
         "beta_direction": _optional_text(record.get("beta_direction")),
-        "odds_ratio": record.get("or_per_copy_num") if isinstance(record.get("or_per_copy_num"), (int, float)) else None,
+        "odds_ratio": (
+            record.get("or_per_copy_num")
+            if isinstance(record.get("or_per_copy_num"), (int, float)) else None
+        ),
         "odds_ratio_text": _optional_text(record.get("or_value")),
         "confidence_interval": {
             "text": _optional_text(record.get("range")),
@@ -246,7 +249,10 @@ def _normalize_association(record: dict) -> dict:
             _optional_text(item) for item in record.get("snp_effect_allele", [])
             if _optional_text(item)
         ] if isinstance(record.get("snp_effect_allele"), list) else [],
-        "multi_snp_haplotype": record.get("multi_snp_haplotype") if isinstance(record.get("multi_snp_haplotype"), bool) else None,
+        "multi_snp_haplotype": (
+            record.get("multi_snp_haplotype")
+            if isinstance(record.get("multi_snp_haplotype"), bool) else None
+        ),
         "snp_interaction": record.get("snp_interaction") if isinstance(record.get("snp_interaction"), bool) else None,
         "last_mapping_date": _optional_text(record.get("last_mapping_date")),
         "last_update_date": _optional_text(record.get("last_update_date")),
