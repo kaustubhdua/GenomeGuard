@@ -343,6 +343,37 @@ def main() -> None:
               "; ".join(errors)[:120])
         ctx.close()
 
+        print("\n2. Safe, non-mutating researcher walkthrough")
+        tour_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        tour_pg = tour_ctx.new_page()
+        tour_errors: list[str] = []
+        tour_posts: list[str] = []
+        tour_pg.on("pageerror", lambda e: tour_errors.append(str(e)))
+        tour_pg.on("request", lambda request: tour_posts.append(request.url)
+                   if request.method == "POST" and "/requests" in request.url else None)
+        tour_pg.goto(base + "/#/overview", wait_until="domcontentloaded")
+        tour_pg.wait_for_selector("#view h1", timeout=15000)
+        tour_pg.locator("#who").wait_for(state="visible", timeout=30000)
+        tour_pg.keyboard.press("Control+k")
+        tour_pg.locator("#cmdk-input").fill("Start the guided tour")
+        tour_pg.locator("#cmdk-list li").first.click()
+        expected_routes = ["#/overview", "#/research", "#/datasets", "#/requests", "#/donor"]
+        for step, expected in enumerate(expected_routes):
+            tour_pg.wait_for_function("(hash) => location.hash === hash", arg=expected, timeout=15000)
+            check(f"safe guided tour step {step + 1} navigates to its page",
+                  tour_pg.locator(".tour").count() == 1)
+            if step < len(expected_routes) - 1:
+                tour_pg.get_by_role("button", name="Next").click()
+        tour_pg.get_by_role("button", name="Finish").click()
+        check("guided tour closes", tour_pg.locator(".tour").count() == 0)
+        check("guided tour does not create or approve research requests", not tour_posts,
+              ", ".join(tour_posts))
+        check("guided tour does not change the active demo identity",
+              tour_pg.locator("#who").input_value().isdigit())
+        check("no JavaScript errors during guided tour", not tour_errors,
+              "; ".join(tour_errors)[:120])
+        tour_ctx.close()
+
         for theme in ("light", "dark"):
             print(f"\n2. Every page, {theme} theme: contrast, names, labels, targets")
             ctx = browser.new_context(viewport={"width": 1280, "height": 900})
