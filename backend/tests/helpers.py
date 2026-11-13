@@ -1,17 +1,22 @@
 """Shared builders for service/API tests (no pytest fixtures, so tests stay simple)."""
 
+import os
 import warnings
+
+# Unit tests intentionally exercise the legacy static-key compatibility path. The
+# default application setting remains disabled; public demo flows use session tokens.
+os.environ["GG_TEST_ALLOW_STATIC_DEMO_KEYS"] = "true"
+os.environ["GG_ADMIN_API_KEY"] = "demo-admin-key"
 
 from starlette.testclient import TestClient
 
 from app.api import create_app
 from app.config import Settings
-from app.service import bootstrap
+from app.service import DEMO_REQUESTERS, bootstrap
 
 warnings.filterwarnings("ignore", message="GG_MASTER_KEY")
 
-RESEARCHER, ATTACKER, ANON, CONTROLLED = ("demo-researcher", "demo-attacker", "demo-anonymous",
-                                          "demo-controlled")
+RESEARCHER, ATTACKER, ANON, CONTROLLED = tuple(persona[4] for persona in DEMO_REQUESTERS)
 ADMIN = {"X-Admin-Key": "demo-admin-key"}
 
 DEMO_REQ = {"purpose": "disease_research", "disease": "diabetes", "data_level": "frequency",
