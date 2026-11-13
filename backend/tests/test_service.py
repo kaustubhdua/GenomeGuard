@@ -276,7 +276,7 @@ def test_service_agent_explanations_are_offline_and_deterministic():
 
 
 def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
-    svc = make_service()
+    svc = make_service(demo_mode=False)
     first, second = svc.ds.donors[0], svc.ds.donors[1]
     svc.ds.donors[0] = replace(
         first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
@@ -340,3 +340,21 @@ def test_signed_consent_event_produces_policy_compatible_participant_basis(monke
     assert permitted(
         updated.consent, ConsentRequest("general_research"), updated.withdrawn,
     ) == (True, "ok")
+
+def test_demo_eligibility_uses_only_explicitly_simulated_consent_facts():
+    svc = make_service(demo_mode=True)
+    first, second = svc.ds.donors[0], svc.ds.donors[1]
+    svc.ds.donors[0] = replace(
+        first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
+        withdrawn=False,
+    )
+    svc.ds.donors[1] = replace(
+        second, consent={**second.consent, "use": "GRU", "modifiers": ["NPU"]},
+        withdrawn=False,
+    )
+    result = svc.eligibility(
+        U(svc, RESEARCHER), "general_research", None, False, "frequency", {},
+    )
+    assert result["excluded_by_reason"].get("commercial_use_unverified", 0) == 0
+    assert result["excluded_by_reason"].get("nonprofit_status_unverified", 0) == 0
+
