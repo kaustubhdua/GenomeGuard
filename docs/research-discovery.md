@@ -130,4 +130,5 @@ The adapter uses a fixed Ensembl origin, URL-encodes the validated symbol, caps 
 Verification:
 - `backend/tests/test_ensembl.py` covers request validation, URL construction, stable-ID validation, assembly/transcript normalization and oversized responses.
 - `backend/tests/test_ensembl_api.py` covers API validation, not-found/provider errors, concurrency limits, no-store headers and OpenAPI documentation.
-- Manual/browser acceptance should verify the gene-symbol resolver, source links and transfer into the Open Targets gene-ID field on desktop and mobile.
+- `scripts/ensembl_provider_smoke.py` checks the live public BRCA2 record and stable Ensembl identifier.
+- `scripts/research_ui_smoke.py` intercepts Ensembl with deterministic source-shaped fixtures and verifies symbol resolution and transfer into the Open Targets gene-ID field on desktop and mobile.
