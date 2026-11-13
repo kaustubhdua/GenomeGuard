@@ -1247,6 +1247,31 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     # These replace the Supabase Edge Function calls that previously required
     # an external publishable key. All data comes from the local backend.
 
+    @route("GET", "/literature/pubmed/search", "Search public PubMed literature metadata", "public")
+    async def pubmed_literature_search(request):
+        """Retrieve public PubMed metadata; search terms are never persisted."""
+        from app.literature.pubmed import PubMedProviderError, search_pubmed
+
+        query = request.query_params.get("q", "")
+        try:
+            retstart = int(request.query_params.get("retstart", "0"))
+            retmax = int(request.query_params.get("retmax", "20"))
+            payload = await run_in_threadpool(
+                search_pubmed, query, retstart=retstart, retmax=retmax,
+            )
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_literature_query", str(exc)) from None
+        except PubMedProviderError:
+            raise ServiceError(
+                503, "literature_provider_unavailable",
+                "PubMed is temporarily unavailable. Please retry or use another literature source.",
+            ) from None
+        response = _j(payload)
+        # Search strings can be sensitive even though callers are instructed not to send
+        # patient data. Do not retain them in browser or shared intermediary caches.
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @route("GET", "/catalogue/sources", "External public genomic sources and review status", "public")
     async def catalogue_sources(request):
         """List source references without approving, importing, or loading datasets."""
