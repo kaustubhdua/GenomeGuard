@@ -1608,6 +1608,51 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         return response
 
 
+    @route("POST", "/research/uniprot/search", "Search reviewed UniProtKB protein annotations by human gene symbol", "public")
+    async def uniprot_protein_search(request):
+        """Search reviewed human protein annotations without returning sequences."""
+        from app.literature.uniprot import (
+            UniProtProviderError,
+            search_proteins,
+            validate_gene_request,
+        )
+
+        data = await _body(request)
+        symbol = data.get("symbol")
+        size = data.get("size", 5)
+        try:
+            validate_gene_request(symbol, size)
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_uniprot_query", str(exc)) from None
+        if not _UNIPROT_SEARCH_SLOTS.acquire(blocking=False):
+            response = _j({
+                "error": "uniprot_provider_busy",
+                "message": "Protein lookup is busy. Please retry shortly.",
+            }, 429)
+            response.headers["Retry-After"] = "2"
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        try:
+            try:
+                payload = await run_in_threadpool(
+                    search_proteins, symbol, size=size,
+                )
+            except ValueError as exc:
+                raise ServiceError(400, "invalid_uniprot_query", str(exc)) from None
+            except UniProtProviderError:
+                response = _j({
+                    "error": "uniprot_provider_unavailable",
+                    "message": "UniProtKB is temporarily unavailable or returned an invalid response. Please retry.",
+                }, 503)
+                response.headers["Cache-Control"] = "no-store"
+                return response
+        finally:
+            _UNIPROT_SEARCH_SLOTS.release()
+        response = _j(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
     @route("POST", "/research/clinvar/search", "Search ClinVar variant classifications by gene", "public")
     async def clinvar_variant_search(request):
         """Retrieve source-attributed ClinVar aggregate variant records by gene symbol."""
