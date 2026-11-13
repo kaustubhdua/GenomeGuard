@@ -226,6 +226,10 @@ def search_clinvar(
         raise ClinVarProviderError("ClinVar ESearch returned invalid variation identifiers")
     if len(ids) > retmax:
         raise ClinVarProviderError("ClinVar ESearch returned more records than requested")
+    if count > retstart and not ids:
+        raise ClinVarProviderError("ClinVar ESearch returned no identifiers for a non-empty page")
+    if retstart + len(ids) > count:
+        raise ClinVarProviderError("ClinVar ESearch returned identifiers beyond its result count")
 
     records = []
     if ids:
