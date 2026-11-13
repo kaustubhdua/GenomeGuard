@@ -18,7 +18,7 @@ def main() -> int:
     if result["count"] <= 0 or not result["records"]:
         raise AssertionError("ClinVar returned no records for the public BRCA1 smoke query")
     if not any(
-        record.get("accession", "").startswith("VCV")
+        str(record.get("accession") or "").startswith("VCV")
         and record.get("classifications", {}).get("germline", {}).get("description")
         for record in result["records"]
     ):
