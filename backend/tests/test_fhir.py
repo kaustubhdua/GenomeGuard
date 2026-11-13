@@ -153,3 +153,18 @@ def test_poa_and_npuncu_are_exported_with_official_duo_identifiers():
         and item["system"] == "http://purl.obolibrary.org/obo/duo.owl"
         for item in codings
     )
+
+
+
+def test_fhir_export_does_not_label_source_participant_record_as_simulated():
+    svc = make_service()
+    donor = _donor_with(svc, lambda consent: consent["use"] == "GRU")
+    consent = {**donor.consent, "consent_basis": "participant_record"}
+    svc.store.set_donor_consent(donor.id, consent)
+    svc.ds.donors[donor.id - 1] = replace(donor, consent=consent)
+    resource = svc.donor_consent_fhir(donor.id)
+    tags = [tag["code"] for tag in resource["meta"]["tag"]]
+    assert "participant-consent-record" in tags
+    assert "simulated-consent" not in tags
+    assert "not independently verified" in resource["text"]["div"]
+    assert "purpose" not in resource["provision"]
