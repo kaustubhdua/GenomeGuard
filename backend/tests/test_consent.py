@@ -225,7 +225,7 @@ def test_official_duo_identifiers_are_mapped_and_local_extensions_are_not_mislab
     assert DUO_REFERENCE["NPOA"]["id"] == "DUO:0000044"
     assert DUO_REFERENCE["POA"]["id"] == "DUO:0000011"
     assert DUO_REFERENCE["NPUNCU"]["id"] == "DUO:0000018"
-    assert DUO_REFERENCE["NAGR"]["meaning"] == "No aggregate-level general research (project-specific rule)"
-    assert DUO_REFERENCE["NCTRL"]["meaning"] == "No use as a control set"
+    assert "not a DUO term" in DUO_REFERENCE["NAGR"]["meaning"]
+    assert "not a DUO term" in DUO_REFERENCE["NCTRL"]["meaning"]
     for extension in ("NAGR", "NCTRL"):
         assert DUO_REFERENCE[extension]["id"] is None
