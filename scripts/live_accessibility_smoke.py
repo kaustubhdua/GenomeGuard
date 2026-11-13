@@ -11,8 +11,11 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies",
-         "#/audit", "#/donor", "#/redteam", "#/federated"]
+PAGES = [
+    "#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies",
+    "#/audit", "#/datasets", "#/chromosomes", "#/variants", "#/sources",
+    "#/research", "#/dataset-qc", "#/donor", "#/redteam", "#/federated",
+]
 FAILURES: list[str] = []
 
 
