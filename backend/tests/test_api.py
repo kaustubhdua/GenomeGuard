@@ -391,6 +391,14 @@ def test_demo_requester_session_is_short_lived_and_never_returns_api_key():
     assert profile.status_code == 200
 
 
+def test_demo_mode_rejects_predictable_static_requester_keys(monkeypatch):
+    monkeypatch.setenv("GG_TEST_ALLOW_STATIC_DEMO_KEYS", "false")
+    _, client = make_client()
+    response = client.get("/me", headers={"X-API-Key": "demo-researcher"})
+    assert response.status_code == 401
+    assert response.json()["error"] == "demo_session_required"
+
+
 def test_demo_requester_session_rejects_unknown_and_expired_tokens():
     _, client = make_client()
     missing = client.post("/demo/session", json={"requester_id": 999999})
