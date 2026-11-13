@@ -68,15 +68,23 @@ certifications, clinical validity assessments, legal determinations or formal pr
 - **The copilot is advisory and its guardrails are partial.** It cannot act, and it cannot be more
   permissive than the rules, but a model could still write a misleading rationale; only the
   numbers in it are checked against the evidence. A human steward makes the call.
-- **FHIR validation has a limited scope.** A generated synthetic Consent resource passed the pinned HL7 FHIR Validator CLI against R4 4.0.1 and the project's extension definitions. This does not establish legally valid consent or validate a real consent workflow. DUO terms travel in namespaced extensions, and only the two DUO ids confirmed from the official ontology are emitted as ids.
+- **FHIR validation has a limited scope.** Generated synthetic Consent resources have passed the pinned HL7 FHIR Validator CLI against R4 4.0.1 and the project's extension definitions. The pending consolidated consent PR #165 adds official DUO coding, explicit consent-basis provenance, a separate MONDO Coding extension for DUO:0000007 (DS), and distinct participant-record versus synthetic-demo tags. This does not establish legally valid consent, an accredited consent authority, or a production participant-consent workflow. Do not mark the mappings complete until exact-head FHIR validation passes.
 - **Demo mode is synthetic-only, not an identity system.** `GET /demo/requesters` and
   `GET /demo/donors` expose synthetic persona metadata only; they do not return reusable
   requester, donor or steward credentials. `POST /demo/session` and
   `POST /demo/donor-session` issue short-lived, process-local demo session tokens for
   explicitly synthetic demo mode. These sessions are not institutional authentication,
   do not establish researcher affiliation, and must never be enabled for real or
-  controlled-access participant data. The public demo must remain synthetic-only.
+  controlled-access participant data. Pending PR #166 adds a browser fallback for health
+  metadata outages only when both demo-only endpoints independently prove the synthetic
+  environment; institutional mode fails closed and never falls back to demo personas.
+  The public demo must remain synthetic-only.
 - **Not modelled:** the DUO consent-form-date limit; per-jurisdiction legal tests; insider abuse
   by a steward; side channels such as timing.
-- **DUO fidelity:** NAGR and NCTRL follow the project spec's wording. Run `make fetch-duo` and
-  compare with the official labels before describing them as DUO terms.
+- **DUO fidelity:** the pending consolidated PR #165 maps GRU, HMB, DS, POA, NPU, NPUNCU,
+  NCU, NMDS and NPOA to official DUO identifiers. NAGR and NCTRL remain GenomeGuard-local
+  policy extensions with no fabricated DUO IDs. DUO:0000007 (DS) is paired with a MONDO
+  disease identifier in real/research mode; the display label is not the authorization key.
+  This is terminology/policy-engine support, not proof of participant consent or legal
+  permission. Verify the exact-head FHIR R4 package and source mappings before closing
+  the interoperability gate.
