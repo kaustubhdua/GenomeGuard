@@ -9,6 +9,7 @@ membership: only aggregates, transformed releases, counts and reason codes.
 from __future__ import annotations
 
 import json
+from html import escape
 import logging
 import os
 import re
@@ -1928,7 +1929,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "<!doctype html><meta charset=utf-8><title>GenomeGuard API</title>"
             "<style>body{font:15px system-ui;margin:2rem;max-width:60rem}td,th{padding:.3rem .8rem;"
             "text-align:left;border-bottom:1px solid #ddd}</style><h1>GenomeGuard API</h1>"
-            f"<p>Genotypes: {genotype_label}. Consent: {consent_label}. "
+            f"<p>Genotypes: {escape(str(genotype_label))}. Consent: {escape(str(consent_label))}. "
             "These labels describe imported provenance; they do not certify legal authority.</p>"
             "Send <code>X-API-Key</code> (requester) or "
             f"<code>X-Admin-Key</code> (reviewer).</p><table><tr><th>Method<th>Path<th>What<th>Auth"
