@@ -98,10 +98,25 @@ async function renderCatalogue(sample, force = false) {
   }
 
   const search = h("input", {
-    class: "dataset-search", type: "search", placeholder: "Search name, release or assembly…",
+    class: "dataset-search", type: "search", placeholder: "Search name, release, citation or assembly…",
     "aria-label": "Search verified datasets",
   });
+  const sourceValues = [...new Set(datasets.map((d) => String(d.source_name || "").trim()).filter(Boolean))].sort();
+  const assemblyValues = [...new Set(datasets.map((d) => String(d.reference_assembly || "").trim()).filter(Boolean))].sort();
+  const sourceFilter = h("select", { class: "dataset-filter", "aria-label": "Filter by source" },
+    h("option", { value: "" }, "All sources"),
+    ...sourceValues.map((value) => h("option", { value }, value)));
+  const assemblyFilter = h("select", { class: "dataset-filter", "aria-label": "Filter by reference assembly" },
+    h("option", { value: "" }, "All assemblies"),
+    ...assemblyValues.map((value) => h("option", { value }, value)));
+  const sortBy = h("select", { class: "dataset-filter", "aria-label": "Sort datasets" },
+    h("option", { value: "newest" }, "Newest imports"),
+    h("option", { value: "oldest" }, "Oldest imports"),
+    h("option", { value: "samples" }, "Most individuals"),
+    h("option", { value: "variants" }, "Most variants"));
   const count = h("span", { class: "dataset-result-count", "aria-live": "polite" }, datasets.length + " datasets");
+  const exportStatus = h("span", { class: "fine muted", role: "status", "aria-live": "polite" });
+  const exportButton = h("button", { class: "btn secondary", type: "button" }, "Export filtered CSV");
   const body = h("tbody", {});
   const table = h("table", { class: "dataset-table" },
     h("thead", {}, h("tr", {}, ...[
@@ -109,11 +124,64 @@ async function renderCatalogue(sample, force = false) {
     ].map((label) => h("th", { scope: "col" }, label)))),
     body);
 
-  function paintRows() {
+  function filteredDatasets() {
     const q = search.value.trim().toLowerCase();
-    const filtered = datasets.filter((d) =>
-      [d.source_name, d.dataset_key, d.source_release, d.reference_assembly]
-        .some((v) => String(v || "").toLowerCase().includes(q)));
+    const filtered = datasets.filter((d) => {
+      const matchesText = [
+        d.source_name, d.dataset_key, d.source_release, d.reference_assembly,
+        d.citation, d.policy_description,
+      ].some((v) => String(v || "").toLowerCase().includes(q));
+      return matchesText
+        && (!sourceFilter.value || String(d.source_name || "") === sourceFilter.value)
+        && (!assemblyFilter.value || String(d.reference_assembly || "") === assemblyFilter.value);
+    });
+    const timestamp = (value) => {
+      const parsed = Date.parse(value || "");
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    return filtered.sort((a, b) => {
+      if (sortBy.value === "samples") return Number(b.sample_count || 0) - Number(a.sample_count || 0);
+      if (sortBy.value === "variants") return Number(b.variant_count || 0) - Number(a.variant_count || 0);
+      return sortBy.value === "oldest"
+        ? timestamp(a.imported_at) - timestamp(b.imported_at)
+        : timestamp(b.imported_at) - timestamp(a.imported_at);
+    });
+  }
+
+  function csvCell(value) {
+    const text = value == null ? "" : String(value);
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+
+  function exportCsv() {
+    const rows = filteredDatasets();
+    if (!rows.length) {
+      exportStatus.textContent = "There are no matching datasets to export.";
+      return;
+    }
+    const columns = [
+      ["dataset_key", "Dataset key"], ["source_name", "Source name"],
+      ["source_release", "Source release"], ["reference_assembly", "Reference assembly"],
+      ["file_sha256", "SHA-256"], ["sample_count", "Individuals"],
+      ["variant_count", "Variants"], ["genotype_call_count", "Genotype calls"],
+      ["imported_at", "Imported at"], ["source_url", "Source URL"],
+      ["reuse_statement_url", "Reuse terms URL"], ["citation", "Citation"],
+      ["policy_description", "Policy description"],
+    ];
+    const csv = [columns.map(([, label]) => csvCell(label)).join(","),
+      ...rows.map((dataset) => columns.map(([key]) => csvCell(dataset[key])).join(","))].join("\r\n");
+    const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = h("a", { href: url, download: "genomeguard-dataset-catalogue.csv" });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    exportStatus.textContent = "Exported " + rows.length + " filtered dataset records.";
+  }
+
+  function paintRows() {
+    const filtered = filteredDatasets();
     count.textContent = filtered.length + " of " + datasets.length + " datasets";
     body.replaceChildren(...filtered.map((d) => h("tr", {},
       h("th", { scope: "row" },
@@ -140,11 +208,17 @@ async function renderCatalogue(sample, force = false) {
       h("td", {}, date(d.imported_at)))));
     if (!filtered.length) body.append(h("tr", {}, h("td", { colSpan: "8", class: "dataset-no-results" }, "No datasets match this search.")));
   }
-  search.addEventListener("input", paintRows);
+  for (const control of [search, sourceFilter, assemblyFilter, sortBy]) {
+    control.addEventListener(control === search ? "input" : "change", paintRows);
+  }
+  exportButton.addEventListener("click", exportCsv);
   paintRows();
 
-  root.append(card("Verified public-research datasets", "Provenance and measured counts",
-    h("div", { class: "dataset-toolbar" }, search, count),
+  root.append(card("Verified public-research datasets", "Filter, compare and export source-backed records",
+    h("div", { class: "dataset-toolbar dataset-toolbar-expanded" },
+      h("div", { class: "dataset-filter-row" }, search, sourceFilter, assemblyFilter, sortBy),
+      h("div", { class: "dataset-toolbar-actions" }, count, exportButton)),
+    exportStatus,
     h("div", { class: "tablewrap" }, table)));
   root.append(h("p", { class: "fine dataset-footnote" }, "Counts are measured at import time. Genotype calls are not clinical interpretations, and catalogue inclusion does not authorize participant-specific release."));
   return root;
