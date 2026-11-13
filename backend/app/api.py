@@ -16,6 +16,7 @@ import secrets
 import tempfile
 import threading
 import time
+from html import escape
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -134,10 +135,42 @@ def _reported_consent_provenance(
     return reported, matched, scoped, consistent
 
 
+MAX_JSON_BODY_BYTES = 1_048_576
+
+
 async def _body(request: Request) -> dict:
+    """Read a bounded JSON object without buffering an attacker-controlled body.
+
+    Content-Length is an early rejection hint only: the streaming limit is authoritative
+    because clients can omit or lie about that header. Binary VCF uploads use their own
+    separately bounded streaming parser and do not pass through this helper.
+    """
+    declared_length = request.headers.get("content-length")
+    if declared_length is not None:
+        try:
+            declared = int(declared_length)
+        except (TypeError, ValueError):
+            raise ServiceError(400, "invalid_content_length", "invalid Content-Length header") from None
+        if declared < 0:
+            raise ServiceError(400, "invalid_content_length", "invalid Content-Length header")
+        if declared > MAX_JSON_BODY_BYTES:
+            raise ServiceError(
+                413, "request_body_too_large",
+                f"JSON request bodies must not exceed {MAX_JSON_BODY_BYTES} bytes",
+            )
+
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_JSON_BODY_BYTES:
+            raise ServiceError(
+                413, "request_body_too_large",
+                f"JSON request bodies must not exceed {MAX_JSON_BODY_BYTES} bytes",
+            )
+        body.extend(chunk)
+
     try:
-        data = await request.json()
-    except Exception:
+        data = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError, RecursionError):
         raise ServiceError(400, "bad_json", "body must be a JSON object") from None
     if not isinstance(data, dict):
         raise ServiceError(400, "bad_json", "body must be a JSON object")
@@ -496,6 +529,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/health", "Liveness and non-authoritative dataset/readiness facts", "public")
     async def health(request):
         svc = S()
+        # Keep operational diagnostics useful for the public synthetic demo, but do not
+        # disclose private-cohort size, variant counts, consent provenance, storage backend,
+        # LLM availability, or internal release state from a non-demo public endpoint.
+        if not settings.demo_mode:
+            response = _j({"status": "ok", "deployment": _deployment_info()})
+            response.headers["Cache-Control"] = "no-store"
+            return response
         raw_provenance = getattr(svc, "provenance", {})
         provenance, consent_records_matched, policy_samples_scoped, consent_provenance_consistent = (
             _reported_consent_provenance(raw_provenance, svc.ds.n_donors)
@@ -529,11 +569,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def readiness(request):
         checks = readiness_checks(S())
         ready = all(checks.values())
-        return _j({"status": "ready" if ready else "not_ready", "ready": ready,
-                   "checks": checks, "note": (
+        payload = {"status": "ready" if ready else "not_ready", "ready": ready,
+                   "note": (
                        "Readiness is not clinical or legal approval; independent security, "
                        "privacy, and governance review remains required."
-                   )}, 200 if ready else 503)
+                   )}
+        # Detailed gate names are useful on the synthetic demo, but reveal internal
+        # institutional configuration on a public non-demo endpoint.
+        if settings.demo_mode:
+            payload["checks"] = checks
+        response = _j(payload, 200 if ready else 503)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @route("GET", "/demo/requesters", "Synthetic demo personas (no credentials)", "public")
     async def demo_requesters(request):
@@ -1896,7 +1943,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             "<!doctype html><meta charset=utf-8><title>GenomeGuard API</title>"
             "<style>body{font:15px system-ui;margin:2rem;max-width:60rem}td,th{padding:.3rem .8rem;"
             "text-align:left;border-bottom:1px solid #ddd}</style><h1>GenomeGuard API</h1>"
-            f"<p>Genotypes: {genotype_label}. Consent: {consent_label}. "
+            f"<p>Genotypes: {escape(str(genotype_label))}. Consent: {escape(str(consent_label))}. "
             "These labels describe imported provenance; they do not certify legal authority.</p>"
             "Send <code>X-API-Key</code> (requester) or "
             f"<code>X-Admin-Key</code> (reviewer).</p><table><tr><th>Method<th>Path<th>What<th>Auth"
@@ -1913,7 +1960,28 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     routes.append(Route("/", index))
     if (FRONTEND).exists():
         routes.append(Mount("/static", StaticFiles(directory=FRONTEND), name="static"))
-    return Starlette(routes=routes)
+    app = Starlette(routes=routes)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        """Apply browser security headers consistently to API, HTML and static responses."""
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+        )
+        if request.url.scheme == "https":
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains",
+            )
+        return response
+
+    return app
 
 
 app = None

@@ -1,0 +1,93 @@
+"""Release-mode defaults must fail closed for non-demo cohort data."""
+
+from app.config import Settings
+from app.service import _release_enabled_for_mode
+from tests.helpers import make_client
+
+
+
+def test_governed_release_is_enabled_only_for_synthetic_demo_mode():
+    settings = Settings()
+    settings.demo_mode = True
+    assert _release_enabled_for_mode(settings) is True
+
+    settings.demo_mode = False
+    assert _release_enabled_for_mode(settings) is False
+
+
+
+def test_variant_search_uses_verified_public_catalogue_when_release_is_disabled(monkeypatch):
+    service, client = make_client()
+    service.release_enabled = False
+    chromosome, position, _reference, _alternate = service.ds.coords[0]
+    calls = []
+
+    def public_lookup(chrom, pos, reference=None, alternate=None):
+        calls.append((chrom, pos, reference, alternate))
+        return [{"source": "verified-public-reference", "variant_id": "public-variant-1"}]
+
+    monkeypatch.setattr(
+        service.store, "verified_public_variant_search", public_lookup, raising=False,
+    )
+    response = client.get(f"/variants/search?q={chromosome}:{position}")
+
+    assert response.status_code == 200
+    assert response.json()["matches"] == [
+        {"source": "verified-public-reference", "variant_id": "public-variant-1"}
+    ]
+    assert calls == [(chromosome, position, None, None)]
+
+
+def test_api_docs_escape_untrusted_provenance_labels():
+    service, client = make_client()
+    service.provenance["genotypes_label"] = '<img src=x onerror="alert(1)">'
+    service.provenance["consent_label"] = "<script>alert(1)</script>"
+
+    response = client.get("/docs")
+
+    assert response.status_code == 200
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in response.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
+    assert "<script>alert(1)</script>" not in response.text
+
+
+def test_security_headers_cover_html_and_https_responses():
+    from starlette.testclient import TestClient
+
+    from app.api import create_app
+
+    service, _client = make_client()
+    client = TestClient(create_app(service), base_url="https://testserver")
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert "object-src 'none'" in response.headers["content-security-policy"]
+    assert response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+
+
+def test_non_demo_public_health_endpoints_do_not_disclose_cohort_diagnostics(monkeypatch):
+    import app.api as api_module
+
+    settings = Settings()
+    settings.demo_mode = False
+    monkeypatch.setattr(api_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(api_module, "validate_settings", lambda _settings: None)
+
+    service, _client = make_client()
+    from starlette.testclient import TestClient
+
+    client = TestClient(api_module.create_app(service))
+    health = client.get("/health")
+    readiness = client.get("/health/ready")
+
+    assert health.status_code == 200
+    assert set(health.json()) == {"status", "deployment"}
+    assert health.headers["cache-control"] == "no-store"
+    assert readiness.status_code in (200, 503)
+    assert "checks" not in readiness.json()
+    assert readiness.headers["cache-control"] == "no-store"
