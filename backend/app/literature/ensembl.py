@@ -150,6 +150,7 @@ def lookup_gene(symbol: str, *, species: str = SPECIES) -> dict:
             "chromosome": str(payload.get("seq_region_name")) if payload.get("seq_region_name") is not None else None,
             "start": start,
             "end": end,
+            "coordinate_system": "1-based closed (inclusive)",
             "strand": strand,
             "canonical_transcript": payload.get("canonical_transcript")
                 if isinstance(payload.get("canonical_transcript"), str) else None,
