@@ -1,15 +1,16 @@
 import { h } from "../ui.js";
 
 const API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
+const PAGE_SIZE = 20;
 const DEPARTMENTS = [
-  ["Genetics & Genomics", "genetics"],
-  ["Oncology", "oncology"],
-  ["Neurology", "neurology"],
-  ["Cardiology", "cardiology"],
-  ["Immunology", "immunology"],
-  ["Rare Diseases", "rare disease"],
-  ["Bioinformatics", "bioinformatics"],
-  ["Pharmacogenomics", "pharmacogenomics"],
+  ["Genetics & Genomics", "genetics", 'genetics OR genomics'],
+  ["Oncology", "oncology", 'oncology OR cancer OR neoplasm'],
+  ["Neurology", "neurology", 'neurology OR neurological OR neurodegenerative'],
+  ["Cardiology", "cardiology", 'cardiology OR cardiovascular OR heart'],
+  ["Immunology", "immunology", 'immunology OR immune OR immunological'],
+  ["Rare Diseases", "rare-diseases", '"rare disease" OR orphan'],
+  ["Bioinformatics", "bioinformatics", 'bioinformatics OR "computational biology"'],
+  ["Pharmacogenomics", "pharmacogenomics", 'pharmacogenomics OR pharmacogenetics'],
 ];
 
 function safeExternal(url, label, className = "source-link") {
@@ -56,13 +57,27 @@ function paperCard(article) {
 
 function buildQuery(question, department) {
   const terms = question.trim();
-  if (!department) return terms;
-  return '"' + department.replaceAll('"', "") + '" AND (' + terms + ')';
+  const selected = DEPARTMENTS.find(([, slug]) => slug === department);
+  const departmentQuery = selected?.[2] || "";
+  if (departmentQuery && terms) return "(" + departmentQuery + ") AND (" + terms + ")";
+  return departmentQuery || terms;
+}
+
+function parseSearchResponse(data) {
+  if (!data || !data.resultList || !Array.isArray(data.resultList.result)
+      || !Number.isFinite(Number(data.hitCount))) {
+    throw new Error("The literature provider returned an unexpected response.");
+  }
+  return {
+    papers: data.resultList.result.filter((paper) => paper && typeof paper === "object"),
+    hitCount: Math.max(0, Number(data.hitCount)),
+  };
 }
 
 export async function render() {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   const initialDepartment = params.get("department") || "";
+  const initialQuery = params.get("q") || "";
   const root = h("div", { class: "stack source-page research-discovery" },
     h("section", { class: "card hero source-hero" },
       h("div", { class: "hero-copy" },
@@ -75,13 +90,13 @@ export async function render() {
     h("section", { class: "card stack" },
       h("div", {},
         h("h2", {}, "Explore by department"),
-        h("p", { class: "muted" }, "Choose a field to open a focused literature search. You can refine the query below.")),
+        h("p", { class: "muted" }, "Choose a department to immediately open its publication results, then refine the search with a research question.")),
       h("div", { class: "grid g2 research-departments", "aria-label": "Research departments" },
-        ...DEPARTMENTS.map(([label, term]) => h("a", {
+        ...DEPARTMENTS.map(([label, slug]) => h("a", {
           class: "research-department",
-          href: "#/research?department=" + encodeURIComponent(term),
-          "aria-current": initialDepartment === term ? "true" : "false",
-        }, h("strong", {}, label), h("span", { class: "muted" }, "Explore publications →"))))),
+          href: "#/research?department=" + encodeURIComponent(slug),
+          "aria-current": initialDepartment === slug ? "true" : "false",
+        }, h("strong", {}, label), h("span", { class: "muted" }, "Browse publications →")))),
     h("section", { class: "card stack" },
       h("div", {},
         h("h2", {}, "Search research literature"),
@@ -93,7 +108,7 @@ export async function render() {
         h("label", { for: "research-department" }, "Research department"),
         h("select", { id: "research-department", name: "department" },
           h("option", { value: "" }, "All biomedical fields"),
-          ...DEPARTMENTS.map(([label, term]) => h("option", { value: term }, label))),
+          ...DEPARTMENTS.map(([label, slug]) => h("option", { value: slug }, label))),
         h("div", { class: "hero-actions" },
           h("button", { class: "btn", type: "submit" }, "Search publications"),
           h("span", { class: "fine muted" }, "Source: Europe PMC · abstracts and metadata"))),
@@ -109,57 +124,129 @@ export async function render() {
   const department = root.querySelector("#research-department");
   const status = root.querySelector("#research-status");
   const results = root.querySelector("#research-results");
-  if (DEPARTMENTS.some(([, term]) => term === initialDepartment)) department.value = initialDepartment;
+  const submitButton = form.querySelector('button[type="submit"]');
+  let activeController = null;
+  let activeQuery = "";
+  let currentPage = 0;
+  let totalHits = 0;
+  let loadedCount = 0;
+
+  if (DEPARTMENTS.some(([, slug]) => slug === initialDepartment)) department.value = initialDepartment;
+  question.value = initialQuery.slice(0, 500);
+
+  async function fetchPage(query, pageNumber) {
+    if (activeController) activeController.abort();
+    activeController = new AbortController();
+    const timeout = setTimeout(() => activeController?.abort(), 12000);
+    const url = API + "?query=" + encodeURIComponent(query)
+      + "&format=json&resultType=core&pageSize=" + PAGE_SIZE + "&page=" + pageNumber;
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: activeController.signal,
+      });
+      if (!response.ok) throw new Error("The literature service returned HTTP " + response.status + ".");
+      return parseSearchResponse(await response.json());
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function renderLoadMore() {
+    const old = results.querySelector("#research-load-more");
+    old?.remove();
+    if (loadedCount >= totalHits || loadedCount === 0) return;
+    const button = h("button", { id: "research-load-more", class: "btn secondary", type: "button" },
+      "Load more publications");
+    button.addEventListener("click", loadMore);
+    results.append(button);
+  }
+
+  async function loadMore() {
+    const button = results.querySelector("#research-load-more");
+    if (!button || !activeQuery) return;
+    button.disabled = true;
+    button.textContent = "Loading…";
+    try {
+      const nextPage = currentPage + 1;
+      const data = await fetchPage(activeQuery, nextPage);
+      if (data.papers.length) {
+        results.insertBefore(
+          h("div", { class: "research-paper-page" }, ...data.papers.map(paperCard)),
+          button,
+        );
+      }
+      currentPage = nextPage;
+      loadedCount += data.papers.length;
+      totalHits = data.hitCount;
+      status.textContent = "Showing " + loadedCount + " of " + totalHits
+        + " publication records returned by Europe PMC. Results are source-indexed, not clinical recommendations.";
+      renderLoadMore();
+    } catch (error) {
+      status.textContent = error.name === "AbortError"
+        ? "The literature search timed out. Please try again."
+        : "More results could not be loaded. " + error.message;
+      button.disabled = false;
+      button.textContent = "Retry loading more";
+    }
+  }
 
   async function search(event) {
     event?.preventDefault();
     const text = question.value.trim();
-    if (text.length < 3) {
-      status.textContent = "Enter at least 3 characters to search.";
-      question.focus();
-      return;
-    }
     if (text.length > 500) {
       status.textContent = "Keep the search under 500 characters.";
       return;
     }
+    if (text.length < 3 && !department.value) {
+      status.textContent = "Enter at least 3 characters or choose a research department.";
+      question.focus();
+      return;
+    }
     const query = buildQuery(text, department.value) + " sort_date:y";
+    if (!query.trim()) {
+      status.textContent = "Choose a department or enter a research question.";
+      return;
+    }
+    activeQuery = query;
+    currentPage = 0;
+    loadedCount = 0;
+    totalHits = 0;
     status.textContent = "Searching Europe PMC for matching publication records…";
     results.replaceChildren();
-    const button = form.querySelector("button[type=submit]");
-    button.disabled = true;
-    button.textContent = "Searching…";
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    submitButton.disabled = true;
+    submitButton.textContent = "Searching…";
     try {
-      const url = API + "?query=" + encodeURIComponent(query)
-        + "&format=json&resultType=core&pageSize=20";
-      const response = await fetch(url, {
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error("The literature service returned HTTP " + response.status + ".");
-      const data = await response.json();
-      const papers = Array.isArray(data.resultList?.result) ? data.resultList.result : [];
-      status.textContent = papers.length
-        ? papers.length + " publication records returned by Europe PMC. Results are source-indexed, not clinical recommendations."
-        : "No publication records matched this search. Try broader terms or another department.";
-      if (papers.length) results.replaceChildren(...papers.map(paperCard));
+      const data = await fetchPage(query, 1);
+      currentPage = 1;
+      totalHits = data.hitCount;
+      loadedCount = data.papers.length;
+      if (data.papers.length) {
+        results.append(h("div", { class: "research-paper-page" }, ...data.papers.map(paperCard)));
+        status.textContent = "Showing " + loadedCount + " of " + totalHits
+          + " publication records returned by Europe PMC. Results are source-indexed, not clinical recommendations.";
+      } else {
+        status.textContent = "No publication records matched this search. Try broader terms or another department.";
+      }
+      renderLoadMore();
     } catch (error) {
       status.textContent = error.name === "AbortError"
         ? "The literature search timed out. Please try again."
         : "The live literature service could not be reached. No sample or fabricated papers are shown. " + error.message;
     } finally {
-      clearTimeout(timeout);
-      button.disabled = false;
-      button.textContent = "Search publications";
+      submitButton.disabled = false;
+      submitButton.textContent = "Search publications";
     }
   }
 
   form.addEventListener("submit", search);
-  if (initialDepartment) {
-    question.value = "";
-    status.textContent = "Department selected. Add a question or symptom description to search this field.";
+  if (initialDepartment || initialQuery) {
+    if (!question.value && !initialDepartment) {
+      status.textContent = "Enter a research question or select a department to begin.";
+    } else {
+      // Department links are useful on their own: opening one performs a real, source-backed search.
+      search();
+    }
   }
   return root;
 }
