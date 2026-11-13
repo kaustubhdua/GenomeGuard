@@ -45,6 +45,8 @@ jobs:
           }
           console.log('Vercel JSON valid; static asset references exist:', refs.join(', '));
           NODE
+      - name: Enforce deterministic CI and isolated live provider acceptance
+        run: python3 scripts/verify_ci_provider_isolation.py
       - name: Validate native PostgreSQL migrations and deployment profile
         run: |
           test -s backend/migrations/001_initial_postgres.sql
