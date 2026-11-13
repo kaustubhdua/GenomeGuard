@@ -10,7 +10,7 @@ way).
 |---|---|---|
 | `GG_DB_PATH` | `./genomeguard.sqlite3` | SQLite file (a fresh file is seeded on first start) |
 | `GG_DATABASE_URL` | unset | PostgreSQL URL; required when `GG_DEMO_MODE=false`. Non-demo startup refuses to fall back to SQLite. Keep it server-side only. |
-| `GG_DEMO_MODE` | `true` | Publish demo accounts and keys at `/demo/requesters`. Turn off for anything else |
+| `GG_DEMO_MODE` | `true` | Publish synthetic persona metadata and issue short-lived, process-local demo sessions. No API or donor keys are returned by public persona endpoints. Turn off for anything else |
 | `GG_ALLOW_TAMPER_DEMO` | `false` | Enable the audit tamper exercise (demo only) |
 | `GG_ADMIN_API_KEY` | `demo-admin-key` | Steward key. Outside demo mode it must be 32+ characters |
 | `GG_MASTER_KEY` | unset: a fixed, publicly known development key, with a warning | base64 of 32 random bytes; encrypts the genotype matrix at rest |
@@ -20,3 +20,12 @@ way).
 | `PORT` | 8000 | Used by the Docker image |
 
 Generate a master key: `python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"`.
+
+
+## Public synthetic demo sessions
+
+In demo mode, GET /demo/requesters and GET /demo/donors return persona metadata only. They do not disclose requester API keys, donor keys or administrator credentials.
+
+The browser obtains a short-lived (30-minute) requester session using POST /demo/session with a requester_id, and a donor session using POST /demo/donor-session with a donor_id. Tokens are held in tab memory and sent in X-Demo-Session or X-Demo-Donor-Session headers. They are scoped to one synthetic persona and expire automatically.
+
+The session registry is in process memory. It is suitable only for the current single-process synthetic demo. Multi-worker or multi-instance deployments must replace it with a shared, expiring server-side session store before scaling. Do not expose GG_EXPOSE_DEMO_ADMIN_KEY on any public deployment; it exists only for isolated local demonstrations and the public persona endpoints never return it.
