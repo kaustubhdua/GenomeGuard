@@ -14,6 +14,7 @@ import os
 import re
 import secrets
 import tempfile
+import threading
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -39,6 +40,7 @@ EVAL_JSON = Path(os.environ.get("GG_EVAL_JSON")
 
 # (method, path, summary, who): drives both routing documentation and /docs
 ROUTES_DOC: list[tuple[str, str, str, str]] = []
+_PUBMED_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -1247,9 +1249,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     # These replace the Supabase Edge Function calls that previously required
     # an external publishable key. All data comes from the local backend.
 
-    @route("GET", "/literature/pubmed/search", "Search public PubMed literature metadata", "public")
+    @route("POST", "/literature/pubmed/search", "Search public PubMed literature metadata", "public")
     async def pubmed_literature_search(request):
-        """Retrieve public PubMed metadata; search terms are never persisted."""
+        """Retrieve public PubMed metadata without putting query text in access logs."""
         from app.literature.pubmed import (
             MAX_OFFSET,
             MAX_PAGE_SIZE,
@@ -1258,29 +1260,48 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             search_pubmed,
         )
 
-        query = request.query_params.get("q", "").strip()
-        try:
-            retstart = int(request.query_params.get("retstart", "0"))
-            retmax = int(request.query_params.get("retmax", "20"))
-            if not query or len(query) > MAX_QUERY_LENGTH:
-                raise ValueError(f"q must contain 1 to {MAX_QUERY_LENGTH} characters")
-            if not 0 <= retstart <= MAX_OFFSET:
-                raise ValueError(f"retstart must be between 0 and {MAX_OFFSET}")
-            if not 1 <= retmax <= MAX_PAGE_SIZE:
-                raise ValueError(f"retmax must be between 1 and {MAX_PAGE_SIZE}")
-            payload = await run_in_threadpool(
-                search_pubmed, query, retstart=retstart, retmax=retmax,
+        data = await _body(request)
+        query = data.get("q", "")
+        retstart = data.get("retstart", 0)
+        retmax = data.get("retmax", 20)
+        if not isinstance(query, str) or not query.strip() or len(query.strip()) > MAX_QUERY_LENGTH:
+            raise ServiceError(
+                400, "invalid_literature_query",
+                f"q must contain 1 to {MAX_QUERY_LENGTH} characters",
             )
-        except ValueError as exc:
-            raise ServiceError(400, "invalid_literature_query", str(exc)) from None
+        if isinstance(retstart, bool) or not isinstance(retstart, int) or not 0 <= retstart <= MAX_OFFSET:
+            raise ServiceError(
+                400, "invalid_literature_query",
+                f"retstart must be an integer between 0 and {MAX_OFFSET}",
+            )
+        if isinstance(retmax, bool) or not isinstance(retmax, int) or not 1 <= retmax <= MAX_PAGE_SIZE:
+            raise ServiceError(
+                400, "invalid_literature_query",
+                f"retmax must be an integer between 1 and {MAX_PAGE_SIZE}",
+            )
+        if not _PUBMED_SEARCH_SLOTS.acquire(blocking=False):
+            response = _j({
+                "error": "literature_provider_busy",
+                "message": "PubMed search is busy. Please retry shortly.",
+            }, 429)
+            response.headers["Retry-After"] = "1"
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        try:
+            payload = await run_in_threadpool(
+                search_pubmed, query.strip(), retstart=retstart, retmax=retmax,
+            )
         except PubMedProviderError:
             raise ServiceError(
                 503, "literature_provider_unavailable",
                 "PubMed is temporarily unavailable. Please retry or use another literature source.",
             ) from None
+        finally:
+            _PUBMED_SEARCH_SLOTS.release()
         response = _j(payload)
         # Search strings can be sensitive even though callers are instructed not to send
-        # patient data. Do not retain them in browser or shared intermediary caches.
+        # patient data. POST keeps them out of request-line access logs; no-store prevents
+        # browser and shared intermediary caching.
         response.headers["Cache-Control"] = "no-store"
         return response
 
