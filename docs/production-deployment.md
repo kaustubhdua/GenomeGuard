@@ -127,3 +127,39 @@ Research-mode smoke checks should be read-only. Run write-enabled acceptance onl
 ## Release decision
 
 The service is a working **public-genotype research prototype**, not a production genomic-data-governance service. Do not submit private participant data, identifiable genomic data, controlled-access cohorts, or clinical records. Keep readiness fail-closed until the relevant controls exist and their live behavior is verified.
+
+
+## Fresh operational audit — 13 November 2026, 14:22 UTC
+
+This addendum supersedes earlier deployment snapshots above where their timestamps conflict with the observations below.
+
+### Render public service
+
+- Service: `srv-dbev1ka9lscs738813t0`, branch `main`, Free plan, Singapore, Dockerfile `./Dockerfile`, auto-deploy enabled.
+- Last confirmed live backend revision remains `10fb08dcc11ca09282cc1085fd86e3c73708281a`. A live `GET /health` returns HTTP 200 and explicitly reports a synthetic-only dataset (600 synthetic donors, 3,000 synthetic variants), simulated consent, and no verified participant-consent records.
+- `GET /health/ready` returns HTTP 503. Durable storage, backup/restore, monitoring/alerting, external audit anchoring, institutional identity, private-cohort ingestion, tenant processing isolation and participant-consent authority are not verified.
+- Deployment `dep-dbrgl2c9v7es73chrnd0` has remained `build_in_progress` since 13:03:05 UTC on commit `267c040cecd695f52ebdecb88c34341348c368b6`. The newer synthetic-only image deployment `dep-dbrgucce7ovs73femptg` for commit `3280ebc1924039bcfa19f4c58bb75e83a8c370eb` is queued behind it.
+- The connected Render tools support inspection and triggering but do not expose the Render cancel-deploy operation. An operator must cancel the stalled deployment in the Render dashboard (or use the documented Render cancel-deploy API) before the queued synthetic-only deployment can proceed. Do not trigger additional deployments behind the stalled build.
+
+### Vercel frontend
+
+- Latest production deployment remains READY at commit `c12868d951cf966cb4a44852115b230c07b870e9`; it does not include the merged GWAS Catalog PR #149.
+- The GWAS merge commit `f200b643f05a5f959887ac51accd7e202c424557` has no production deployment. Vercel reports `api-deployments-free-per-day` (more than 100 deployments; retry after the 24-hour quota window). PR previews are affected by the same quota.
+- The deployed frontend's same-origin API reaches the stale Render backend. The live `/openapi.json` contract does not expose the newer PubMed, Open Targets, ClinVar, or GWAS endpoints. Do not mark the frontend/backend integration accepted until the matching backend is live and its API contracts pass.
+
+### Database and research-mode separation
+
+- The connected Neon project `genomeguard-staging` is on the `free_v3` subscription with 6-hour history retention and is used for staging/validation branches. It is not a durable production database and must not be represented as one.
+- The Render workspace has no Render Postgres instances.
+- The separate `Dockerfile.research`/research-mode blueprint remains unprovisioned and unaccepted. Do not apply it to the public synthetic demo service or load private participant data.
+- PR #150 adds OLS4-backed MONDO/HPO/DOID discovery on a feature branch; it is not merged or deployed. Its exact-head CI is a separate acceptance gate.
+
+### Operator actions and release gates
+
+1. Cancel the stalled Render deployment above; allow the queued synthetic-only deployment to complete.
+2. Verify the exact deployed Render SHA, live health, readiness and `/openapi.json` contract.
+3. Resolve the Vercel daily deployment quota; deploy the exact main SHA and verify frontend/backend compatibility.
+4. Provision and approve durable production storage, backups/PITR, monitoring, key management and recovery evidence before any production data claim.
+5. Provision a separate research-mode service only after institutional OIDC, authoritative consent, tenant isolation and independent governance/security reviews are available.
+
+A successful image build, a synthetic demo, a PostgreSQL driver setting, or a CI test does not satisfy production acceptance by itself.
