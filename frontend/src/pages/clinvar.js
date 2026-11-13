@@ -133,6 +133,7 @@ export function renderClinVarPanel() {
   let activeQuery = null;
   let generation = 0;
   let busy = false;
+  let seenIds = new Set();
 
   function renderAll() {
     results.replaceChildren(...records.map(recordCard));
@@ -210,6 +211,7 @@ export function renderClinVarPanel() {
     const requestGeneration = generation;
     current = null;
     records = [];
+    seenIds = new Set();
     busy = true;
     submit.disabled = true;
     submit.textContent = "Searching…";
@@ -219,7 +221,11 @@ export function renderClinVarPanel() {
       const data = await fetchPage(0, requestGeneration);
       if (!data || requestGeneration !== generation) return;
       current = data;
-      records = data.records.slice();
+      records = data.records.filter((record) => {
+        if (!record?.uid || seenIds.has(record.uid)) return false;
+        seenIds.add(record.uid);
+        return true;
+      });
       status.textContent = records.length
         ? "Loaded " + records.length + " ClinVar records. Source classifications and review status are preserved."
         : "No ClinVar records matched this gene and filter.";
@@ -248,8 +254,14 @@ export function renderClinVarPanel() {
     try {
       const data = await fetchPage(nextStart, requestGeneration);
       if (!data || requestGeneration !== generation) return;
-      records.push(...data.records);
+      const fresh = data.records.filter((record) => {
+        if (!record?.uid || seenIds.has(record.uid)) return false;
+        seenIds.add(record.uid);
+        return true;
+      });
+      records.push(...fresh);
       current = data;
+      if (!fresh.length && data.has_more) current.has_more = false;
       status.textContent = "Loaded " + records.length + " ClinVar records. Each page is retrieved from the current public index.";
       renderAll();
     } catch (error) {
