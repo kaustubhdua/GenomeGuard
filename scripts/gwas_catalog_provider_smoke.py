@@ -17,7 +17,7 @@ def main() -> int:
     if result["count"] <= 0 or not result["records"]:
         raise AssertionError("GWAS Catalog returned no associations for the public BRCA1 smoke query")
     if not any(
-        record.get("study_accession", "").startswith("GCST")
+        str(record.get("study_accession") or "").startswith("GCST")
         and isinstance(record.get("p_value"), (int, float))
         and record.get("source_url", "").startswith("https://www.ebi.ac.uk/gwas/rest/api/v2/")
         for record in result["records"]
