@@ -170,7 +170,7 @@ async function renderCatalogue(sample, force = false) {
     ];
     const csv = [columns.map(([, label]) => csvCell(label)).join(","),
       ...rows.map((dataset) => columns.map(([key]) => csvCell(dataset[key])).join(","))].join("\r\n");
-    const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = h("a", { href: url, download: "genomeguard-dataset-catalogue.csv" });
     document.body.append(link);
