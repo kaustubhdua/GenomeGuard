@@ -6,7 +6,7 @@
 > - [#153](https://github.com/kaustubhdua/GenomeGuard/pull/153): this documentation reconciliation.
 > - [#154](https://github.com/kaustubhdua/GenomeGuard/pull/154): gnomAD manifest checksum enforcement. This is an importer integrity gate, not evidence that gnomAD data has been imported.
 > - [#164](https://github.com/kaustubhdua/GenomeGuard/pull/164): CI live-provider isolation, research UI smoke correction, dataset catalogue browser reliability, and whitespace-prefixed CSV formula-injection protection.
-> - [#165](https://github.com/kaustubhdua/GenomeGuard/pull/165): consolidated DUO/consent provenance, signed-event chronology and PostgreSQL row locking, MONDO-coded DUO DS restrictions, and FHIR R4 disease coding.
+> - [#165](https://github.com/kaustubhdua/GenomeGuard/pull/165): consolidated DUO/consent provenance, signed-event chronology and PostgreSQL row locking, MONDO-coded DUO DS restrictions, FHIR R4 disease coding, and demo-only donor self-service consent controls.
 > - [#166](https://github.com/kaustubhdua/GenomeGuard/pull/166): Ensembl gene and UniProtKB protein discovery, research browser acceptance, synthetic-demo health-metadata fallback and bounded cold-start retries.
 >
 > Superseded, closed without merging: #152 → #164; #155 and #156 → #165; #158, #159 and #161 → #166. Their work is carried by the replacement PRs; reopen them if the replacement PR cannot pass or merge.
