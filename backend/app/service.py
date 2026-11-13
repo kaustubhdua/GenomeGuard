@@ -1556,8 +1556,13 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
     # provenance gates: synthetic fixtures are explicitly demo-only, while non-demo
     # cohorts must have verified real-genotype and consent/data-use provenance.
     # Record-level rows are separately prohibited by release_approved().
+    # Public synthetic demonstrations may illustrate the release pipeline. A non-demo
+    # deployment must not expose cohort-derived outputs merely because its data loaded:
+    # release remains disabled until deployment-level governance, privacy, backup,
+    # monitoring, and independent release controls have been verified.
     svc = GenomeGuardService(store, ds, p, master=master, llm=llm, allow_tamper=s.allow_tamper_demo,
-                             admin_key=s.admin_api_key, release_enabled=True, demo_mode=s.demo_mode, **kwargs)
+                             admin_key=s.admin_api_key, release_enabled=s.demo_mode,
+                             demo_mode=s.demo_mode, **kwargs)
     if stored_meta.get("provenance_unknown"):
         kind = "unknown"
     elif stored_meta.get("genotypes_real") is True:
