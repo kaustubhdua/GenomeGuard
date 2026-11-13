@@ -262,3 +262,8 @@ This follow-up supersedes earlier Render and Neon status statements above where 
 ### Production controls still fail closed
 
 The primary service's readiness endpoint remains HTTP 503 while institutional controls are unverified. Keep institutional OIDC/SSO/MFA, organization verification, authoritative participant consent/DAC approval, private cohort ingestion and research-mode access disabled. Do not set readiness flags to true to silence the 503. KMS/HSM-backed key custody, scheduled backups and isolated restore evidence, production monitoring/alerting, and externally controlled audit anchoring remain unproven.
+
+
+### Render metrics and alerting follow-up
+
+A read-only metrics query for the primary service over 13 November 15:00–21:35 UTC returned CPU and memory time-series samples, but no HTTP request-count, HTTP-latency or instance-count series. This confirms that some provider resource metrics are queryable; it does not establish application-level SLO monitoring, alert thresholds, notification routing, trace correlation, or incident response. No alerting configuration was exposed by the connected Render integration, and none was changed.
