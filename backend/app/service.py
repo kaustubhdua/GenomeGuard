@@ -914,7 +914,7 @@ class GenomeGuardService:
             "modifiers": sorted({item.upper() for item in modifiers}),
             "population": population,
             "consent_date": consent_date,
-            "consent_basis": "participant_records",
+            "consent_basis": "participant_record",
             "consent_simulated": False,
             "consent_authority_issuer": trusted_issuer,
             "consent_event_id": payload["event_id"],
