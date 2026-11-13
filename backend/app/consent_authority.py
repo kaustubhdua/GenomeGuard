@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from cryptography.exceptions import InvalidSignature
@@ -53,7 +53,11 @@ def verify_consent_event(
         effective = event["effective_at"]
         if not isinstance(effective, str):
             raise ValueError
-        datetime.fromisoformat(effective.replace("Z", "+00:00"))
+        effective_at = datetime.fromisoformat(effective.replace("Z", "+00:00"))
+        if effective_at.tzinfo is None or effective_at.utcoffset() is None:
+            raise ValueError("effective_at must include an explicit timezone")
+        if effective_at > datetime.now(UTC):
+            raise ValueError("future-effective consent events must not be applied immediately")
         public_bytes = base64.b64decode(public_key_b64, validate=True)
         if len(public_bytes) != 32:
             raise ValueError
