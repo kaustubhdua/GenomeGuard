@@ -49,3 +49,22 @@ def test_api_docs_escape_untrusted_provenance_labels():
     assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in response.text
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
     assert "<script>alert(1)</script>" not in response.text
+
+
+def test_security_headers_cover_html_and_https_responses():
+    from starlette.testclient import TestClient
+
+    from app.api import create_app
+
+    service, _client = make_client()
+    client = TestClient(create_app(service), base_url="https://testserver")
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert "object-src 'none'" in response.headers["content-security-policy"]
+    assert response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
