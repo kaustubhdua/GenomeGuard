@@ -6,17 +6,17 @@ GenomeGuard's PubMed adapter retrieves public PubMed search results and article 
 
 ## Endpoint
 
-`GET /literature/pubmed/search?q={query}&retstart=0&retmax=20`
+`POST /literature/pubmed/search` with a JSON body containing `q`, `retstart` and `retmax`.
 
 - `q`: required research query, 1–500 characters.
-- `retstart`: zero-based offset, 0–10,000.
-- `retmax`: page size, 1–50.
+- `retstart`: zero-based integer offset, 0–10,000.
+- `retmax`: integer page size, 1–50.
 - Results are sorted by PubMed relevance.
 - Response includes provider, query, total count, offset, page size, returned count, has-more flag, normalized papers, retrieval timestamp and provider provenance.
 - Each paper preserves PMID, DOI and PMCID when supplied by PubMed, source title, authors, journal, publication date, article types and the canonical PubMed URL.
 - Abstracts are not included by this adapter; `abstract_available` is explicitly false.
 
-Search responses use `Cache-Control: no-store` because a research query can be sensitive even when callers are instructed not to send patient-identifying or private genomic information. Queries are not written to GenomeGuard's database or audit log.
+Search uses POST so query text is not placed in the HTTP request line/access-log path. Responses use `Cache-Control: no-store` because a research query can be sensitive even when callers are instructed not to send patient-identifying or private genomic information. Queries are not written to GenomeGuard's database or audit log. The API caps concurrent PubMed provider calls at two per process and returns HTTP 429 with `Retry-After: 1` when both slots are occupied.
 
 ## NCBI configuration
 
