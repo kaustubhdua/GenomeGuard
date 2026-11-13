@@ -6,6 +6,7 @@ import warnings
 # Unit tests intentionally exercise the legacy static-key compatibility path. The
 # default application setting remains disabled; public demo flows use session tokens.
 os.environ["GG_TEST_ALLOW_STATIC_DEMO_KEYS"] = "true"
+os.environ["GG_ADMIN_API_KEY"] = "demo-admin-key"
 
 from starlette.testclient import TestClient
 
