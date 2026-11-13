@@ -139,6 +139,7 @@ def search_ontology(query: str, *, ontology: str = "all", page: int = 0, size: i
         "start": str(page * size),
         "obsoletes": "false",
         "queryFields": "label,synonym,description,short_form,obo_id",
+        "fieldList": "iri,label,short_form,obo_id,ontology_name,ontology_prefix,description,synonym,is_obsolete",
     }
     payload = _fetch_json(params)
     response = payload.get("response")
