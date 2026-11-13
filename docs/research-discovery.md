@@ -71,7 +71,7 @@ Each response preserves the association ID, study accession, PubMed ID, first au
 
 **Scope boundary:** the v2 API provides literature-curated top associations and metadata. It does not provide full genome-wide summary statistics; the previous summary-statistics API was retired in 2026. A GWAS association or p-value is not proof of causation, clinical validity, or an individual's risk. Effect estimates and allele frequencies remain source-reported and must be interpreted in the context of study design, ancestry, phenotype, and replication.
 
-The research panel supports gene, rsID, and trait searches and exports the query, source records, release metadata, and interpretation limits as JSON.
+The research panel supports gene, rsID, and trait searches and exports the query, source records, release metadata, and interpretation limits as JSON. It compares release identity across pages and refuses to append results if the Catalog data/API release or reference-build metadata changes during pagination.
 
 Verification:
 - `scripts/gwas_catalog_provider_smoke.py` checks the live v2 metadata and BRCA1 association contract.
