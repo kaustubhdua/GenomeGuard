@@ -62,17 +62,27 @@ def main() -> int:
 
         status, demo = call(base, "/demo/requesters", timeout=args.timeout)
         accounts = {r.get("name"): r for r in demo.get("requesters", [])}
-        check("demo credentials are available for synthetic acceptance checks",
-              status == 200 and bool(demo.get("admin_key"))
-              and all(name in accounts and accounts[name].get("api_key") for name in
-                      ("Dr. Amara Nwosu", "Public Viewer", "Controlled-Access Lab")))
-        if status != 200 or not demo.get("admin_key") or not accounts:
-            raise RuntimeError("demo account endpoint unavailable; cannot run authenticated acceptance tests")
+        required = ("Dr. Amara Nwosu", "Public Viewer", "Controlled-Access Lab")
+        check("demo persona metadata is available without credentials",
+              status == 200 and all(name in accounts for name in required)
+              and "admin_key" not in demo
+              and all("api_key" not in account for account in accounts.values()))
+        if status != 200 or not all(name in accounts for name in required):
+            raise RuntimeError("demo persona endpoint unavailable; cannot run authenticated acceptance tests")
 
-        admin = {"X-Admin-Key": demo["admin_key"]}
-        researcher = {"X-API-Key": accounts["Dr. Amara Nwosu"]["api_key"]}
-        anonymous = {"X-API-Key": accounts["Public Viewer"]["api_key"]}
-        controlled = {"X-API-Key": accounts["Controlled-Access Lab"]["api_key"]}
+        def session_for(name: str) -> dict:
+            session_status, session = call(
+                base, "/demo/session", "POST",
+                body={"requester_id": accounts[name]["id"]}, timeout=args.timeout,
+            )
+            check(f"{name} receives a short-lived demo session",
+                  session_status == 200 and bool(session.get("session_token"))
+                  and "api_key" not in session)
+            return {"X-Demo-Session": session.get("session_token", "")}
+
+        researcher = session_for("Dr. Amara Nwosu")
+        anonymous = session_for("Public Viewer")
+        controlled = session_for("Controlled-Access Lab")
 
         status, permit = call(base, "/requests", "POST", researcher, {
             "purpose": "disease_research", "disease": "diabetes", "data_level": "frequency",
@@ -108,23 +118,21 @@ def main() -> int:
         check("request listing rejects unauthenticated access", status == 401)
         status, _ = call(base, "/audit", timeout=args.timeout)
         check("audit log rejects unauthenticated access", status == 401)
-        status, _ = call(base, "/audit", headers={"X-Admin-Key": "invalid-smoke-key"},
-                         timeout=args.timeout)
-        check("audit log rejects an invalid admin key", status == 401)
-        status, _ = call(base, "/donor/1", headers=admin, timeout=args.timeout)
-        check("steward key cannot impersonate a donor", status == 401)
+        status, _ = call(base, "/donor/1", timeout=args.timeout)
+        check("requester session cannot impersonate a donor", status == 401)
 
         if held_id is not None:
             status, _ = call(base, f"/requests/{held_id}", headers=researcher, timeout=args.timeout)
-            check("requester cannot read another account's request", status == 404)
-            status, held_admin = call(base, f"/requests/{held_id}", headers=admin, timeout=args.timeout)
-            check("steward can read the held decision", status == 200
-                  and held_admin.get("outcome") == "escalate")
+            check("researcher cannot read another account's held request", status == 404)
+            status, held_owner = call(base, f"/requests/{held_id}", headers=controlled, timeout=args.timeout)
+            check("controlled requester can read its own held decision", status == 200
+                  and held_owner.get("outcome") == "escalate")
         if permit_id is not None:
-            status, _ = call(base, f"/requests/{permit_id}", headers=admin, timeout=args.timeout)
-            check("steward can read the permitted decision", status == 200)
+            status, permit_owner = call(base, f"/requests/{permit_id}", headers=researcher, timeout=args.timeout)
+            check("researcher can read its own permitted decision", status == 200
+                  and permit_owner.get("outcome") == "permit_with_transform")
 
-        status, verification = call(base, "/audit/verify", headers=admin, timeout=args.timeout)
+        status, verification = call(base, "/audit/verify", timeout=args.timeout)
         check("audit verification endpoint succeeds after requests",
               status == 200 and verification.get("ok") is True)
     except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:

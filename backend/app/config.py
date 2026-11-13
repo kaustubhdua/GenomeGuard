@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
@@ -60,9 +61,9 @@ class Settings:
     db_path: str = field(default_factory=lambda: _env("db_path", "./genomeguard.sqlite3"))
     allow_tamper_demo: bool = field(default_factory=lambda: _env("allow_tamper_demo", False, bool))
     demo_mode: bool = field(default_factory=lambda: _env("demo_mode", True, bool))
-    # Publicly returning the demo admin key is allowed only in explicitly local demos.
-    expose_demo_admin_key: bool = field(default_factory=lambda: _env("expose_demo_admin_key", False, bool))
-    admin_api_key: str = field(default_factory=lambda: _env("admin_api_key", "demo-admin-key"))
+    allow_static_demo_keys: bool = field(default_factory=lambda: _env("test_allow_static_demo_keys", False, bool))
+    # A missing demo admin key is process-random; hosted deployments must set a secret explicitly.
+    admin_api_key: str = field(default_factory=lambda: _env("admin_api_key", secrets.token_urlsafe(32)))
     master_key: str = field(default_factory=lambda: _env("master_key", ""))
     dataset_id: str = field(default_factory=lambda: _env("dataset_id", "synthetic-cohort-1"))
     seed: int = field(default_factory=lambda: _env("seed", 1337, int))

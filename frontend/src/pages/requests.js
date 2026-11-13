@@ -241,7 +241,7 @@ function formSection(out) {
       : state.demo ? "Fill in or pick a preset" : "Submit a query against the public cohort and documented dataset policy mapping",
       state.demo ? h("div", { class: "presets" }, PRESETS.map((p) => h("button", { class: "ghost", title: p.why, onclick: () => load(p.body) }, p.name))) : null, form,
       h("div", { style: "margin-top:12px;display:flex;gap:10px;flex-wrap:wrap" }, submitBtn, probeBtn,
-        att && state.who !== att.api_key ? h("button", { class: "ghost", onclick: () => { setWho(att.api_key); location.reload(); } }, "Switch to the probe account") : null), msg),
+        att && state.who !== String(att.id) ? h("button", { class: "ghost", onclick: async () => { const switched = await selectDemoRequester(att.id); if (switched.ok) window.dispatchEvent(new Event("gg:refresh-who")); } }, "Switch to the probe account") : null), msg),
     row(state.demo ? "Example consent check" : "Dataset policy check", state.demo ? "Example permissions; demonstration only" : "Dataset-level policy only, not participant-specific consent", preview));
   load(state.demo ? PRESETS[0].body : st);
   return wrap;

@@ -100,6 +100,30 @@ def test_app_provenance_follows_the_files_metadata_not_its_existence():
     assert _boot("").provenance["genotypes"] == "synthetic"
 
 
+def test_public_demo_sessions_are_only_available_for_explicitly_synthetic_cohorts():
+    from starlette.testclient import TestClient
+
+    from app.api import create_app
+
+    with tempfile.TemporaryDirectory() as d:
+        for meta, synthetic in ((REAL_META, False), ({"source": "unknown"}, False), (None, True)):
+            svc = _boot(_cohort_file(d, meta) if meta else "")
+            client = TestClient(create_app(svc))
+            if synthetic:
+                requesters = client.get("/demo/requesters")
+                donors = client.get("/demo/donors")
+                assert requesters.status_code == donors.status_code == 200
+                requester_id = requesters.json()["requesters"][0]["id"]
+                donor_id = donors.json()["donors"][0]["id"]
+                assert client.post("/demo/session", json={"requester_id": requester_id}).status_code == 200
+                assert client.post("/demo/donor-session", json={"donor_id": donor_id}).status_code == 200
+            else:
+                assert client.get("/demo/requesters").status_code == 404
+                assert client.post("/demo/session", json={"requester_id": 1}).status_code == 404
+                assert client.get("/demo/donors").status_code == 404
+                assert client.post("/demo/donor-session", json={"donor_id": 1}).status_code == 404
+
+
 def test_health_reports_synthetic_only_correctly_for_each_kind():
     from starlette.testclient import TestClient
 

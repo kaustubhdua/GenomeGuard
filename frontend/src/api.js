@@ -1,11 +1,11 @@
 // Tiny API client. Credentials are deliberately kept in tab memory only.
 // Never read or write API keys to localStorage, sessionStorage, URLs, or logs.
-// Donors use their own X-Donor-Key and are also kept in memory only.
+// Synthetic demo personas use short-lived session headers; tokens stay in tab memory only.
 import { beginOidcLogin, completeOidcCallback } from "./oidc.js";
 
 // Defer any remembered identity until the server confirms demo mode.
 export const state = {
-  who: "", adminKey: "", demo: null, health: null, readiness: null, bootError: "",
+  who: "", adminKey: "", demoSession: "", demo: null, health: null, readiness: null, bootError: "",
   me: null, donors: [], donor: null, oidc: null, oidcError: "", accessToken: "",
 };
 
@@ -14,6 +14,7 @@ export const isSteward = () => state.who === "steward"
 
 export function setWho(v) {
   state.who = v;
+  state.demoSession = "";
   // Clear credentials left by older builds; never persist the selected identity/key.
   try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
 }
@@ -61,6 +62,7 @@ async function call(path, {
 
 function authHeaders() {
   if (state.accessToken) return { Authorization: "Bearer " + state.accessToken };
+  if (state.demoSession) return { "X-Demo-Session": state.demoSession };
   if (isSteward()) {
     if (state.demo?.admin_key) return { "X-Admin-Key": state.demo.admin_key };
     if (state.adminKey) return { "X-Admin-Key": state.adminKey };
@@ -101,7 +103,20 @@ export function stewardApi(path, opts = {}) {
 // patient-side calls: authenticated with the chosen donor's own key
 export function donorApi(path, opts = {}) {
   const d = state.donor;
-  return call(path, { ...opts, headers: d ? { "X-Donor-Key": d.key } : {} });
+  return call(path, { ...opts, headers: d?.session_token ? { "X-Demo-Donor-Session": d.session_token } : {} });
+}
+
+export async function selectDemoRequester(requesterId) {
+  const id = Number(requesterId);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    return { ok: false, status: 400, data: { message: "Choose a valid demo persona." } };
+  }
+  const result = await call("/demo/session", { method: "POST", body: { requester_id: id } });
+  if (!result.ok || !result.data?.session_token) return result;
+  setWho(String(id));
+  state.demoSession = result.data.session_token;
+  state.me = result.data.requester || null;
+  return result;
 }
 
 export async function connectKey(kind, key) {
@@ -121,6 +136,7 @@ export async function connectKey(kind, key) {
 
 export function disconnectKey() {
   state.adminKey = "";
+  state.demoSession = "";
   state.accessToken = "";
   state.me = null;
   setWho("");
@@ -161,6 +177,7 @@ export async function boot() {
     // Production uses institutional OIDC; demo personas and API keys are never reused.
     state.who = "";
     state.adminKey = "";
+    state.demoSession = "";
     state.donor = null;
     try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
     const config = await call("/auth/oidc");
@@ -207,12 +224,35 @@ export async function boot() {
     state.donor = null;
     return;
   }
-  if (!state.donor && state.donors.length) state.donor = state.donors[0];
+  if (state.donors.length) {
+    const donor = state.donors[0];
+    const session = await call("/demo/donor-session", {
+      method: "POST", body: { donor_id: donor.id },
+    });
+    state.donor = session.ok && session.data?.session_token
+      ? { ...donor, session_token: session.data.session_token } : null;
+    if (!state.donor) {
+      state.bootError = session.data?.message || "Could not initialize the synthetic participant session.";
+      return;
+    }
+  } else {
+    state.donor = null;
+  }
   const reqs = state.demo.requesters || [];
-  // Preserve an in-memory selection during this tab's lifetime, but never
-  // restore credentials from browser storage after a reload.
-  if (state.who === "steward" && state.demo.admin_key) return;
-  if (state.who === "steward" && !state.demo.admin_key) setWho("");
-  if (reqs.some((r) => r.api_key === state.who)) return;
-  if (!state.who) setWho(reqs.length ? reqs[0].api_key : "");
+  // Persona discovery contains no credentials. Issue a short-lived session for the
+  // first synthetic researcher; changing personas issues a new scoped session.
+  if (reqs.length) {
+    const desired = reqs.find((r) => String(r.id) === String(state.who)) || reqs[0];
+    const selected = await selectDemoRequester(desired.id);
+    if (!selected.ok) {
+      state.bootError = selected.data?.message || "Could not initialize the synthetic researcher session.";
+      state.who = "";
+      state.demoSession = "";
+      return;
+    }
+  } else {
+    state.who = "";
+    state.demoSession = "";
+    state.bootError = "No synthetic demo personas are available.";
+  }
 }
