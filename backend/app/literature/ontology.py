@@ -135,6 +135,7 @@ def search_ontology(query: str, *, ontology: str = "all", page: int = 0, size: i
     params = {
         "q": query.strip(),
         "ontology": ",".join(sorted(ALLOWED_ONTOLOGIES)) if ontology == "all" else ontology,
+        "type": "class",
         "rows": str(size),
         "start": str(page * size),
         "obsoletes": "false",
