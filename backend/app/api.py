@@ -1946,7 +1946,28 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     routes.append(Route("/", index))
     if (FRONTEND).exists():
         routes.append(Mount("/static", StaticFiles(directory=FRONTEND), name="static"))
-    return Starlette(routes=routes)
+    app = Starlette(routes=routes)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        """Apply browser security headers consistently to API, HTML and static responses."""
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+        )
+        if request.url.scheme == "https":
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains",
+            )
+        return response
+
+    return app
 
 
 app = None
