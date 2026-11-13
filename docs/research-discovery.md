@@ -46,3 +46,18 @@ Search ranking is the provider's retrieval order, not a GenomeGuard evidence-qua
 The research workspace includes an Open Targets evidence panel that accepts an explicit Ensembl gene identifier and optional EFO disease identifier. It does not guess gene symbols or resolve identifiers silently. Association and evidence source filters preserve the provider's datasource/datatype attribution. Original HTTPS evidence URLs and numeric PMID links are rendered as source links.
 
 The panel displays the Open Targets API version, data release, retrieval timestamp, endpoint and exact query identifiers. JSON and Markdown exports include those provenance fields, the loaded result pages, original evidence identifiers/URLs, and explicit citation requirements. The export warns that association scores are Open Targets prioritisation scores, not probabilities, clinical validity, causality or GenomeGuard confidence. Pagination refuses to combine records if the API or data release changes during a search.
+
+
+## ClinVar variant evidence
+
+The workspace includes a ClinVar panel for searching variant-level records by an explicit gene symbol. The server uses NCBI E-utilities ESearch and ESummary v2.0, and the browser never receives an NCBI API key. Supported filters use ClinVar's documented Properties terms (for example, `clinsig pathogenic` and `clinsig has conflicts`). These are source search properties that find variants with at least one matching report; they are not a GenomeGuard classification or a guarantee that the aggregate VCV classification has that exact value.
+
+Each result preserves the VCV accession/version, source title, gene identifiers, variation type, assembly-specific genomic locations, SPDI where supplied, molecular consequences, and the three distinct ClinVar classification groups: germline, somatic clinical impact, and somatic oncogenicity. Review status, last-evaluated date, traits, and counts of supporting SCV/RCV submissions are displayed as source-provided. Conflicting classifications are not flattened or resolved by GenomeGuard.
+
+The UI exports the exact query, loaded source records, retrieval time, API version, and interpretation limits as JSON. ClinVar records are variant-level assertions, not patient-specific interpretations, diagnosis, treatment recommendations, or independent proof of clinical validity. Researchers should review the original VCV/RCV/SCV submissions and evidence.
+
+Verification:
+- `scripts/clinvar_provider_smoke.py` performs a live BRCA1 + ClinVar Properties search and checks the ESearch/ESummary contract.
+- `backend/tests/test_clinvar.py` validates query construction, classification filters, pagination, source metadata, review status, and conflict preservation.
+- `backend/tests/test_clinvar_api.py` validates request bounds, safe errors, no-store headers, and concurrency limits.
+- `scripts/research_ui_smoke.py` intercepts the API with deterministic source-shaped fixtures and checks conflict display, pagination, export, and mobile layout.
