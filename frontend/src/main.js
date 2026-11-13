@@ -39,9 +39,16 @@ const NAV = [
 
 const $ = (id) => document.getElementById(id);
 let token = 0;
+let bootReady = false;
 
 async function render() {
   const view = $("view");
+  if (!bootReady) {
+    view.setAttribute("aria-busy", "true");
+    view.replaceChildren(h("div", { class: "skeleton lattice-loader", role: "status", "aria-label": "Loading secure session" },
+      h("span", {}, "Preparing workspace"), h("small", {}, "Establishing a scoped session before loading protected data")));
+    return;
+  }
   const hash = location.hash && location.hash !== "#" ? location.hash : "#/overview";
   const hit = ROUTES.map((r) => [r, hash.match(r.re)]).find(([, m]) => m);
   drawNav(hit ? hit[0].nav : "");
@@ -306,7 +313,10 @@ function drawConnectionStatus() {
       drawWho();
       drawProv();
       drawConnectionStatus();
-      if (!state.bootError) render();
+      if (!state.bootError) {
+        bootReady = true;
+        render();
+      }
     } }, "Retry connection")
   );
 }
@@ -319,7 +329,10 @@ boot().then(() => {
   drawWho();
   drawProv();
   drawConnectionStatus();
-  render();
+  if (!state.bootError) {
+    bootReady = true;
+    render();
+  }
 }).catch(() => {
   state.bootError = "A startup error occurred. Check your connection and retry.";
   drawConnectionStatus();
