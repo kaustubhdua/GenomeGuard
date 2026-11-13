@@ -12,12 +12,11 @@ from starlette.testclient import TestClient
 
 from app.api import create_app
 from app.config import Settings
-from app.service import bootstrap
+from app.service import DEMO_REQUESTERS, bootstrap
 
 warnings.filterwarnings("ignore", message="GG_MASTER_KEY")
 
-RESEARCHER, ATTACKER, ANON, CONTROLLED = ("demo-researcher", "demo-attacker", "demo-anonymous",
-                                          "demo-controlled")
+RESEARCHER, ATTACKER, ANON, CONTROLLED = tuple(persona[4] for persona in DEMO_REQUESTERS)
 ADMIN = {"X-Admin-Key": "demo-admin-key"}
 
 DEMO_REQ = {"purpose": "disease_research", "disease": "diabetes", "data_level": "frequency",
