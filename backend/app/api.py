@@ -46,6 +46,7 @@ _DEMO_SESSION_TTL_SECONDS = 1800
 _MAX_DEMO_SESSIONS = 5000
 _MAX_DEMO_SESSIONS_PER_PERSONA = 5
 _OPEN_TARGETS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
+_CLINVAR_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -1447,6 +1448,52 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 ) from None
         finally:
             _OPEN_TARGETS_SEARCH_SLOTS.release()
+        response = _j(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+    @route("POST", "/research/clinvar/search", "Search ClinVar variant classifications by gene", "public")
+    async def clinvar_variant_search(request):
+        """Retrieve source-attributed ClinVar aggregate variant records by gene symbol."""
+        from app.literature.clinvar import (
+            ClinVarProviderError,
+            search_clinvar,
+            validate_search_request,
+        )
+
+        data = await _body(request)
+        gene_symbol = data.get("gene_symbol")
+        classification = data.get("classification")
+        retstart = data.get("retstart", 0)
+        retmax = data.get("retmax", 20)
+        try:
+            validate_search_request(gene_symbol, classification, retstart, retmax)
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_clinvar_query", str(exc)) from None
+        if not _CLINVAR_SEARCH_SLOTS.acquire(blocking=False):
+            response = _j({
+                "error": "clinvar_provider_busy",
+                "message": "ClinVar search is busy. Please retry shortly.",
+            }, 429)
+            response.headers["Retry-After"] = "2"
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        try:
+            payload = await run_in_threadpool(
+                search_clinvar,
+                gene_symbol.strip().upper(),
+                classification=classification or None,
+                retstart=retstart,
+                retmax=retmax,
+            )
+        except ClinVarProviderError:
+            raise ServiceError(
+                503, "clinvar_provider_unavailable",
+                "ClinVar is temporarily unavailable or returned an invalid response. Please retry.",
+            ) from None
+        finally:
+            _CLINVAR_SEARCH_SLOTS.release()
         response = _j(payload)
         response.headers["Cache-Control"] = "no-store"
         return response

@@ -58,6 +58,7 @@ Auth: institution-bound requesters use `Authorization: Bearer`; non-demo API-key
 | GET | `/catalogue/chromosomes` | Local chromosome reference (replaces Supabase Edge Function) | public |
 | POST | `/literature/pubmed/search` | Search public PubMed literature metadata via NCBI E-utilities; query body is not logged | public |
 | POST | `/research/open-targets/target` | Retrieve Open Targets direct target-disease associations and optional source evidence by Ensembl ID | public |
+| POST | `/research/clinvar/search` | Search ClinVar variant-level records by gene and optional ClinVar Properties filter; preserves separate aggregate classifications and review status | public |
 | GET | `/catalogue/sources` | Curated public source references with explicit review/import status | public |
 | GET | `/openapi.json` | Machine-readable endpoint list | public |
 | GET | `/docs` | Human-readable endpoint list | public |

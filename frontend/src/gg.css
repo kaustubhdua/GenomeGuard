@@ -1089,3 +1089,20 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
   .research-department { padding: 12px; }
   .research-paper .source-card-top { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
+
+
+.clinvar-classifications {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+.clinvar-classification {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pane);
+  background: var(--pane-2);
+  overflow-wrap: anywhere;
+}
+.clinvar-classification p { margin: 6px 0 0; }
+.clinvar-record .clinvar-classifications { margin: 8px 0; }

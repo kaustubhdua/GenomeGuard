@@ -91,6 +91,10 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/open_targets_provider_smoke.py
+      - name: Verify live ClinVar E-utilities search and classification contract
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/clinvar_provider_smoke.py
       - name: Verify live Europe PMC search and cursor pagination contract
         run: .venv/bin/python scripts/research_provider_smoke.py
       - name: Compile all Python application and script files

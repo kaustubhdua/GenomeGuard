@@ -27,6 +27,7 @@ def main() -> int:
     failures: list[str] = []
     pubmed_requests: list[dict[str, object]] = []
     open_targets_requests: list[dict[str, object]] = []
+    clinvar_requests: list[dict[str, object]] = []
     provider_outages = {"europe": False, "pubmed": False}
 
     def check(label: str, ok: bool, detail: str = "") -> None:
@@ -177,6 +178,65 @@ def main() -> int:
         }
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
+    def handle_clinvar(route) -> None:
+        payload = json.loads(route.request.post_data or "{}")
+        clinvar_requests.append(payload)
+        retstart = int(payload.get("retstart", 0))
+        uid = "373892" if retstart == 0 else "267741"
+        classification = (
+            "Conflicting classifications of pathogenicity"
+            if retstart == 0 else "Pathogenic"
+        )
+        review_status = (
+            "criteria provided, conflicting interpretations"
+            if retstart == 0 else "criteria provided, single submitter"
+        )
+        record = {
+            "uid": uid,
+            "accession": "VCV000373892" if retstart == 0 else "VCV000267741",
+            "accession_version": "VCV000373892.1" if retstart == 0 else "VCV000267741.1",
+            "title": "NM_007294.4(BRCA1):c.100del",
+            "variation_type": "Deletion",
+            "genes": [{"symbol": "BRCA1", "gene_id": "672"}],
+            "variations": [{
+                "name": "BRCA1 deletion",
+                "type": "Deletion",
+                "locations": [{
+                    "status": "current", "assembly": "GRCh38", "chromosome": "17",
+                    "start": "43051118", "stop": "43051119",
+                }],
+            }],
+            "molecular_consequences": ["frameshift variant"],
+            "classifications": {
+                "germline": {
+                    "description": classification, "review_status": review_status,
+                    "last_evaluated": "2026/07/01 00:00", "traits": [],
+                },
+                "somatic_clinical_impact": {"description": None, "review_status": None, "traits": []},
+                "somatic_oncogenicity": {"description": None, "review_status": None, "traits": []},
+            },
+            "supporting_submissions": {"scv_count": 2, "rcv_count": 1},
+            "source_url": f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{uid}/",
+        }
+        query = {
+            "gene_symbol": "BRCA1", "classification_filter": "pathogenic",
+            "classification_filter_semantics": "ClinVar Properties search for at least one report.",
+            "retstart": retstart, "retmax": PAGE_SIZE,
+        }
+        body = {
+            "provider": "NCBI ClinVar", "query": query, "count": 2,
+            "returned": 1, "has_more": retstart == 0, "records": [record],
+            "retrieved_at": "2026-11-13T10:00:00Z",
+            "provenance": {
+                "provider": "NCBI ClinVar", "api": "E-utilities ESearch + ESummary v2.0",
+                "query": 'BRCA1[gene] AND "clinsig pathogenic"[Properties]',
+                "retrieved_at": "2026-11-13T10:00:00Z",
+                "source_url": "https://www.ncbi.nlm.nih.gov/clinvar/",
+                "classification_note": "Variant-level source assertions, not patient-specific interpretations.",
+            },
+        }
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         page = browser.new_page(viewport={"width": 1280, "height": 900})
@@ -184,6 +244,7 @@ def main() -> int:
         page.route("https://www.ebi.ac.uk/europepmc/webservices/rest/search**", handle_provider)
         page.route("**/literature/pubmed/search", handle_pubmed)
         page.route("**/research/open-targets/target", handle_open_targets)
+        page.route("**/research/clinvar/search", handle_clinvar)
         page.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Research discovery").wait_for()
         page.get_by_role("link", name="Oncology Browse publications →").click()
@@ -300,6 +361,37 @@ def main() -> int:
               and "https://example.org/evidence/1" in markdown_report
               and "Citation and reuse requirements" in markdown_report)
 
+        page.get_by_label("Gene symbol").fill("BRCA1")
+        page.get_by_label("ClinVar report property filter").select_option("pathogenic")
+        page.get_by_role("button", name="Search ClinVar variants").click()
+        page.get_by_text("Conflicting classifications of pathogenicity", exact=True).wait_for()
+        check("ClinVar displays source-provided aggregate conflicts and review status",
+              len(clinvar_requests) == 1
+              and clinvar_requests[0].get("gene_symbol") == "BRCA1"
+              and clinvar_requests[0].get("classification") == "pathogenic"
+              and "criteria provided, conflicting interpretations"
+                  in page.locator("#clinvar-results").inner_text())
+        clinvar_link = page.locator("#clinvar-results a").first
+        check("ClinVar original record links are HTTPS and open safely",
+              clinvar_link.get_attribute("href", timeout=args.timeout).startswith("https://")
+              and clinvar_link.get_attribute("rel") == "noopener noreferrer")
+        page.get_by_role("button", name="Load more ClinVar records").click()
+        page.wait_for_function(
+            "document.querySelectorAll('#clinvar-results .clinvar-record').length === 2"
+        )
+        check("ClinVar pagination requests the next source page without duplicating records",
+              len(clinvar_requests) == 2 and clinvar_requests[1].get("retstart") == 1
+              and page.locator("#clinvar-results .clinvar-record").count() == 2)
+        with page.expect_download() as clinvar_download_info:
+            page.get_by_role("button", name="Export ClinVar JSON").click()
+        clinvar_download = clinvar_download_info.value
+        clinvar_export = json.loads(Path(clinvar_download.path()).read_text(encoding="utf-8"))
+        check("ClinVar JSON export preserves query and source-level conflict metadata",
+              clinvar_export["query"]["gene_symbol"] == "BRCA1"
+              and len(clinvar_export["records"]) == 2
+              and clinvar_export["records"][0]["classifications"]["germline"]["description"]
+                  == "Conflicting classifications of pathogenicity")
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
@@ -309,6 +401,7 @@ def main() -> int:
         mobile.route("https://www.ebi.ac.uk/europepmc/webservices/rest/search**", handle_provider)
         mobile.route("**/literature/pubmed/search", handle_pubmed)
         mobile.route("**/research/open-targets/target", handle_open_targets)
+        mobile.route("**/research/clinvar/search", handle_clinvar)
         mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         mobile.get_by_role("heading", name="Research discovery").wait_for()
         no_horizontal_overflow = mobile.evaluate(
@@ -323,6 +416,12 @@ def main() -> int:
         mobile.locator(".research-paper").first.wait_for()
         check("mobile research search renders live-provider-shaped results",
               mobile.locator(".research-paper").count() == PAGE_SIZE + 1)
+        mobile.get_by_label("Gene symbol").fill("BRCA1")
+        mobile.get_by_label("ClinVar report property filter").select_option("pathogenic")
+        mobile.get_by_role("button", name="Search ClinVar variants").click()
+        mobile.get_by_text("Conflicting classifications of pathogenicity", exact=True).wait_for()
+        check("mobile ClinVar evidence has no horizontal overflow at 375px",
+              mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
         browser.close()
 
