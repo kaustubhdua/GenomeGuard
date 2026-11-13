@@ -121,7 +121,7 @@ The Research Discovery page provides direct, shareable hyperlinks for Genetics &
 
 ## Ensembl gene identity resolution
 
-The Research Discovery workspace includes a server-side Ensembl REST lookup for exact human gene symbols. The `POST /research/ensembl/gene` endpoint resolves a symbol against `homo_sapiens` and returns the stable Ensembl gene ID, approved display symbol, gene biotype/version, assembly, chromosome, coordinates, strand, canonical transcript and bounded transcript metadata where supplied by Ensembl.
+The Research Discovery workspace includes a server-side Ensembl REST lookup for exact human gene symbols. The `POST /research/ensembl/gene` endpoint resolves a symbol against `homo_sapiens` and returns the stable Ensembl gene ID, approved display symbol, gene biotype/version, assembly, chromosome, 1-based inclusive coordinates, strand, canonical transcript and bounded transcript metadata where supplied by Ensembl.
 
 The adapter uses a fixed Ensembl origin, URL-encodes the validated symbol, caps response size, applies a timeout and per-process request pacing, bounds concurrent API calls, and returns `Cache-Control: no-store`. It does not accept arbitrary provider URLs or arbitrary species. The UI can transfer the resolved stable gene ID into the existing Open Targets panel; the researcher must explicitly submit that second query.
 
