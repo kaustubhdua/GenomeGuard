@@ -13,10 +13,13 @@ function safeExternal(url, label) {
   }
 }
 
-function termCard(term) {
+function termCard(term, onUse) {
   const ontology = String(term.ontology || "").toLowerCase();
   const termUrl = "https://www.ebi.ac.uk/ols4/ontologies/" + encodeURIComponent(ontology)
     + "/classes?iri=" + encodeURIComponent(term.iri || "");
+  const useButton = h("button", { class: "btn secondary", type: "button" },
+    "Add selected term to publication query");
+  useButton.addEventListener("click", () => onUse(term));
   return h("article", { class: "card research-paper ontology-term" },
     h("div", { class: "source-card-top" },
       h("span", { class: "tag" }, String(term.ontology_prefix || ontology).toUpperCase()),
@@ -26,7 +29,8 @@ function termCard(term) {
     term.description ? h("p", { class: "muted" }, term.description) : null,
     Array.isArray(term.synonyms) && term.synonyms.length
       ? h("p", { class: "fine muted" }, "Synonyms: " + term.synonyms.join("; ")) : null,
-    safeExternal(termUrl, "View source term"));
+    safeExternal(termUrl, "View source term"),
+    useButton);
 }
 
 export function renderOntologyPanel() {
@@ -67,6 +71,27 @@ export function renderOntologyPanel() {
   let busy = false;
   let generation = 0;
   let seen = new Set();
+
+  function useTerm(term) {
+    const literatureQuestion = document.getElementById("research-question");
+    if (!literatureQuestion) {
+      status.textContent = "Open the publication search panel to use ontology-based query expansion.";
+      return;
+    }
+    const phrases = [...new Set([term.label, ...(Array.isArray(term.synonyms) ? term.synonyms : [])]
+      .filter((value) => typeof value === "string" && value.trim()))].slice(0, 4);
+    if (!phrases.length) return;
+    const expansion = "(" + phrases.map((value) => '"' + value.replace(/"/g, '\\"') + '"').join(" OR ") + ")";
+    const existing = literatureQuestion.value.trim();
+    if (existing.includes(expansion)) {
+      status.textContent = "These source terms are already included in the publication query.";
+      literatureQuestion.focus();
+      return;
+    }
+    literatureQuestion.value = existing ? "(" + existing + ") OR " + expansion : expansion;
+    literatureQuestion.focus();
+    status.textContent = "Added the selected ontology label and source synonyms to the publication query. Review it, then run Search publications.";
+  }
 
   function renderMore() {
     more.hidden = !query || (page + 1) * PAGE_SIZE >= total;
@@ -109,7 +134,7 @@ export function renderOntologyPanel() {
         const key = String(term.ontology) + "|" + String(term.obo_id || term.iri);
         if (!seen.has(key)) {
           seen.add(key);
-          results.append(termCard(term));
+          results.append(termCard(term, useTerm));
         }
       }
       status.textContent = "Loaded " + seen.size + " of " + total
