@@ -342,6 +342,8 @@ def main() -> None:
         check("no JavaScript errors during session-based navigation", not errors,
               "; ".join(errors)[:120])
 
+        catalogue_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        catalogue_pg = catalogue_ctx.new_page()
         catalogue_fixture = {
             "provenance_note": "Synthetic browser fixture only; not a verified import.",
             "datasets": [
@@ -363,30 +365,30 @@ def main() -> None:
             catalogue_requests.append(route.request.url)
             route.fulfill(status=200, content_type="application/json", body=json.dumps(catalogue_fixture))
 
-        pg.route("**/catalogue/datasets", handle_catalogue)
-        pg.goto(base + "/#/datasets")
-        pg.get_by_label("Filter by source").wait_for()
+        catalogue_pg.route("**/catalogue/datasets", handle_catalogue)
+        catalogue_pg.goto(base + "/#/datasets")
+        catalogue_pg.get_by_label("Filter by source").wait_for()
         check("dataset catalogue exposes source and assembly filters",
-              pg.get_by_label("Filter by source").count() == 1
-              and pg.get_by_label("Filter by reference assembly").count() == 1)
-        pg.get_by_label("Filter by source").select_option(label="Beta source")
-        source_rows = pg.locator(".dataset-table tbody tr").all_text_contents()
+              catalogue_pg.get_by_label("Filter by source").count() == 1
+              and catalogue_pg.get_by_label("Filter by reference assembly").count() == 1)
+        catalogue_pg.get_by_label("Filter by source").select_option(label="Beta source")
+        source_rows = catalogue_pg.locator(".dataset-table tbody tr").all_text_contents()
         check("dataset source filter narrows visible rows",
               len(source_rows) == 1 and "Beta source" in " ".join(source_rows),
-              f"requests={catalogue_requests!r}; selected={pg.get_by_label('Filter by source').input_value()!r}; rows={source_rows!r}")
-        pg.get_by_label("Filter by source").select_option("")
-        pg.get_by_label("Filter by reference assembly").select_option("GRCh37")
-        assembly_rows = pg.locator(".dataset-table tbody tr").all_text_contents()
+              f"requests={catalogue_requests!r}; selected={catalogue_pg.get_by_label('Filter by source').input_value()!r}; rows={source_rows!r}")
+        catalogue_pg.get_by_label("Filter by source").select_option("")
+        catalogue_pg.get_by_label("Filter by reference assembly").select_option("GRCh37")
+        assembly_rows = catalogue_pg.locator(".dataset-table tbody tr").all_text_contents()
         check("dataset assembly filter narrows visible rows",
               len(assembly_rows) == 1 and "Alpha source" in " ".join(assembly_rows),
-              f"selected={pg.get_by_label('Filter by reference assembly').input_value()!r}; rows={assembly_rows!r}")
-        pg.get_by_label("Filter by reference assembly").select_option("")
-        pg.get_by_label("Sort datasets").select_option("samples")
-        first_row = pg.locator(".dataset-table tbody tr").first.inner_text()
+              f"selected={catalogue_pg.get_by_label('Filter by reference assembly').input_value()!r}; rows={assembly_rows!r}")
+        catalogue_pg.get_by_label("Filter by reference assembly").select_option("")
+        catalogue_pg.get_by_label("Sort datasets").select_option("samples")
+        first_row = catalogue_pg.locator(".dataset-table tbody tr").first.inner_text()
         check("dataset sort orders by measured sample count", "Beta source" in first_row,
-              f"selected={pg.get_by_label('Sort datasets').input_value()!r}; first_row={first_row!r}")
-        with pg.expect_download() as catalogue_download_info:
-            pg.get_by_role("button", name="Export filtered CSV").click()
+              f"selected={catalogue_pg.get_by_label('Sort datasets').input_value()!r}; first_row={first_row!r}")
+        with catalogue_pg.expect_download() as catalogue_download_info:
+            catalogue_pg.get_by_role("button", name="Export filtered CSV").click()
         catalogue_download = catalogue_download_info.value
         catalogue_path = Path(tempfile.gettempdir()) / catalogue_download.suggested_filename
         catalogue_download.save_as(str(catalogue_path))
@@ -395,6 +397,7 @@ def main() -> None:
               "Source URL" in catalogue_csv and "Reuse terms URL" in catalogue_csv
               and "'=HYPERLINK" in catalogue_csv)
         catalogue_path.unlink(missing_ok=True)
+        catalogue_ctx.close()
         ctx.close()
 
         for theme in ("light", "dark"):
