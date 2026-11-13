@@ -82,10 +82,10 @@ def main() -> int:
                     "returned": 3, "has_more": True, "papers": papers}
         else:
             papers = [{
-                "source": "PubMed", "pmid": "12345878", "title": "Duplicate second-page publication",
+                "source": "PubMed", "pmid": "22345878", "title": "Distinct PubMed second-page publication",
                 "authors": ["NCBI Author"], "journal": "NCBI Journal", "publication_date": "2026",
                 "doi": "10.1000/genomeguard.page2", "abstract": None,
-                "source_url": "https://pubmed.ncbi.nlm.nih.gov/12345878/"
+                "source_url": "https://pubmed.ncbi.nlm.nih.gov/22345878/"
             }]
             body = {"provider": "PubMed", "count": 4, "retstart": 3, "retmax": PAGE_SIZE,
                     "returned": 1, "has_more": False, "papers": papers}
