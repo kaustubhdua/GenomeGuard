@@ -97,7 +97,7 @@ export async function render() {
           class: "research-department",
           href: "#/research?department=" + encodeURIComponent(slug),
           "aria-current": initialDepartment === slug ? "true" : "false",
-        }, h("strong", {}, label), h("span", { class: "muted" }, "Browse publications →")))),
+        }, h("strong", {}, label), h("span", { class: "muted" }, "Browse publications →"))))),
     h("section", { class: "card stack" },
       h("div", {},
         h("h2", {}, "Search research literature"),
