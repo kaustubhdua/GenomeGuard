@@ -9,7 +9,7 @@
   "experimental": true,
   "date": "2026-10-25",
   "publisher": "GenomeGuard demo project",
-  "description": "Demo-only population extension used in GenomeGuard FHIR R4 Consent exports. This extension describes simulated data, not real participant consent.",
+  "description": "Population restriction label associated with a GenomeGuard FHIR R4 Consent provision. This value is descriptive and does not independently verify population membership.",
   "fhirVersion": "4.0.1",
   "kind": "complex-type",
   "abstract": false,
