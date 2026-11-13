@@ -76,7 +76,8 @@ ui-smoke:
 		GG_EXPOSE_DEMO_ADMIN_KEY=true $(PY) scripts/deploy_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/live_ui_smoke.py --base http://127.0.0.1:8767; \
 		$(PY) scripts/ui_smoke.py --base http://127.0.0.1:8767; \
-		$(PY) scripts/non_demo_ui_smoke.py --base http://127.0.0.1:8767
+		$(PY) scripts/non_demo_ui_smoke.py --base http://127.0.0.1:8767; \
+		$(PY) scripts/research_ui_smoke.py --base http://127.0.0.1:8767
 
 # Mocked API checks for non-demo browser sign-in and suppression of synthetic-only UI.
 non-demo-ui-smoke:
