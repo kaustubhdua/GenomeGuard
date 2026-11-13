@@ -652,7 +652,7 @@ def main() -> int:
         page.get_by_role("button", name="Find research papers for this term").first.click()
         page.get_by_text("Showing", exact=False).first.wait_for(timeout=args.timeout)
         check("symptom-to-research action launches live publication search with selected phenotype terms",
-              "\\"Ataxia\\"" in page.locator("#research-question").input_value()
+              '"Ataxia"' in page.locator("#research-question").input_value()
               and page.locator("#research-results .research-paper").count() > 0)
         page.get_by_role("button", name="Load more terms").click()
         page.wait_for_function(
