@@ -58,6 +58,41 @@ jobs:
         run: |
           grep -Fq '_MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql")' backend/app/postgres_store.py
           grep -q 'schema_migrations' backend/app/postgres_store.py
+      - name: Validate separate public-demo and research-mode deployment targets
+        run: |
+          ruby -e '
+            require "yaml"
+            config = YAML.safe_load_file("render.yaml", permitted_classes: [], permitted_symbols: [], aliases: false)
+            services = config.fetch("services")
+            raise "research blueprint must define exactly one service" unless services.length == 1
+            service = services.first
+            raise "research blueprint must use a distinct service name" unless service["name"] == "genomeguard-research"
+            raise "research blueprint must use /health/live" unless service["healthCheckPath"] == "/health/live"
+            env = service.fetch("envVars").to_h { |entry| [entry.fetch("key"), entry] }
+            raise "research mode must disable demo sessions" unless env.dig("GG_DEMO_MODE", "value") == "false"
+            raise "research mode must require OIDC" unless env.dig("GG_OIDC_REQUIRED", "value") == "true"
+            raise "research mode must require tenant isolation" unless env.dig("GG_TENANT_ISOLATION_REQUIRED", "value") == "true"
+            raise "research mode must require consent authority" unless env.dig("GG_CONSENT_AUTHORITY_REQUIRED", "value") == "true"
+            raise "research mode must require OIDC admin identity" unless env.dig("GG_OIDC_ADMIN_REQUIRED", "value") == "true"
+            raise "tamper demo must be disabled" unless env.dig("GG_ALLOW_TAMPER_DEMO", "value") == "false"
+            raise "runtime database URL must remain a manual secret" unless env.dig("GG_DATABASE_URL", "sync") == false
+            raise "migration database URL must remain a manual secret" unless env.dig("GG_MIGRATION_DATABASE_URL", "sync") == false
+            raise "master key must remain a manual secret" unless env.dig("GG_MASTER_KEY", "sync") == false
+            %w[GG_OIDC_ISSUER GG_OIDC_AUDIENCE GG_OIDC_CLIENT_ID GG_OIDC_REDIRECT_URI GG_OIDC_JWKS_URL GG_OIDC_ALLOWED_ORGANIZATIONS GG_CONSENT_AUTHORITY_ISSUER GG_CONSENT_AUTHORITY_PUBLIC_KEY].each do |key|
+              raise "#{key} must remain a manual secret" unless env.dig(key, "sync") == false
+            end
+            puts "Research-mode blueprint is distinct from the public synthetic demo and fails closed by default."
+          '
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const workflow = fs.readFileSync('.github/workflows/live-research-mode-smoke.yml', 'utf8');
+          if (/^  push:/m.test(workflow)) throw new Error('Live research-mode smoke must not run against the public demo on every main push.');
+          if (!workflow.includes('workflow_dispatch:') || !workflow.includes('required: true')) throw new Error('Research-mode smoke must require an explicit deployment URL.');
+          if (!workflow.includes('https://genomeguard.onrender.com')) throw new Error('Research-mode smoke must explicitly guard against the public demo URL.');
+          const publicDemo = fs.readFileSync('.github/workflows/live-acceptance.yml', 'utf8');
+          if (!publicDemo.includes('https://genomeguard.onrender.com')) throw new Error('Public synthetic-demo acceptance must retain its own target.');
+          console.log('Live research-mode acceptance is manually targeted and cannot collide with public synthetic-demo acceptance.');
+          NODE
       - name: Validate isolated Render staging blueprint
         run: |
           ruby -e '
