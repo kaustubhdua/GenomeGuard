@@ -357,8 +357,13 @@ def main() -> None:
                  "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "Fixture policy"},
             ],
         }
-        pg.route("**/catalogue/datasets", lambda route: route.fulfill(
-            status=200, content_type="application/json", body=json.dumps(catalogue_fixture)))
+        catalogue_requests: list[str] = []
+
+        def handle_catalogue(route) -> None:
+            catalogue_requests.append(route.request.url)
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(catalogue_fixture))
+
+        pg.route("**/catalogue/datasets", handle_catalogue)
         pg.goto(base + "/#/datasets")
         pg.get_by_label("Filter by source").wait_for()
         check("dataset catalogue exposes source and assembly filters",
@@ -368,7 +373,7 @@ def main() -> None:
         source_rows = pg.locator(".dataset-table tbody tr").all_text_contents()
         check("dataset source filter narrows visible rows",
               len(source_rows) == 1 and "Beta source" in " ".join(source_rows),
-              f"selected={pg.get_by_label('Filter by source').input_value()!r}; rows={source_rows!r}")
+              f"requests={catalogue_requests!r}; selected={pg.get_by_label('Filter by source').input_value()!r}; rows={source_rows!r}")
         pg.get_by_label("Filter by source").select_option("")
         pg.get_by_label("Filter by reference assembly").select_option("GRCh37")
         assembly_rows = pg.locator(".dataset-table tbody tr").all_text_contents()
