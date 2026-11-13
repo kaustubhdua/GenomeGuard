@@ -361,7 +361,7 @@ def main() -> int:
             "query": payload.get("query"),
             "ontology_filter": payload.get("ontology", "all"),
             "page": page_number, "size": 10,
-            "total": 3, "returned": len(terms), "has_more": page_number == 0,
+            "total": 11, "returned": len(terms), "has_more": page_number == 0,
             "terms": terms,
             "retrieved_at": "2026-11-13T10:00:00Z",
             "interpretation": "candidate annotations only",
