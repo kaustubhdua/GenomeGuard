@@ -164,19 +164,25 @@ export async function render() {
   let savedSearches = readSavedSearches();
 
   function readSavedSearches() {
+    let raw;
     try {
-      const raw = localStorage.getItem(SAVED_SEARCHES_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item) => item && typeof item.id === "string"
-        && typeof item.question === "string" && item.question.length <= 500
-        && typeof item.department === "string"
-        && (!item.department || DEPARTMENTS.some(([, slug]) => slug === item.department))
-        && VALID_SOURCES.has(item.source)).slice(0, MAX_SAVED_SEARCHES);
+      raw = localStorage.getItem(SAVED_SEARCHES_KEY);
     } catch {
       return null;
     }
+    if (!raw) return [];
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && typeof item.id === "string"
+      && typeof item.question === "string" && item.question.length <= 500
+      && typeof item.department === "string"
+      && (!item.department || DEPARTMENTS.some(([, slug]) => slug === item.department))
+      && VALID_SOURCES.has(item.source)).slice(0, MAX_SAVED_SEARCHES);
   }
 
   function writeSavedSearches(next) {
@@ -217,11 +223,11 @@ export async function render() {
         h("div", { class: "hero-actions" },
           h("button", {
             class: "btn ghost", type: "button", "data-action": "run",
-            "aria-label": "Run saved search",
+            "aria-label": "Run saved search: " + (item.question || departmentLabel),
           }, "Run"),
           h("button", {
             class: "btn ghost", type: "button", "data-action": "remove",
-            "aria-label": "Remove saved search",
+            "aria-label": "Remove saved search: " + (item.question || departmentLabel),
           }, "Remove")));
       row.querySelector('[data-action="run"]').addEventListener("click", () => {
         question.value = item.question;
@@ -257,7 +263,9 @@ export async function render() {
     };
     const next = [item, ...savedSearches].slice(0, MAX_SAVED_SEARCHES);
     if (writeSavedSearches(next)) {
-      status.textContent = "Search saved in this browser only. Avoid saving identifying or sensitive information.";
+      status.textContent = savedSearches.length >= MAX_SAVED_SEARCHES
+        ? "Search saved in this browser only; the oldest saved search was removed to keep the list at ten."
+        : "Search saved in this browser only. Avoid saving identifying or sensitive information.";
       renderSavedSearches();
     }
   }
