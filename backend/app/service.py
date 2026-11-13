@@ -1012,17 +1012,27 @@ class GenomeGuardService:
             tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
                    "code": "simulated-consent",
                    "display": "Synthetic demo consent record (not a real person)"}
-            narrative_div = '<div xmlns="http://www.w3.org/1999/xhtml"><p>Synthetic demo consent record; this is not actual consent.</p></div>'
+            narrative_div = (
+                '<div xmlns="http://www.w3.org/1999/xhtml">'
+                '<p>Synthetic demo consent record; this is not actual consent.</p></div>'
+            )
         elif basis == "participant_record":
             tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
                    "code": "participant-consent-record",
                    "display": "Participant consent record; source authority is not independently verified by this export"}
-            narrative_div = '<div xmlns="http://www.w3.org/1999/xhtml"><p>Participant consent record supplied to GenomeGuard; source authority is not independently verified and legal validity requires institutional verification.</p></div>'
+            narrative_div = (
+                '<div xmlns="http://www.w3.org/1999/xhtml">'
+                '<p>Participant consent record supplied to GenomeGuard; source authority is '
+                'not independently verified and legal validity requires institutional verification.</p></div>'
+            )
         else:
             tag = {"system": f"{self.FHIR_BASE}/CodeSystem-genomeguard-tags.json",
                    "code": "unverified-consent-provenance",
                    "display": "Consent provenance is not verified"}
-            narrative_div = '<div xmlns="http://www.w3.org/1999/xhtml"><p>Consent provenance is not verified; do not treat this export as proof of legal consent.</p></div>'
+            narrative_div = (
+                '<div xmlns="http://www.w3.org/1999/xhtml">'
+                '<p>Consent provenance is not verified; do not treat this export as proof of legal consent.</p></div>'
+            )
         ext = [{"url": f"{self.FHIR_EXT}duo-use.json", "valueCoding": duo(str(c.get("use")))}]
         ext += [{"url": f"{self.FHIR_EXT}duo-modifier.json", "valueCoding": duo(m)}
                 for m in (c.get("modifiers") or [])]
