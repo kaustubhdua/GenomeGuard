@@ -1,4 +1,4 @@
-import { api, boot, state, setWho, isSteward, signInWithInstitution, signOutInstitution } from "./api.js";
+import { api, boot, state, selectDemoRequester, isSteward, signInWithInstitution, signOutInstitution } from "./api.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
 
@@ -119,11 +119,9 @@ function drawWho() {
     $("auth-controls").replaceChildren();
     label.hidden = false;
     selector.hidden = false;
-    if (!state.demo.admin_key && isSteward()) setWho(state.demo.requesters?.[0]?.api_key || "");
-    const options = [
-      ...(state.demo.admin_key ? [["steward", "Example data steward"]] : []),
-      ...(state.demo.requesters || []).map((r) => [r.api_key, r.name || r.institution || "Demo researcher"]),
-    ];
+    const options = (state.demo.requesters || []).map((r) => [
+      String(r.id), r.name || "Synthetic demo researcher",
+    ]);
     selector.replaceChildren(...options.map(([value, text]) => {
       const option = document.createElement("option");
       option.value = value;
@@ -131,9 +129,7 @@ function drawWho() {
       return option;
     }));
     selector.value = state.who || "";
-    note.textContent = state.demo.admin_key
-      ? "Guest preview · example accounts · no account required"
-      : "Guest preview · example accounts · steward controls disabled";
+    note.textContent = "Synthetic guest preview · short-lived session · no API keys exposed";
   } else {
     label.hidden = true;
     selector.hidden = true;
@@ -197,11 +193,14 @@ function toggleTheme() {
 const ACTIONS = () => [
   ...visibleNav().flatMap(([label, items]) => items.map(([, text, href]) => ({ text, hint: label || "Page", run: () => (location.hash = href) }))),
   ...(state.demo ? [
-    ...(state.demo.admin_key ? [{ text: "Switch to the steward view", hint: "Acting as", run: () => { setWho("steward"); drawWho(); drawNav(""); render(); } }] : []),
-    { text: "Switch to the researcher view", hint: "Acting as", run: () => { const r = (state.demo || { requesters: [] }).requesters[0]; if (r) { setWho(r.api_key); drawWho(); drawNav(""); render(); } } },
+    { text: "Switch to the researcher view", hint: "Acting as", run: async () => {
+      const r = (state.demo || { requesters: [] }).requesters[0];
+      if (r) await selectDemoRequester(r.id);
+      drawWho(); drawNav(""); render();
+    } },
   ] : []),
-  { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
   ...(tourAvailable() ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
+  { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
 ];
 let sel = 0, shown = [];
 function openPalette() { $("cmdk").classList.add("open"); const i = $("cmdk-input"); i.value = ""; filter(); i.focus(); }
@@ -245,7 +244,14 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && $("shell").classList.contains("open") && !$("cmdk").classList.contains("open")) setMenu(false, true);
 });
 window.addEventListener("hashchange", () => { if ($("shell").classList.contains("open")) setMenu(false); });
-$("who").addEventListener("change", (e) => { setWho(e.target.value); drawWho(); drawNav(""); render(); });
+$("who").addEventListener("change", async (e) => {
+  const result = await selectDemoRequester(e.target.value);
+  if (!result.ok) {
+    $("who-note").textContent = result.data?.message || "Could not start the selected demo session.";
+    return;
+  }
+  drawWho(); drawNav(""); render();
+});
 // Warm the route chunk when a visitor signals intent, without loading every page at startup.
 for (const container of [ $("nav"), $("view") ]) {
   container.addEventListener("pointerover", (e) => {
