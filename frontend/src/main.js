@@ -1,5 +1,6 @@
 import { api, boot, state, selectDemoRequester, isSteward, signInWithInstitution, signOutInstitution } from "./api.js";
 import { h } from "./ui.js";
+import { startTour, tourAvailable } from "./tour.js";
 
 const ROUTES = [
   { re: /^#\/chromosomes$/, load: () => import("./pages/chromosomes.js"), nav: "chromosomes", title: "Chromosomes" },
@@ -198,6 +199,7 @@ const ACTIONS = () => [
       drawWho(); drawNav(""); render();
     } },
   ] : []),
+  ...(tourAvailable() ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
   { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
 ];
 let sel = 0, shown = [];
