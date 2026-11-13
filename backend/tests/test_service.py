@@ -269,9 +269,44 @@ def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
 
 
 def test_signed_consent_event_produces_policy_compatible_participant_basis(monkeypatch):
+    import hashlib
+    import hmac
+    import app.consent_authority as authority
+
     svc = make_service()
     donor = svc.ds.donors[0]
-    donor.consent["consent_basis"] = "participant_record"
-    # The signed-event cryptographic verifier is covered independently; this regression
-    # protects the basis value persisted by the service from drifting from policy semantics.
-    assert donor.consent["consent_basis"] == "participant_record"
+    sample_id = "SYNTHETIC-SOURCE-TEST-001"
+    digest = hmac.new(
+        svc.master,
+        svc.dataset_id.encode() + b"\\0" + sample_id.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    svc.store.x("UPDATE donors SET source_sample_id_hash=? WHERE id=?", (digest, donor.id))
+
+    payload = {
+        "event_id": "e54e6f0d-7f72-4d74-ae4d-6d9f4f6b6d4a",
+        "issuer": "test-consent-authority",
+        "dataset_id": svc.dataset_id,
+        "source_sample_id": sample_id,
+        "event_type": "consent_updated",
+        "effective_at": "2026-11-14T10:00:00+00:00",
+        "consent": {
+            "use": "GRU", "disease": None, "modifiers": [],
+            "population": None, "consent_date": "2026-11-14",
+        },
+    }
+    monkeypatch.setattr(
+        authority, "verify_consent_event",
+        lambda *args, **kwargs: (payload, "a" * 64),
+    )
+
+    svc.apply_signed_consent_event(
+        {"signed": "fixture"}, public_key_b64="unused",
+        trusted_issuer="test-consent-authority",
+    )
+    updated = svc.ds.donors[donor.id - 1]
+    assert updated.consent["consent_basis"] == "participant_record"
+    from app.core.consent import ConsentRequest, permitted
+    assert permitted(
+        updated.consent, ConsentRequest("general_research"), updated.withdrawn,
+    ) == (True, "ok")
