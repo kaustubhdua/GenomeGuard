@@ -215,7 +215,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                                    "this identity is not provisioned for researcher access")
             request.state.authenticated_requester = r
             return r
-        if settings.demo_mode and not settings.allow_static_demo_keys:
+        if settings.demo_mode:
             demo_token = request.headers.get("x-demo-session")
             if demo_token:
                 with demo_session_lock:
@@ -236,10 +236,11 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 principal = {**principal, "_allow_unscoped_demo": True}
                 request.state.authenticated_requester = principal
                 return principal
-            raise ServiceError(
-                401, "demo_session_required",
-                "use a short-lived synthetic demo session; static demo API keys are disabled",
-            )
+            if not settings.allow_static_demo_keys:
+                raise ServiceError(
+                    401, "demo_session_required",
+                    "use a short-lived synthetic demo session; static demo API keys are disabled",
+                )
         if settings.oidc_required:
             raise ServiceError(401, "unauthorized", "institutional bearer token required")
         if settings.demo_mode:
