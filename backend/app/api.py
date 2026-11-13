@@ -1250,12 +1250,20 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/literature/pubmed/search", "Search public PubMed literature metadata", "public")
     async def pubmed_literature_search(request):
         """Retrieve public PubMed metadata; search terms are never persisted."""
-        from app.literature.pubmed import PubMedProviderError, search_pubmed
+        from app.literature.pubmed import (
+            MAX_OFFSET, MAX_PAGE_SIZE, MAX_QUERY_LENGTH, PubMedProviderError, search_pubmed,
+        )
 
-        query = request.query_params.get("q", "")
+        query = request.query_params.get("q", "").strip()
         try:
             retstart = int(request.query_params.get("retstart", "0"))
             retmax = int(request.query_params.get("retmax", "20"))
+            if not query or len(query) > MAX_QUERY_LENGTH:
+                raise ValueError(f"q must contain 1 to {MAX_QUERY_LENGTH} characters")
+            if not 0 <= retstart <= MAX_OFFSET:
+                raise ValueError(f"retstart must be between 0 and {MAX_OFFSET}")
+            if not 1 <= retmax <= MAX_PAGE_SIZE:
+                raise ValueError(f"retmax must be between 1 and {MAX_PAGE_SIZE}")
             payload = await run_in_threadpool(
                 search_pubmed, query, retstart=retstart, retmax=retmax,
             )
