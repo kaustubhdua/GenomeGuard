@@ -261,9 +261,10 @@ export async function render() {
       source: currentSearch.source,
       createdAt: new Date().toISOString(),
     };
+    const limitReached = savedSearches.length >= MAX_SAVED_SEARCHES;
     const next = [item, ...savedSearches].slice(0, MAX_SAVED_SEARCHES);
     if (writeSavedSearches(next)) {
-      status.textContent = savedSearches.length >= MAX_SAVED_SEARCHES
+      status.textContent = limitReached
         ? "Search saved in this browser only; the oldest saved search was removed to keep the list at ten."
         : "Search saved in this browser only. Avoid saving identifying or sensitive information.";
       renderSavedSearches();
