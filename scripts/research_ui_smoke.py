@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Browser acceptance for GenomeGuard's department and symptom literature search.
+"""Browser acceptance for GenomeGuard's department, literature, and variant evidence discovery.
 
 The provider is intercepted with source-shaped fixtures here so the UI test is
 deterministic. A separate CI smoke test exercises the real Europe PMC service.
@@ -28,6 +28,7 @@ def main() -> int:
     pubmed_requests: list[dict[str, object]] = []
     open_targets_requests: list[dict[str, object]] = []
     clinvar_requests: list[dict[str, object]] = []
+    gwas_requests: list[dict[str, object]] = []
     provider_outages = {"europe": False, "pubmed": False}
 
     def check(label: str, ok: bool, detail: str = "") -> None:
@@ -237,6 +238,95 @@ def main() -> int:
         }
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
+    def handle_gwas(route) -> None:
+        payload = json.loads(route.request.post_data or "{}")
+        gwas_requests.append(payload)
+        page_number = int(payload.get("page", 0))
+        release_date = (
+            "2026-10-30"
+            if payload.get("trait") == "release drift test" and page_number > 0
+            else "2026-10-29"
+        )
+        association_id = "218086295" if page_number == 0 else "218060208"
+        trait_label = (
+            "Hematological traits (multi-trait analysis)"
+            if page_number == 0 else "Creatine kinase levels"
+        )
+        pubmed_id = "38627641" if page_number == 0 else "42066438"
+        study = "GCST90838669" if page_number == 0 else "GCST90838680"
+        record = {
+            "association_id": association_id,
+            "study_accession": study,
+            "pubmed_id": pubmed_id,
+            "first_author": "Troubat L" if page_number == 0 else "Chen G",
+            "reported_traits": [trait_label],
+            "efo_traits": [{"id": "EFO_0004503", "label": "hematological measurement"}],
+            "p_value": 2.0e-24 if page_number == 0 else 2.0e-8,
+            "pvalue_mantissa": 2,
+            "pvalue_exponent": -24 if page_number == 0 else -8,
+            "pvalue_description": "",
+            "beta": "5.662 z score increase" if page_number else "-",
+            "beta_numeric": 5.662 if page_number else None,
+            "beta_unit": "z score",
+            "beta_direction": "increase",
+            "odds_ratio": None,
+            "odds_ratio_text": None,
+            "confidence_interval": {"text": "-", "lower": None, "upper": None},
+            "risk_frequency": "NR",
+            "locations": ["17:43100558"],
+            "mapped_genes": ["BRCA1"],
+            "snp_alleles": [{"rs_id": "rs10445316", "effect_allele": "?"}],
+            "snp_effect_alleles": ["rs10445316-?"],
+            "multi_snp_haplotype": False,
+            "snp_interaction": False,
+            "source_url": f"https://www.ebi.ac.uk/gwas/rest/api/v2/associations/{association_id}",
+            "snp_url": "https://www.ebi.ac.uk/gwas/rest/api/v2/single-nucleotide-polymorphisms/rs10445316",
+            "loci_url": f"https://www.ebi.ac.uk/gwas/rest/api/v2/associations/{association_id}/loci",
+            "study_url": f"https://www.ebi.ac.uk/gwas/studies/{study}",
+            "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{pubmed_id}/",
+        }
+        query = {
+            "gene_symbol": payload.get("gene_symbol"),
+            "rs_id": payload.get("rs_id"),
+            "trait": payload.get("trait"),
+            "show_child_traits": bool(payload.get("show_child_traits")),
+            "extended_geneset": False,
+            "page": page_number,
+            "size": PAGE_SIZE,
+        }
+        body = {
+            "provider": "GWAS Catalog",
+            "api_version": "2.0",
+            "query": query,
+            "count": 2,
+            "returned": 1,
+            "has_more": page_number == 0,
+            "next_page_url": (
+                "https://www.ebi.ac.uk/gwas/rest/api/v2/associations?mapped_gene=BRCA1&page=1&size=20"
+                if page_number == 0 else None
+            ),
+            "page": {
+                "number": page_number, "size": PAGE_SIZE,
+                "total_elements": 2, "total_pages": 2,
+            },
+            "records": [record],
+            "retrieved_at": "2026-11-13T10:00:00Z",
+            "provenance": {
+                "provider": "GWAS Catalog", "api": "REST API v2", "api_version": "2.0",
+                "data_release_date": release_date, "api_release_date": "2025-08-01",
+                "dbsnp_build": "156", "gene_build": "GRCh38.p14",
+                "efo_version": "v3.95.0", "ensembl_version": "116",
+                "commit_hash": "c5e2dc9", "license": "Apache License 2.0",
+                "license_url": "https://github.com/EBISPOT/gwas-rest-api/blob/master/LICENSE",
+                "terms_of_service": "https://www.ebi.ac.uk/about/terms-of-use/",
+                "source_url": "https://www.ebi.ac.uk/gwas/rest/api/v2/associations",
+                "query_parameters": {"mapped_gene": "BRCA1", "page": str(page_number), "size": str(PAGE_SIZE)},
+                "retrieved_at": "2026-11-13T10:00:00Z",
+                "scope_note": "Literature-curated top associations; not full summary statistics.",
+            },
+        }
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         page = browser.new_page(viewport={"width": 1280, "height": 900})
@@ -245,6 +335,7 @@ def main() -> int:
         page.route("**/literature/pubmed/search", handle_pubmed)
         page.route("**/research/open-targets/target", handle_open_targets)
         page.route("**/research/clinvar/search", handle_clinvar)
+        page.route("**/research/gwas/search", handle_gwas)
         page.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Research discovery").wait_for()
         page.get_by_role("link", name="Oncology Browse publications →").click()
@@ -361,7 +452,7 @@ def main() -> int:
               and "https://example.org/evidence/1" in markdown_report
               and "Citation and reuse requirements" in markdown_report)
 
-        page.get_by_label("Gene symbol").fill("BRCA1")
+        page.locator("#clinvar-gene-symbol").fill("BRCA1")
         page.get_by_label("ClinVar report property filter").select_option("pathogenic")
         page.get_by_role("button", name="Search ClinVar variants").click()
         page.get_by_text("Conflicting classifications of pathogenicity", exact=True).wait_for()
@@ -392,6 +483,53 @@ def main() -> int:
               and clinvar_export["records"][0]["classifications"]["germline"]["description"]
                   == "Conflicting classifications of pathogenicity")
 
+        page.get_by_label("Gene symbol (optional)").fill("BRCA1")
+        page.get_by_role("button", name="Search GWAS Catalog").click()
+        page.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
+        check("GWAS Catalog search preserves data release and reported association metadata",
+              len(gwas_requests) == 1
+              and gwas_requests[0].get("gene_symbol") == "BRCA1"
+              and "GCST90838669" in page.locator("#gwas-results").inner_text()
+              and "2 × 10^-24" in page.locator("#gwas-results").inner_text())
+        gwas_link = page.locator("#gwas-results a").first
+        check("GWAS Catalog source links are HTTPS and open safely",
+              gwas_link.get_attribute("href", timeout=args.timeout).startswith("https://")
+              and gwas_link.get_attribute("rel") == "noopener noreferrer")
+        page.get_by_role("button", name="Load more GWAS associations").click()
+        page.wait_for_function(
+            "document.querySelectorAll('#gwas-results .gwas-record').length === 2"
+        )
+        check("GWAS Catalog pagination requests the next page without duplicating associations",
+              len(gwas_requests) == 2 and gwas_requests[1].get("page") == 1
+              and page.locator("#gwas-results .gwas-record").count() == 2)
+        with page.expect_download() as gwas_download_info:
+            page.get_by_role("button", name="Export GWAS JSON").click()
+        gwas_download = gwas_download_info.value
+        gwas_export = json.loads(Path(gwas_download.path()).read_text(encoding="utf-8"))
+        check("GWAS JSON export preserves release metadata and source records",
+              gwas_export["source_response"]["provenance"]["data_release_date"] == "2026-10-29"
+              and len(gwas_export["records"]) == 2
+              and gwas_export["records"][0]["study_accession"] == "GCST90838669")
+
+        page.get_by_label("Trait / phenotype (optional)").fill("release drift test")
+        page.get_by_role("button", name="Search GWAS Catalog").click()
+        page.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
+        page.get_by_role("button", name="Load more GWAS associations").click()
+        page.get_by_text("The GWAS Catalog release changed while loading this search", exact=False).wait_for()
+        check("GWAS pagination refuses to combine records from different data releases",
+              len(gwas_requests) == 4
+              and page.locator("#gwas-results .gwas-record").count() == 1
+              and "new page was not appended" in page.locator("#gwas-status").inner_text())
+
+        page.get_by_label("Trait / phenotype (optional)").fill("breast cancer")
+        page.get_by_label("Include more specific child ontology traits").check()
+        page.get_by_role("button", name="Search GWAS Catalog").click()
+        page.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
+        check("GWAS Catalog trait search explicitly includes child ontology terms",
+              len(gwas_requests) == 5
+              and gwas_requests[-1].get("trait") == "breast cancer"
+              and gwas_requests[-1].get("show_child_traits") is True)
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
@@ -402,6 +540,7 @@ def main() -> int:
         mobile.route("**/literature/pubmed/search", handle_pubmed)
         mobile.route("**/research/open-targets/target", handle_open_targets)
         mobile.route("**/research/clinvar/search", handle_clinvar)
+        mobile.route("**/research/gwas/search", handle_gwas)
         mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         mobile.get_by_role("heading", name="Research discovery").wait_for()
         no_horizontal_overflow = mobile.evaluate(
@@ -416,11 +555,16 @@ def main() -> int:
         mobile.locator(".research-paper").first.wait_for()
         check("mobile research search renders live-provider-shaped results",
               mobile.locator(".research-paper").count() == PAGE_SIZE + 1)
-        mobile.get_by_label("Gene symbol").fill("BRCA1")
+        mobile.locator("#clinvar-gene-symbol").fill("BRCA1")
         mobile.get_by_label("ClinVar report property filter").select_option("pathogenic")
         mobile.get_by_role("button", name="Search ClinVar variants").click()
         mobile.get_by_text("Conflicting classifications of pathogenicity", exact=True).wait_for()
         check("mobile ClinVar evidence has no horizontal overflow at 375px",
+              mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
+        mobile.get_by_label("Gene symbol (optional)").fill("BRCA1")
+        mobile.get_by_role("button", name="Search GWAS Catalog").click()
+        mobile.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
+        check("mobile GWAS evidence has no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
         browser.close()

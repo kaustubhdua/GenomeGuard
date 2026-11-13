@@ -47,6 +47,7 @@ _MAX_DEMO_SESSIONS = 5000
 _MAX_DEMO_SESSIONS_PER_PERSONA = 5
 _OPEN_TARGETS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _CLINVAR_SEARCH_SLOTS = threading.BoundedSemaphore(2)
+_GWAS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -1448,6 +1449,58 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                 ) from None
         finally:
             _OPEN_TARGETS_SEARCH_SLOTS.release()
+        response = _j(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+    @route("POST", "/research/gwas/search", "Search GWAS Catalog v2 associations by gene, rsID, or trait", "public")
+    async def gwas_catalog_search(request):
+        """Retrieve literature-curated GWAS Catalog v2 associations with release provenance."""
+        from app.literature.gwas_catalog import (
+            GwasCatalogProviderError,
+            search_gwas_catalog,
+            validate_search_request,
+        )
+
+        data = await _body(request)
+        gene_symbol = data.get("gene_symbol")
+        rs_id = data.get("rs_id")
+        trait = data.get("trait")
+        show_child_traits = data.get("show_child_traits", False)
+        page = data.get("page", 0)
+        size = data.get("size", 20)
+        try:
+            validate_search_request(
+                gene_symbol, rs_id, trait, show_child_traits, page, size,
+            )
+        except ValueError as exc:
+            raise ServiceError(400, "invalid_gwas_query", str(exc)) from None
+        if not _GWAS_SEARCH_SLOTS.acquire(blocking=False):
+            response = _j({
+                "error": "gwas_provider_busy",
+                "message": "GWAS Catalog search is busy. Please retry shortly.",
+            }, 429)
+            response.headers["Retry-After"] = "2"
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        try:
+            payload = await run_in_threadpool(
+                search_gwas_catalog,
+                gene_symbol=gene_symbol,
+                rs_id=rs_id,
+                trait=trait,
+                show_child_traits=show_child_traits,
+                page=page,
+                size=size,
+            )
+        except GwasCatalogProviderError:
+            raise ServiceError(
+                503, "gwas_provider_unavailable",
+                "GWAS Catalog is temporarily unavailable or returned an invalid response. Please retry.",
+            ) from None
+        finally:
+            _GWAS_SEARCH_SLOTS.release()
         response = _j(payload)
         response.headers["Cache-Control"] = "no-store"
         return response

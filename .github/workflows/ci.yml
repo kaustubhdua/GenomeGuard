@@ -95,6 +95,10 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/clinvar_provider_smoke.py
+      - name: Verify live GWAS Catalog REST API v2 associations and release metadata
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/gwas_catalog_provider_smoke.py
       - name: Verify live Europe PMC search and cursor pagination contract
         run: .venv/bin/python scripts/research_provider_smoke.py
       - name: Compile all Python application and script files
