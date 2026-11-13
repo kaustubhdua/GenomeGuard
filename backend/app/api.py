@@ -529,6 +529,13 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     @route("GET", "/health", "Liveness and non-authoritative dataset/readiness facts", "public")
     async def health(request):
         svc = S()
+        # Keep operational diagnostics useful for the public synthetic demo, but do not
+        # disclose private-cohort size, variant counts, consent provenance, storage backend,
+        # LLM availability, or internal release state from a non-demo public endpoint.
+        if not settings.demo_mode:
+            response = _j({"status": "ok", "deployment": _deployment_info()})
+            response.headers["Cache-Control"] = "no-store"
+            return response
         raw_provenance = getattr(svc, "provenance", {})
         provenance, consent_records_matched, policy_samples_scoped, consent_provenance_consistent = (
             _reported_consent_provenance(raw_provenance, svc.ds.n_donors)
@@ -562,11 +569,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     async def readiness(request):
         checks = readiness_checks(S())
         ready = all(checks.values())
-        return _j({"status": "ready" if ready else "not_ready", "ready": ready,
-                   "checks": checks, "note": (
+        payload = {"status": "ready" if ready else "not_ready", "ready": ready,
+                   "note": (
                        "Readiness is not clinical or legal approval; independent security, "
                        "privacy, and governance review remains required."
-                   )}, 200 if ready else 503)
+                   )}
+        # Detailed gate names are useful on the synthetic demo, but reveal internal
+        # institutional configuration on a public non-demo endpoint.
+        if settings.demo_mode:
+            payload["checks"] = checks
+        response = _j(payload, 200 if ready else 503)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @route("GET", "/demo/requesters", "Synthetic demo personas (no credentials)", "public")
     async def demo_requesters(request):
