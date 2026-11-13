@@ -8,6 +8,11 @@ import pytest
 from app.literature import open_targets
 
 
+@pytest.fixture(autouse=True)
+def disable_provider_pacing_in_unit_tests(monkeypatch):
+    monkeypatch.setattr(open_targets, "_wait_for_rate_slot", lambda: None)
+
+
 class FakeResponse:
     status = 200
 
@@ -90,7 +95,8 @@ def test_open_targets_returns_direct_associations_and_source_evidence(monkeypatc
 
     monkeypatch.setattr(open_targets, "urlopen", fake_urlopen)
     result = open_targets.search_target(
-        "ENSG00000141510", disease_id="EFO_0000311", page_index=0, page_size=20, evidence_size=25,
+        "ENSG00000141510", disease_id="EFO_0000311", page_index=0, page_size=20,
+        evidence_size=25, evidence_cursor="cursor-next",
     )
     assert len(calls) == 1
     request, timeout, body = calls[0]
@@ -101,6 +107,7 @@ def test_open_targets_returns_direct_associations_and_source_evidence(monkeypatc
     assert body["variables"]["ensemblId"] == "ENSG00000141510"
     assert body["variables"]["includeEvidence"] is True
     assert body["variables"]["diseaseId"] == "EFO_0000311"
+    assert body["variables"]["evidenceCursor"] == "cursor-next"
     assert "enableIndirect: false" in body["query"]
     assert result["target"]["approved_symbol"] == "TP53"
     assert result["associations"]["direct_only"] is True
@@ -181,3 +188,10 @@ def test_open_targets_retries_transient_http_failure(monkeypatch):
     result = open_targets.search_target("ENSG00000141510")
     assert result["target"]["approved_symbol"] == "TP53"
     assert len(calls) == 2
+
+
+def test_open_targets_rejects_oversized_evidence_cursor():
+    with pytest.raises(ValueError, match="evidence_cursor"):
+        open_targets.search_target(
+            "ENSG00000141510", disease_id="EFO_0000311", evidence_cursor="x" * 2049,
+        )
