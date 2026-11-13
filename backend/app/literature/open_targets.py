@@ -104,6 +104,20 @@ def _validate(ensembl_id: str, disease_id: str | None, page_index: int, page_siz
     if isinstance(evidence_size, bool) or not isinstance(evidence_size, int) or not 1 <= evidence_size <= MAX_EVIDENCE_SIZE:
         raise ValueError(f"evidence_size must be between 1 and {MAX_EVIDENCE_SIZE}")
 
+def validate_target_request(
+    ensembl_id: str,
+    disease_id: str | None = None,
+    page_index: int = 0,
+    page_size: int = 20,
+    evidence_size: int = 25,
+    evidence_cursor: str | None = None,
+) -> None:
+    _validate(ensembl_id, disease_id, page_index, page_size, evidence_size)
+    if evidence_cursor is not None and (
+        not isinstance(evidence_cursor, str) or len(evidence_cursor) > MAX_EVIDENCE_CURSOR_LENGTH
+    ):
+        raise ValueError(f"evidence_cursor must be a string of at most {MAX_EVIDENCE_CURSOR_LENGTH} characters")
+
 
 def _wait_for_rate_slot() -> None:
     """Conservatively pace public API requests within this application process."""
@@ -173,9 +187,7 @@ def search_target(
     evidence_cursor: str | None = None,
 ) -> dict:
     """Fetch direct target-disease associations and optional disease-specific evidence."""
-    _validate(ensembl_id, disease_id, page_index, page_size, evidence_size)
-    if evidence_cursor is not None and (not isinstance(evidence_cursor, str) or len(evidence_cursor) > MAX_EVIDENCE_CURSOR_LENGTH):
-        raise ValueError(f"evidence_cursor must be a string of at most {MAX_EVIDENCE_CURSOR_LENGTH} characters")
+    validate_target_request(ensembl_id, disease_id, page_index, page_size, evidence_size, evidence_cursor)
     data = _fetch_graphql({
         "ensemblId": ensembl_id,
         "pageIndex": page_index,
