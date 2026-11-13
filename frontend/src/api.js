@@ -167,8 +167,43 @@ export async function boot() {
     call("/health"),
     call("/health/ready"),
   ]);
+  let demoFallback = null;
+  const healthPayloadValid = h.ok && h.data && typeof h.data.demo_mode === "boolean";
+  state.healthMetadataDegraded = false;
+  if (!healthPayloadValid) {
+    // A synthetic demo can still be safely identified when both demo-only
+    // endpoints succeed: the server exposes them only for an explicitly
+    // synthetic demo deployment. Never use this fallback for institutional mode.
+    const [demoRequesters, demoDonors] = await Promise.all([
+      call("/demo/requesters"),
+      call("/demo/donors"),
+    ]);
+    if (!demoRequesters.ok || !demoDonors.ok
+        || !Array.isArray(demoRequesters.data?.requesters)
+        || !Array.isArray(demoDonors.data?.donors)) {
+      state.health = h.data;
+      state.readiness = ready.data || { ready: false, checks: {} };
+      state.bootError = h.data?.message || h.data?.error
+        || "The GenomeGuard API is not responding. The public demo could not be verified.";
+      state.demo = null;
+      state.donors = [];
+      return;
+    }
+    demoFallback = { requesters: demoRequesters, donors: demoDonors };
+    h.data = {
+      demo_mode: true,
+      synthetic_data_only: true,
+      health_metadata_degraded: true,
+      provenance: {
+        genotypes: "synthetic",
+        genotypes_label: "Synthetic demo cohort (demo-only endpoints)",
+        consent_label: "Consent provenance metadata temporarily unavailable; this is not participant-consent verification",
+      },
+    };
+    h.ok = true;
+    state.healthMetadataDegraded = true;
+  }
   state.health = h.data;
-  if (!h.ok) state.bootError = h.data?.message || h.data?.error || "The GenomeGuard API is not responding.";
   state.readiness = ready.data || h.data?.readiness || { ready: false, checks: {} };
   state.demo = null;
   state.donors = [];
@@ -214,7 +249,9 @@ export async function boot() {
   state.oidcError = "";
   state.accessToken = "";
   state.me = null;
-  const [d, dn] = await Promise.all([call("/demo/requesters"), call("/demo/donors")]);
+  const [d, dn] = demoFallback
+    ? [demoFallback.requesters, demoFallback.donors]
+    : await Promise.all([call("/demo/requesters"), call("/demo/donors")]);
   state.demo = d.ok ? d.data : null;
   state.donors = dn.ok ? dn.data.donors : [];
   if (!state.demo) {
