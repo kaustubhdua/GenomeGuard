@@ -184,3 +184,25 @@ This addendum supersedes earlier deployment snapshots above where their timestam
 5. Provision a separate research-mode service only after institutional OIDC, authoritative consent, tenant isolation and independent governance/security reviews are available.
 
 A successful image build, a synthetic demo, a PostgreSQL driver setting, or a CI test does not satisfy production acceptance by itself.
+
+
+## Fresh public synthetic-demo acceptance — 14 November 2026
+
+Direct HTTP checks against `https://genomeguard.onrender.com` returned:
+
+| Check | Result | Interpretation |
+|---|---|---|
+| `GET /health/live` | HTTP 200 | ASGI process responds; deployed SHA `3280ebc1924039bcfa19f4c58bb75e83a8c370eb` |
+| `GET /health` | HTTP 200 | `demo_mode=true`, synthetic-only, 600 donors, 3,000 variants, PostgreSQL backend |
+| `GET /audit/verify` | HTTP 200, `ok=true`, length 4 | Current audit chain verifies; this is only the current chain, not an external immutable anchor |
+| `GET /demo/requesters`, `/demo/donors` | HTTP 200 | Demo personas are listed without exposing API keys |
+| Demo requester session → `GET /me` | HTTP 200 | Short-lived scoped demo session works |
+| Demo donor session → donor profile | HTTP 200 | Short-lived donor session is scoped to the selected demo donor |
+| `GET /health/ready` | HTTP 503, `ready=false` | Expected fail-closed production gate; institutional identity, private cohort provenance, durable storage/restore, monitoring, audit anchoring and participant consent authority remain unverified |
+| `GET /` | HTTP 200 | HTML document served |
+
+The session-flow check created only short-lived public synthetic-demo sessions; tokens were not logged or retained.
+
+**Browser-origin discrepancy remains open:** a separate hosted-browser run loaded the root HTML but displayed the frontend's API-connection error. Browser `fetch()` to `/health` and `/health/live` rejected with `TypeError: Failed to fetch`, while `/demo/requesters` and `/demo/donors` succeeded. Direct HTTP GETs to the health endpoints returned 200. This may be specific to the hosted-browser environment, but it is not explained. Verify the complete first-load and retry flow in a normal user browser and in GitHub-hosted Playwright before declaring the public UI accepted.
+
+The previous mainline live-demo workflow failed at its first health assertion without reporting the actual status/body. PR #158 adds bounded retries and actionable diagnostics; it does not claim to fix the browser-origin discrepancy. A Render deployment status of `live` and a successful direct health response are not substitutes for full browser acceptance or institutional production readiness.
