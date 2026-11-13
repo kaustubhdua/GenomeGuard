@@ -134,6 +134,7 @@ export function renderClinVarPanel() {
   let generation = 0;
   let busy = false;
   let seenIds = new Set();
+  let activeController = null;
 
   function renderAll() {
     results.replaceChildren(...records.map(recordCard));
@@ -173,26 +174,35 @@ export function renderClinVarPanel() {
   }
 
   async function fetchPage(retstart, requestGeneration) {
-    const response = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        gene_symbol: activeQuery.gene_symbol,
-        classification: activeQuery.classification,
-        retstart,
-        retmax: PAGE_SIZE,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (requestGeneration !== generation) return null;
-    if (!response.ok) {
-      throw new Error(data.message || "ClinVar returned HTTP " + response.status + ".");
+    if (activeController) activeController.abort();
+    const controller = new AbortController();
+    activeController = controller;
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          gene_symbol: activeQuery.gene_symbol,
+          classification: activeQuery.classification,
+          retstart,
+          retmax: PAGE_SIZE,
+        }),
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (requestGeneration !== generation) return null;
+      if (!response.ok) {
+        throw new Error(data.message || "ClinVar returned HTTP " + response.status + ".");
+      }
+      if (!data || data.provider !== "NCBI ClinVar" || !Array.isArray(data.records)
+          || !data.provenance || !data.query) {
+        throw new Error("ClinVar returned an unexpected response.");
+      }
+      return data;
+    } finally {
+      clearTimeout(timeout);
     }
-    if (!data || data.provider !== "NCBI ClinVar" || !Array.isArray(data.records)
-        || !data.provenance || !data.query) {
-      throw new Error("ClinVar returned an unexpected response.");
-    }
-    return data;
   }
 
   async function search(event) {
@@ -203,6 +213,7 @@ export function renderClinVarPanel() {
       geneInput.focus();
       return;
     }
+    if (activeController) activeController.abort();
     activeQuery = {
       gene_symbol: geneSymbol,
       classification: classificationInput.value || null,
@@ -232,8 +243,10 @@ export function renderClinVarPanel() {
       renderAll();
     } catch (error) {
       if (requestGeneration === generation) {
-        status.textContent = "ClinVar records could not be retrieved. No sample or fabricated variants are shown. "
-          + error.message;
+        status.textContent = error.name === "AbortError"
+          ? "ClinVar search timed out. Please retry."
+          : "ClinVar records could not be retrieved. No sample or fabricated variants are shown. "
+            + error.message;
       }
     } finally {
       if (requestGeneration === generation) {
