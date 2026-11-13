@@ -382,7 +382,7 @@ def main() -> None:
         )
         source_text = pg.locator(".dataset-table tbody").inner_text()
         check("dataset source filter narrows visible rows",
-              rows.count() == 1 and "Beta source" in source_text,
+              rows.count() == 1 and "beta source" in source_text.lower(),
               f"rows={rows.count()} text={source_text!r}")
         source_control.select_option("")
         assembly_control.select_option("GRCh37")
@@ -393,7 +393,7 @@ def main() -> None:
         )
         assembly_text = pg.locator(".dataset-table tbody").inner_text()
         check("dataset assembly filter narrows visible rows",
-              rows.count() == 1 and "Alpha source" in assembly_text,
+              rows.count() == 1 and "alpha source" in assembly_text.lower(),
               f"rows={rows.count()} text={assembly_text!r}")
         assembly_control.select_option("")
         sort_control.select_option("samples")
@@ -402,7 +402,7 @@ def main() -> None:
             timeout=5000,
         )
         first_row = rows.first.inner_text()
-        check("dataset sort orders by measured sample count", "Beta source" in first_row,
+        check("dataset sort orders by measured sample count", "beta source" in first_row.lower(),
               f"first_row={first_row!r}")
         with pg.expect_download() as catalogue_download_info:
             pg.get_by_role("button", name="Export filtered CSV").click()
