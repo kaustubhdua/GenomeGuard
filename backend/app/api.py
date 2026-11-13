@@ -44,6 +44,7 @@ ROUTES_DOC: list[tuple[str, str, str, str]] = []
 _PUBMED_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _DEMO_SESSION_TTL_SECONDS = 1800
 _MAX_DEMO_SESSIONS = 5000
+_MAX_DEMO_SESSIONS_PER_PERSONA = 5
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -156,6 +157,18 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             expired = [token for token, session in registry.items() if session["expires_at"] <= now]
             for token in expired:
                 registry.pop(token, None)
+            identity_field = "requester_id" if "requester_id" in payload else "donor_id"
+            identity_value = payload[identity_field]
+            same_persona = sorted(
+                (
+                    (token, session) for token, session in registry.items()
+                    if session.get(identity_field) == identity_value
+                ),
+                key=lambda item: item[1]["expires_at"],
+            )
+            while len(same_persona) >= _MAX_DEMO_SESSIONS_PER_PERSONA:
+                expired_token, _ = same_persona.pop(0)
+                registry.pop(expired_token, None)
             if len(registry) >= _MAX_DEMO_SESSIONS:
                 raise ServiceError(
                     503, "demo_session_capacity",
