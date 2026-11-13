@@ -271,6 +271,7 @@ def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
 def test_signed_consent_event_produces_policy_compatible_participant_basis(monkeypatch):
     import hashlib
     import hmac
+    from datetime import UTC, datetime
     import app.consent_authority as authority
 
     svc = make_service()
@@ -289,7 +290,7 @@ def test_signed_consent_event_produces_policy_compatible_participant_basis(monke
         "dataset_id": svc.dataset_id,
         "source_sample_id": sample_id,
         "event_type": "consent_updated",
-        "effective_at": "2026-11-14T10:00:00+00:00",
+        "effective_at": datetime.now(UTC).isoformat(),
         "consent": {
             "use": "GRU", "disease": None, "modifiers": [],
             "population": None, "consent_date": "2026-11-14",
