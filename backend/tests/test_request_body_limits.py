@@ -64,3 +64,14 @@ def test_streaming_limit_cannot_be_bypassed_without_content_length():
             raise AssertionError("streaming request limit was bypassed")
 
     asyncio.run(invoke())
+
+def test_deeply_nested_json_is_rejected_without_uncaught_recursion_error():
+    _, client = make_client()
+    body = b"[" * 2_000 + b"0" + b"]" * 2_000
+    response = client.post(
+        "/demo/session",
+        content=body,
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"] == "bad_json"
