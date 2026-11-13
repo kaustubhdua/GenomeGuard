@@ -398,6 +398,16 @@ def main() -> None:
                           and "Pending exact-artifact review" in lifecycle_text
                           and "Not imported" in lifecycle_text)
                 if hsh == "#/requests":
+                    # The seeded synthetic database starts with no requests. Create one
+                    # through the actual UI so this layout assertion exercises a populated
+                    # history table instead of treating the legitimate empty state as a failure.
+                    if pg.locator(".request-history tbody tr").count() == 0:
+                        pg.get_by_role("button", name="Send request").click()
+                        pg.wait_for_function(
+                            "() => /^#\\/request\\/\\d+$/.test(location.hash)", timeout=15000
+                        )
+                        pg.goto(base + "/#/requests")
+                        pg.locator(".request-history tbody tr").first.wait_for(timeout=15000)
                     history_layout = pg.evaluate("""() => {
                       const card = document.querySelector(".request-history");
                       const table = card?.querySelector("table");
