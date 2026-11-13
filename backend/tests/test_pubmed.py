@@ -181,12 +181,12 @@ def test_pubmed_api_route_validates_and_disables_caching(monkeypatch):
     }
     monkeypatch.setattr(pubmed, "search_pubmed", lambda *args, **kwargs: expected)
     _, client = make_client()
-    response = client.get("/literature/pubmed/search?q=BRCA1")
+    response = client.post("/literature/pubmed/search", json={"q": "BRCA1"})
     assert response.status_code == 200
     assert response.json() == expected
     assert response.headers["cache-control"] == "no-store"
 
-    invalid = client.get("/literature/pubmed/search?q=BRCA1&retmax=100")
+    invalid = client.post("/literature/pubmed/search", json={"q": "BRCA1", "retmax": 100})
     assert invalid.status_code == 400
     assert invalid.json()["error"] == "invalid_literature_query"
 
@@ -199,7 +199,7 @@ def test_pubmed_api_route_returns_safe_provider_error(monkeypatch):
 
     monkeypatch.setattr(pubmed, "search_pubmed", unavailable)
     _, client = make_client()
-    response = client.get("/literature/pubmed/search?q=BRCA1")
+    response = client.post("/literature/pubmed/search", json={"q": "BRCA1"})
     assert response.status_code == 503
     assert response.json()["error"] == "literature_provider_unavailable"
     assert "upstream detail" not in response.text
@@ -255,3 +255,17 @@ def test_pubmed_stops_after_bounded_retries(monkeypatch):
     with pytest.raises(pubmed.PubMedProviderError, match="temporarily unavailable"):
         pubmed.search_pubmed("BRCA1")
     assert len(calls) == pubmed.MAX_ATTEMPTS
+
+
+def test_pubmed_api_route_bounds_concurrent_requests(monkeypatch):
+    import threading
+
+    import app.api as api_module
+    from tests.helpers import make_client
+
+    monkeypatch.setattr(api_module, "_PUBMED_SEARCH_SLOTS", threading.BoundedSemaphore(0))
+    _, client = make_client()
+    response = client.post("/literature/pubmed/search", json={"q": "BRCA1"})
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "1"
+    assert response.headers["cache-control"] == "no-store"
