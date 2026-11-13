@@ -9,6 +9,9 @@ import { renderUniProtPanel } from "./uniprot.js";
 const API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
 const PUBMED_API = "/literature/pubmed/search";
 const PAGE_SIZE = 20;
+const SAVED_SEARCHES_KEY = "gg_research_saved_searches_v1";
+const MAX_SAVED_SEARCHES = 10;
+const VALID_SOURCES = new Set(["both", "europe-pmc", "pubmed"]);
 const DEPARTMENTS = [
   ["Genetics & Genomics", "genetics", 'genetics OR genomics'],
   ["Oncology", "oncology", 'oncology OR cancer OR neoplasm'],
@@ -127,7 +130,15 @@ export async function render() {
           h("button", { class: "btn", type: "submit" }, "Search publications"),
           h("span", { class: "fine muted" }, "Sources: Europe PMC and NCBI PubMed · source metadata"))),
       h("div", { id: "research-status", class: "fine muted", role: "status", "aria-live": "polite" }),
-      h("div", { id: "research-results", class: "stack", "aria-live": "polite" })),
+      h("div", { id: "research-results", class: "stack", "aria-live": "polite" }),
+      h("section", { class: "research-saved-searches", "aria-labelledby": "research-saved-heading" },
+        h("div", {},
+          h("h3", { id: "research-saved-heading" }, "Saved searches · this browser"),
+          h("p", { class: "fine muted" }, "Saving is optional and happens only when you press Save. Saved searches stay in this browser on this device; they are not uploaded to GenomeGuard. Do not save patient-identifying or sensitive information, and clear saved searches before sharing this device.")),
+        h("div", { class: "hero-actions" },
+          h("button", { id: "research-save-search", class: "btn secondary", type: "button", disabled: true }, "Save current search"),
+          h("button", { id: "research-clear-saved", class: "btn ghost", type: "button", hidden: true }, "Clear saved searches")),
+        h("div", { id: "research-saved-searches-list", role: "list", "aria-live": "polite" }))),
     renderOpenTargetsPanel(),
     renderClinVarPanel(),
     renderGwasPanel(),
@@ -146,6 +157,123 @@ export async function render() {
   const status = root.querySelector("#research-status");
   const results = root.querySelector("#research-results");
   const submitButton = form.querySelector('button[type="submit"]');
+  const saveSearchButton = root.querySelector("#research-save-search");
+  const clearSavedButton = root.querySelector("#research-clear-saved");
+  const savedSearchesList = root.querySelector("#research-saved-searches-list");
+  let currentSearch = null;
+  let savedSearches = readSavedSearches();
+
+  function readSavedSearches() {
+    try {
+      const raw = localStorage.getItem(SAVED_SEARCHES_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((item) => item && typeof item.id === "string"
+        && typeof item.question === "string" && item.question.length <= 500
+        && typeof item.department === "string"
+        && (!item.department || DEPARTMENTS.some(([, slug]) => slug === item.department))
+        && VALID_SOURCES.has(item.source)).slice(0, MAX_SAVED_SEARCHES);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeSavedSearches(next) {
+    try {
+      localStorage.setItem(SAVED_SEARCHES_KEY, JSON.stringify(next));
+      savedSearches = next;
+      return true;
+    } catch {
+      status.textContent = "Browser storage is unavailable or full. The search was not saved.";
+      return false;
+    }
+  }
+
+  function renderSavedSearches() {
+    savedSearchesList.replaceChildren();
+    saveSearchButton.disabled = !currentSearch || savedSearches === null;
+    if (savedSearches === null) {
+      savedSearchesList.append(h("p", { class: "fine muted" },
+        "Saved searches are unavailable because this browser blocks local storage."));
+      clearSavedButton.hidden = true;
+      return;
+    }
+    if (!savedSearches.length) {
+      savedSearchesList.append(h("p", { class: "fine muted" }, "No searches saved on this device."));
+      clearSavedButton.hidden = true;
+      return;
+    }
+    clearSavedButton.hidden = false;
+    for (const item of savedSearches) {
+      const departmentLabel = DEPARTMENTS.find(([, slug]) => slug === item.department)?.[0]
+        || "All biomedical fields";
+      const sourceLabel = item.source === "both" ? "Europe PMC + PubMed"
+        : item.source === "pubmed" ? "PubMed" : "Europe PMC";
+      const row = h("div", { class: "research-saved-row", role: "listitem" },
+        h("div", { class: "research-saved-copy" },
+          h("strong", {}, item.question || departmentLabel),
+          h("span", { class: "fine muted" }, departmentLabel + " · " + sourceLabel)),
+        h("div", { class: "hero-actions" },
+          h("button", {
+            class: "btn secondary", type: "button", "data-action": "run",
+            "aria-label": "Run saved search",
+          }, "Run"),
+          h("button", {
+            class: "btn ghost", type: "button", "data-action": "remove",
+            "aria-label": "Remove saved search",
+          }, "Remove")));
+      row.querySelector('[data-action="run"]').addEventListener("click", () => {
+        question.value = item.question;
+        department.value = item.department;
+        sourceFilter.value = item.source;
+        search();
+      });
+      row.querySelector('[data-action="remove"]').addEventListener("click", () => {
+        const next = savedSearches.filter((saved) => saved.id !== item.id);
+        if (writeSavedSearches(next)) {
+          status.textContent = "Saved search removed from this browser.";
+          renderSavedSearches();
+        }
+      });
+      savedSearchesList.append(row);
+    }
+  }
+
+  function saveCurrentSearch() {
+    if (!currentSearch || savedSearches === null) return;
+    const duplicate = savedSearches.some((item) => item.question === currentSearch.question
+      && item.department === currentSearch.department && item.source === currentSearch.source);
+    if (duplicate) {
+      status.textContent = "This search is already saved in this browser.";
+      return;
+    }
+    const item = {
+      id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+      question: currentSearch.question,
+      department: currentSearch.department,
+      source: currentSearch.source,
+      createdAt: new Date().toISOString(),
+    };
+    const next = [item, ...savedSearches].slice(0, MAX_SAVED_SEARCHES);
+    if (writeSavedSearches(next)) {
+      status.textContent = "Search saved in this browser only. Avoid saving identifying or sensitive information.";
+      renderSavedSearches();
+    }
+  }
+
+  clearSavedButton.addEventListener("click", () => {
+    try {
+      localStorage.removeItem(SAVED_SEARCHES_KEY);
+      savedSearches = [];
+      status.textContent = "All saved searches were cleared from this browser.";
+      renderSavedSearches();
+    } catch {
+      status.textContent = "Saved searches could not be cleared because browser storage is unavailable.";
+    }
+  });
+  saveSearchButton.addEventListener("click", saveCurrentSearch);
+  renderSavedSearches();
   let activeController = null;
   let activeQuery = "";
   let nextCursors = { europe: "*", pubmed: 0 };
@@ -341,6 +469,12 @@ export async function render() {
       return;
     }
     const generation = ++requestGeneration;
+    currentSearch = {
+      question: text,
+      department: department.value,
+      source: sourceFilter.value,
+    };
+    renderSavedSearches();
     activeQuery = query;
     nextCursors = { europe: "*", pubmed: 0 };
     providerHasMore = { europe: false, pubmed: false };
