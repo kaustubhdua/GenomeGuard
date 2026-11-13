@@ -29,6 +29,7 @@ def main() -> int:
     open_targets_requests: list[dict[str, object]] = []
     clinvar_requests: list[dict[str, object]] = []
     gwas_requests: list[dict[str, object]] = []
+    ontology_requests: list[dict[str, object]] = []
     provider_outages = {"europe": False, "pubmed": False}
 
     def check(label: str, ok: bool, detail: str = "") -> None:
@@ -327,6 +328,46 @@ def main() -> int:
         }
         route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
+    def handle_ontology(route) -> None:
+        payload = json.loads(route.request.post_data or "{}")
+        ontology_requests.append(payload)
+        page_number = int(payload.get("page", 0))
+        terms = [
+            {
+                "label": "Ataxia" if page_number == 0 else "Gait ataxia",
+                "iri": "http://purl.obolibrary.org/obo/HP_0001251" if page_number == 0
+                    else "http://purl.obolibrary.org/obo/HP_0002066",
+                "obo_id": "HP:0001251" if page_number == 0 else "HP:0002066",
+                "ontology": "hp", "ontology_prefix": "HP",
+                "description": "A coordination abnormality." if page_number == 0
+                    else "An abnormal gait pattern.",
+                "synonyms": ["coordination abnormality"] if page_number == 0 else [],
+                "is_obsolete": False,
+                "source_url": "https://www.ebi.ac.uk/ols4/",
+            },
+            *([{
+                "label": "Cerebellar ataxia",
+                "iri": "http://purl.obolibrary.org/obo/HP_0001251",
+                "obo_id": "HP:0001251",
+                "ontology": "hp", "ontology_prefix": "HP",
+                "description": "A source fixture term.",
+                "synonyms": [], "is_obsolete": False,
+                "source_url": "https://www.ebi.ac.uk/ols4/",
+            }] if page_number == 0 else []),
+        ]
+        body = {
+            "provider": "EMBL-EBI Ontology Lookup Service",
+            "provider_url": "https://www.ebi.ac.uk/ols4/",
+            "query": payload.get("query"),
+            "ontology_filter": payload.get("ontology", "all"),
+            "page": page_number, "size": 10,
+            "total": 3, "returned": len(terms), "has_more": page_number == 0,
+            "terms": terms,
+            "retrieved_at": "2026-11-13T10:00:00Z",
+            "interpretation": "candidate annotations only",
+        }
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         page = browser.new_page(viewport={"width": 1280, "height": 900})
@@ -336,6 +377,7 @@ def main() -> int:
         page.route("**/research/open-targets/target", handle_open_targets)
         page.route("**/research/clinvar/search", handle_clinvar)
         page.route("**/research/gwas/search", handle_gwas)
+        page.route("**/research/ontology/search", handle_ontology)
         page.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Research discovery").wait_for()
         page.get_by_role("link", name="Oncology Browse publications →").click()
@@ -530,6 +572,28 @@ def main() -> int:
               and gwas_requests[-1].get("trait") == "breast cancer"
               and gwas_requests[-1].get("show_child_traits") is True)
 
+        page.get_by_label("Disease or phenotype term").fill("ataxia")
+        page.get_by_label("Ontology", exact=True).select_option("hp")
+        page.get_by_role("button", name="Search ontology terms").click()
+        page.locator("#ontology-results .ontology-term").first.wait_for()
+        check("OLS4 ontology search sends explicit query and ontology filter",
+              len(ontology_requests) == 1
+              and ontology_requests[0].get("query") == "ataxia"
+              and ontology_requests[0].get("ontology") == "hp")
+        ontology_link = page.locator("#ontology-results a").first
+        check("OLS4 ontology result links open the official source safely",
+              ontology_link.get_attribute("href", timeout=args.timeout).startswith(
+                  "https://www.ebi.ac.uk/ols4/ontologies/hp/"
+              )
+              and ontology_link.get_attribute("rel") == "noopener noreferrer")
+        page.get_by_role("button", name="Load more terms").click()
+        page.wait_for_function(
+            "document.querySelectorAll('#ontology-results .ontology-term').length === 3"
+        )
+        check("OLS4 ontology pagination appends source terms",
+              len(ontology_requests) == 2 and ontology_requests[1].get("page") == 1
+              and page.locator("#ontology-results .ontology-term").count() == 3)
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
@@ -541,6 +605,7 @@ def main() -> int:
         mobile.route("**/research/open-targets/target", handle_open_targets)
         mobile.route("**/research/clinvar/search", handle_clinvar)
         mobile.route("**/research/gwas/search", handle_gwas)
+        mobile.route("**/research/ontology/search", handle_ontology)
         mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
         mobile.get_by_role("heading", name="Research discovery").wait_for()
         no_horizontal_overflow = mobile.evaluate(
@@ -565,6 +630,12 @@ def main() -> int:
         mobile.get_by_role("button", name="Search GWAS Catalog").click()
         mobile.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
         check("mobile GWAS evidence has no horizontal overflow at 375px",
+              mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
+        mobile.get_by_label("Disease or phenotype term").fill("ataxia")
+        mobile.get_by_label("Ontology", exact=True).select_option("hp")
+        mobile.get_by_role("button", name="Search ontology terms").click()
+        mobile.locator("#ontology-results .ontology-term").first.wait_for()
+        check("mobile ontology results have no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
         browser.close()
