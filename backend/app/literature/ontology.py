@@ -84,7 +84,13 @@ def _first_text(value: object) -> str | None:
 
 
 def _normalize_doc(doc: dict) -> dict:
-    ontology = str(doc.get("ontology_name") or doc.get("ontology_prefix") or "").lower()
+    raw_ontology = str(doc.get("ontology_prefix") or doc.get("ontology_name") or "").strip().lower()
+    aliases = {
+        "mondo": "mondo", "hp": "hp", "doid": "doid",
+        "human phenotype ontology": "hp", "disease ontology": "doid",
+        "mondo disease ontology": "mondo",
+    }
+    ontology = aliases.get(raw_ontology, raw_ontology)
     if ontology not in ALLOWED_ONTOLOGIES:
         raise OntologyProviderError("OLS4 returned a term outside the requested ontology set")
     iri = doc.get("iri")
@@ -106,7 +112,7 @@ def _normalize_doc(doc: dict) -> dict:
         "ontology_prefix": str(doc.get("ontology_prefix") or ontology).upper(),
         "description": _first_text(doc.get("description")),
         "synonyms": [item.strip() for item in synonyms if isinstance(item, str) and item.strip()][:10],
-        "is_obsolete": bool(doc.get("is_obsolete", False)),
+        "is_obsolete": doc.get("is_obsolete") is True or str(doc.get("is_obsolete", "")).lower() == "true",
         "source_url": SOURCE_URL,
     }
 
