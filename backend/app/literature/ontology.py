@@ -24,6 +24,8 @@ MAX_PAGE_SIZE = 20
 MAX_OFFSET = 1000
 MAX_RESPONSE_BYTES = 1_000_000
 TIMEOUT_SECONDS = 12
+MAX_RETRIES = 2
+RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
 MIN_INTERVAL_SECONDS = 0.25
 QUERY_RE = re.compile(r"^[^\x00-\x1f\x7f]+$")
 
@@ -57,27 +59,51 @@ def validate_search(query: str, *, ontology: str = "all", page: int = 0, size: i
         raise ValueError(f"size must be between 1 and {MAX_PAGE_SIZE}")
 
 
+def _retry_delay(exc: HTTPError | None, attempt: int) -> float:
+    retry_after = exc.headers.get("Retry-After") if exc is not None and exc.headers else None
+    if retry_after:
+        try:
+            return min(5.0, max(0.0, float(retry_after)))
+        except ValueError:
+            pass
+    return min(3.0, 0.5 * (2 ** attempt))
+
+
 def _fetch_json(params: dict[str, str]) -> dict:
     request = Request(
         ENDPOINT + "?" + urlencode(params),
         headers={"Accept": "application/json", "User-Agent": "GenomeGuard/0.1 (OLS4 ontology discovery)"},
         method="GET",
     )
-    _wait_for_rate_slot()
-    try:
-        with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            if response.status != 200:
-                raise OntologyProviderError(f"OLS4 returned HTTP {response.status}")
-            content_type = response.headers.get("Content-Type", "")
-            if "json" not in content_type.lower():
-                raise OntologyProviderError("OLS4 returned a non-JSON response")
-            raw = response.read(MAX_RESPONSE_BYTES + 1)
-            if len(raw) > MAX_RESPONSE_BYTES:
-                raise OntologyProviderError("OLS4 response exceeded the 1 MB limit")
-    except HTTPError as exc:
-        raise OntologyProviderError(f"OLS4 returned HTTP {exc.code}") from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise OntologyProviderError("OLS4 is temporarily unavailable") from exc
+    raw = b""
+    for attempt in range(MAX_RETRIES + 1):
+        _wait_for_rate_slot()
+        try:
+            with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                if response.status != 200:
+                    if response.status in RETRYABLE_HTTP_STATUS and attempt < MAX_RETRIES:
+                        time.sleep(_retry_delay(None, attempt))
+                        continue
+                    raise OntologyProviderError(f"OLS4 returned HTTP {response.status}")
+                content_type = response.headers.get("Content-Type", "")
+                if "json" not in content_type.lower():
+                    raise OntologyProviderError("OLS4 returned a non-JSON response")
+                raw = response.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    raise OntologyProviderError("OLS4 response exceeded the 1 MB limit")
+            break
+        except HTTPError as exc:
+            if exc.code in RETRYABLE_HTTP_STATUS and attempt < MAX_RETRIES:
+                time.sleep(_retry_delay(exc, attempt))
+                continue
+            raise OntologyProviderError(f"OLS4 returned HTTP {exc.code}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            if attempt < MAX_RETRIES:
+                time.sleep(_retry_delay(None, attempt))
+                continue
+            raise OntologyProviderError("OLS4 is temporarily unavailable after bounded retries") from exc
+    else:
+        raise OntologyProviderError("OLS4 is temporarily unavailable after bounded retries")
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
