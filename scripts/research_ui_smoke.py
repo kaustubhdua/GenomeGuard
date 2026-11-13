@@ -648,6 +648,19 @@ def main() -> int:
         check("mobile ontology results have no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
+        degraded = browser.new_page(viewport={"width": 1280, "height": 900})
+        degraded.set_default_timeout(args.timeout)
+        degraded.route("**/health", lambda route: route.abort())
+        degraded.route("**/health/ready", lambda route: route.abort())
+        degraded.goto(args.base.rstrip("/") + "/#/overview", wait_until="domcontentloaded")
+        degraded.get_by_text("Synthetic guest preview", exact=False).wait_for()
+        provenance_text = degraded.locator("#prov").inner_text()
+        check("synthetic demo boot recovers when health metadata endpoints are unreachable",
+              "Synthetic demo cohort" in provenance_text
+              and "consent provenance metadata temporarily unavailable" in provenance_text.lower()
+              and degraded.locator("#who").is_visible())
+        degraded.close()
+
         browser.close()
 
     print("\n" + ("RESEARCH UI SMOKE PASSED" if not failures else f"RESEARCH UI SMOKE FAILED ({len(failures)} checks)"))
