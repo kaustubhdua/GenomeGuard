@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -23,10 +24,20 @@ MAX_PAGE_SIZE = 20
 MAX_OFFSET = 1000
 MAX_RESPONSE_BYTES = 1_000_000
 TIMEOUT_SECONDS = 12
+MIN_INTERVAL_SECONDS = 0.25
 QUERY_RE = re.compile(r"^[^\x00-\x1f\x7f]+$")
 
 _rate_lock = threading.Lock()
 _last_request_started = 0.0
+
+
+def _wait_for_rate_slot() -> None:
+    global _last_request_started
+    with _rate_lock:
+        delay = MIN_INTERVAL_SECONDS - (time.monotonic() - _last_request_started)
+        if delay > 0:
+            time.sleep(delay)
+        _last_request_started = time.monotonic()
 
 
 class OntologyProviderError(RuntimeError):
@@ -52,6 +63,7 @@ def _fetch_json(params: dict[str, str]) -> dict:
         headers={"Accept": "application/json", "User-Agent": "GenomeGuard/0.1 (OLS4 ontology discovery)"},
         method="GET",
     )
+    _wait_for_rate_slot()
     try:
         with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             if response.status != 200:
