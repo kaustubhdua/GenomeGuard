@@ -15,6 +15,7 @@ import re
 import secrets
 import tempfile
 import threading
+import time
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -41,6 +42,7 @@ EVAL_JSON = Path(os.environ.get("GG_EVAL_JSON")
 # (method, path, summary, who): drives both routing documentation and /docs
 ROUTES_DOC: list[tuple[str, str, str, str]] = []
 _PUBMED_SEARCH_SLOTS = threading.BoundedSemaphore(2)
+_DEMO_SESSION_TTL_SECONDS = 1800
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
@@ -138,6 +140,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     settings = get_settings()
     validate_settings(settings)
     state = {"svc": svc}
+    demo_sessions: dict[str, dict] = {}
+    demo_donor_sessions: dict[str, dict] = {}
+    demo_session_lock = threading.RLock()
 
     def S() -> GenomeGuardService:
         if state["svc"] is None:
@@ -177,6 +182,25 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             if r.get("role") != "researcher":
                 raise ServiceError(403, "role_not_allowed",
                                    "this identity is not provisioned for researcher access")
+            request.state.authenticated_requester = r
+            return r
+        demo_token = request.headers.get("x-demo-session")
+        if settings.demo_mode and demo_token:
+            with demo_session_lock:
+                session = demo_sessions.get(demo_token)
+                if session and session["expires_at"] <= time.time():
+                    demo_sessions.pop(demo_token, None)
+                    session = None
+            if not session:
+                raise ServiceError(401, "demo_session_expired", "demo session is invalid or expired")
+            with S().store.transaction():
+                set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
+                if set_demo is not None:
+                    set_demo()
+                r = S().authenticate(session["api_key"])
+            if not r or r.get("id") != session["requester_id"]:
+                raise ServiceError(401, "demo_session_invalid", "demo session is no longer valid")
+            r = {**r, "_allow_unscoped_demo": True}
             request.state.authenticated_requester = r
             return r
         if settings.oidc_required:
@@ -455,7 +479,7 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
                        "privacy, and governance review remains required."
                    )}, 200 if ready else 503)
 
-    @route("GET", "/demo/requesters", "Demo accounts and keys (demo mode only)", "public")
+    @route("GET", "/demo/requesters", "Synthetic demo personas (no credentials)", "public")
     async def demo_requesters(request):
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "demo mode is off")
@@ -463,16 +487,59 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
             set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
             if set_demo is not None:
                 set_demo()
-            reqs = {r["name"]: r for r in S().store.requesters()}
+            reqs = S().store.requesters()
         payload = {"requesters": [
-            {"id": reqs[n]["id"], "name": n, "role": ro, "tier": lv, "api_key": k,
-             "frozen": reqs[n]["frozen_at"] is not None}
-            for n, ro, lv, _i, k in DEMO_REQUESTERS if n in reqs]}
-        # This is a public endpoint. Never return the hosted administrator credential.
-        # Local interactive demos may explicitly opt in to the local-only workflow.
-        if settings.expose_demo_admin_key:
-            payload["admin_key"] = settings.admin_api_key
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "role": next((ro for n, ro, _tier, _institution, _key in DEMO_REQUESTERS if n == r["name"]), "researcher"),
+                "tier": next((tier for n, _ro, tier, _institution, _key in DEMO_REQUESTERS if n == r["name"]), "anonymous"),
+                "frozen": r["frozen_at"] is not None,
+            }
+            for r in reqs if any(n == r["name"] for n, _ro, _tier, _institution, _key in DEMO_REQUESTERS)
+        ]}
+        # Public persona discovery never returns requester or administrator credentials.
         return _j(payload)
+
+    @route("POST", "/demo/session", "Issue a short-lived, in-memory synthetic demo requester session", "public")
+    async def demo_session(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "demo mode is off")
+        data = await _body(request)
+        requester_id = data.get("requester_id")
+        if isinstance(requester_id, bool) or not isinstance(requester_id, int) or requester_id < 1:
+            raise ServiceError(400, "invalid_demo_requester", "requester_id must be a positive integer")
+        with S().store.transaction():
+            set_demo = getattr(S().store, "set_allow_unscoped_demo", None)
+            if set_demo is not None:
+                set_demo()
+            record = next((r for r in S().store.requesters() if r["id"] == requester_id), None)
+            if not record:
+                raise ServiceError(404, "demo_requester_not_found", "demo requester was not found")
+            persona = next((p for p in DEMO_REQUESTERS if p[0] == record["name"]), None)
+            if not persona:
+                raise ServiceError(404, "demo_requester_not_found", "demo requester was not found")
+            authenticated = S().authenticate(persona[4])
+        if not authenticated or authenticated.get("id") != requester_id:
+            raise ServiceError(404, "demo_requester_not_found", "demo requester was not found")
+        token = secrets.token_urlsafe(32)
+        expires_at = time.time() + _DEMO_SESSION_TTL_SECONDS
+        with demo_session_lock:
+            demo_sessions[token] = {
+                "requester_id": requester_id,
+                "api_key": persona[4],
+                "expires_at": expires_at,
+            }
+        return _j({
+            "session_token": token,
+            "expires_in": _DEMO_SESSION_TTL_SECONDS,
+            "requester": {
+                "id": requester_id,
+                "name": persona[0],
+                "role": persona[1],
+                "tier": persona[2],
+            },
+        })
 
     @route("GET", "/auth/oidc", "Institutional OIDC API configuration (no secrets)", "public")
     async def oidc_configuration(request):
@@ -1165,15 +1232,49 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "participant identity integration is not configured")
         did = request.path_params["id"]
+        demo_token = request.headers.get("x-demo-donor-session")
+        if demo_token:
+            with demo_session_lock:
+                session = demo_donor_sessions.get(demo_token)
+                if session and session["expires_at"] <= time.time():
+                    demo_donor_sessions.pop(demo_token, None)
+                    session = None
+            if not session or session["donor_id"] != did:
+                raise ServiceError(401, "demo_donor_session_invalid", "demo donor session is invalid or expired")
+            return did
         if not S().donor_authenticated(did, request.headers.get("x-donor-key")):
             raise ServiceError(401, "unauthorized", "donor key required (X-Donor-Key)")
         return did
 
-    @route("GET", "/demo/donors", "Demo donor personas and keys (demo mode only)", "public")
+    @route("GET", "/demo/donors", "Synthetic donor personas (no credentials)", "public")
     async def demo_donors(request):
         if not settings.demo_mode:
             raise ServiceError(404, "not_found", "demo mode is off")
-        return _j({"donors": S().demo_donors()})
+        return _j({"donors": [
+            {"id": donor["id"], "label": donor["label"]}
+            for donor in S().demo_donors()
+        ]})
+
+    @route("POST", "/demo/donor-session", "Issue a short-lived synthetic demo donor session", "public")
+    async def demo_donor_session(request):
+        if not settings.demo_mode:
+            raise ServiceError(404, "not_found", "demo mode is off")
+        data = await _body(request)
+        donor_id = data.get("donor_id")
+        if isinstance(donor_id, bool) or not isinstance(donor_id, int) or donor_id < 1:
+            raise ServiceError(400, "invalid_demo_donor", "donor_id must be a positive integer")
+        donor = next((item for item in S().demo_donors() if item["id"] == donor_id), None)
+        if not donor:
+            raise ServiceError(404, "demo_donor_not_found", "demo donor was not found")
+        token = secrets.token_urlsafe(32)
+        expires_at = time.time() + _DEMO_SESSION_TTL_SECONDS
+        with demo_session_lock:
+            demo_donor_sessions[token] = {"donor_id": donor_id, "expires_at": expires_at}
+        return _j({
+            "session_token": token,
+            "expires_in": _DEMO_SESSION_TTL_SECONDS,
+            "donor": {"id": donor_id, "label": donor["label"]},
+        })
 
     @route("GET", "/donor/{id:int}", "A donor's own consent, status and who used their data",
            "donor")
