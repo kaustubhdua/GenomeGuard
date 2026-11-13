@@ -1172,9 +1172,13 @@ class GenomeGuardService:
         clean = self._validate({"purpose": purpose, "disease": disease, "is_commercial": commercial,
                                 "data_level": level, "cohort_filter": cohort_filter})
         pop = clean["cohort_filter"].get("population")
-        creq = ConsentRequest(purpose, clean["disease"], None, level,
-                              pop if isinstance(pop, str) else None, clean["cohort_filter"],
-                              demo_mode=self.demo_mode)
+        creq = ConsentRequest(
+            purpose, clean["disease"],
+            clean["is_commercial"] if self.demo_mode else None,
+            level, pop if isinstance(pop, str) else None, clean["cohort_filter"],
+            organization_is_nonprofit=True if self.demo_mode else None,
+            demo_mode=self.demo_mode,
+        )
         return eligible_cohort(creq, self.ds.donors).counts_only()
 
     def anomalies(self) -> dict:
