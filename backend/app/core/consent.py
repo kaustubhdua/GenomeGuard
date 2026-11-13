@@ -46,11 +46,11 @@ DUO_REFERENCE: dict[str, dict[str, str | None]] = {
     "NPOA": {"id": "DUO:0000044", "meaning": "Population origins or ancestry research prohibited"},
     "NAGR": {
         "id": None,
-        "meaning": "GenomeGuard local policy extension: no aggregate-level general research; not a DUO term",
+        "meaning": "No aggregate-level general research (project-specific rule)",
     },
     "NCTRL": {
         "id": None,
-        "meaning": "GenomeGuard local policy extension: no use as a control set; not a DUO term",
+        "meaning": "No use as a control set",
     },
 }
 
