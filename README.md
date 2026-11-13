@@ -21,6 +21,7 @@ GenomeGuard is a research prototype for governing access to genomic datasets. It
 - **Auditability:** records decisions and events in a hash-chained audit log with verification tooling.
 - **Interoperability experiments:** includes a Beacon v2-style endpoint and export of synthetic FHIR R4 Consent resources for validation.
 - **Research evaluation:** includes repeatable synthetic-data evaluations and optional workflows for public 1000 Genomes genotype data.
+- **Research discovery:** searches live Europe PMC publication records by research question or department, with source-linked abstracts and clear non-clinical boundaries.
 
 ## Current scope
 
@@ -94,6 +95,7 @@ For the curated public-source discovery index and its release-specific reuse-rev
 
 The service applies a deterministic request pipeline: request validation, policy checks, risk assessment, output transformation, anomaly monitoring, decision handling, and audit recording. Advisory agents receive sanitized summaries rather than raw genotypes and do not have authority to approve, deny, freeze, or release data.
 
+- [Research discovery and literature-search boundaries](docs/research-discovery.md)
 - [Architecture](docs/architecture.md)
 - [API reference](docs/api.md)
 - [Configuration](docs/configuration.md)
