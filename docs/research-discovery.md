@@ -132,3 +132,18 @@ Verification:
 - `backend/tests/test_ensembl_api.py` covers API validation, not-found/provider errors, concurrency limits, no-store headers and OpenAPI documentation.
 - `scripts/ensembl_provider_smoke.py` checks the live public BRCA2 record and stable Ensembl identifier.
 - `scripts/research_ui_smoke.py` intercepts Ensembl with deterministic source-shaped fixtures and verifies symbol resolution and transfer into the Open Targets gene-ID field on desktop and mobile.
+
+## UniProtKB reviewed protein discovery
+
+The Research Discovery workspace includes a server-side UniProtKB search for exact human gene symbols. The adapter queries reviewed UniProtKB (Swiss-Prot) records by `gene_exact` and human taxonomy ID 9606, and returns stable accessions, entry names, gene aliases, protein names, organism, amino-acid length, source-provided function text, Ensembl cross-references, UniProt release metadata and retrieval time. It deliberately does not return amino-acid sequences.
+
+The endpoint is `POST /research/uniprot/search`. Input symbols and result counts are bounded; the provider origin is fixed; response size, timeout, request pacing and concurrent calls are bounded; errors are sanitized; and responses are marked `Cache-Control: no-store`. An empty result set is a valid no-match response, not a provider error.
+
+The UI can transfer a source-provided Ensembl gene cross-reference into the existing Open Targets panel. The user must explicitly launch that separate association query.
+
+**Scientific boundary:** reviewed protein annotations describe protein identity and curated function. They do not establish variant pathogenicity, disease causality, clinical diagnosis or treatment. UniProt release metadata and accession links are shown for reproducibility.
+
+Verification:
+- `backend/tests/test_uniprot.py` covers exact query construction, reviewed-human filters, response normalization, source release, empty results, malformed payloads and size limits.
+- `backend/tests/test_uniprot_api.py` covers validation, no-store responses, safe provider errors, concurrency bounds and OpenAPI documentation.
+- The CI live provider smoke checks the public BRCA2 reviewed record; browser acceptance covers result rendering and the Ensembl/Open Targets hand-off.
