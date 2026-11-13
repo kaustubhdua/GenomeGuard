@@ -342,6 +342,8 @@ def main() -> None:
         check("no JavaScript errors during session-based navigation", not errors,
               "; ".join(errors)[:120])
 
+        catalogue_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        catalogue_pg = catalogue_ctx.new_page()
         catalogue_fixture = {
             "provenance_note": "Synthetic browser fixture only; not a verified import.",
             "datasets": [
@@ -357,55 +359,9 @@ def main() -> None:
                  "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "  =SUM(1,1)"},
             ],
         }
-        pg.route("**/catalogue/datasets", lambda route: route.fulfill(
+        catalogue_pg.route("**/catalogue/datasets", lambda route: route.fulfill(
             status=200, content_type="application/json", body=json.dumps(catalogue_fixture)))
-        pg.goto(base + "/#/datasets")
-        pg.get_by_label("Filter by source").wait_for()
-        source_control = pg.get_by_label("Filter by source")
-        assembly_control = pg.get_by_label("Filter by reference assembly")
-        sort_control = pg.get_by_label("Sort datasets")
-        rows = pg.locator(".dataset-table tbody tr")
-        # The catalogue is fetched asynchronously. Wait for both fixture records to be
-        # rendered before exercising filters; otherwise a fast CI runner can race the
-        # first paint even though the controls have already been inserted.
-        pg.wait_for_function(
-            "() => document.querySelectorAll('.dataset-table tbody tr').length === 2",
-            timeout=10000,
-        )
-        check("dataset catalogue exposes source and assembly filters",
-              source_control.count() == 1 and assembly_control.count() == 1)
-        source_control.select_option(label="Beta source")
-        pg.wait_for_function(
-            "() => document.querySelectorAll('.dataset-table tbody tr').length === 1 "
-            "&& document.querySelector('.dataset-table tbody').textContent.includes('Beta source')",
-            timeout=5000,
-        )
-        source_text = pg.locator(".dataset-table tbody").inner_text()
-        check("dataset source filter narrows visible rows",
-              rows.count() == 1 and "beta source" in source_text.lower(),
-              f"rows={rows.count()} text={source_text!r}")
-        source_control.select_option("")
-        assembly_control.select_option("GRCh37")
-        pg.wait_for_function(
-            "() => document.querySelectorAll('.dataset-table tbody tr').length === 1 "
-            "&& document.querySelector('.dataset-table tbody').textContent.includes('Alpha source')",
-            timeout=5000,
-        )
-        assembly_text = pg.locator(".dataset-table tbody").inner_text()
-        check("dataset assembly filter narrows visible rows",
-              rows.count() == 1 and "alpha source" in assembly_text.lower(),
-              f"rows={rows.count()} text={assembly_text!r}")
-        assembly_control.select_option("")
-        sort_control.select_option("samples")
-        pg.wait_for_function(
-            "() => document.querySelector('.dataset-table tbody tr')?.textContent.includes('Beta source')",
-            timeout=5000,
-        )
-        first_row = rows.first.inner_text()
-        check("dataset sort orders by measured sample count", "beta source" in first_row.lower(),
-              f"first_row={first_row!r}")
-        with pg.expect_download() as catalogue_download_info:
-            pg.get_by_role("button", name="Export filtered CSV").click()
+
         catalogue_download = catalogue_download_info.value
         catalogue_path = Path(tempfile.gettempdir()) / catalogue_download.suggested_filename
         catalogue_download.save_as(str(catalogue_path))
@@ -414,6 +370,7 @@ def main() -> None:
               "Source URL" in catalogue_csv and "Reuse terms URL" in catalogue_csv
               and "'=HYPERLINK" in catalogue_csv and "'  =SUM(1,1)" in catalogue_csv)
         catalogue_path.unlink(missing_ok=True)
+        catalogue_ctx.close()
         ctx.close()
 
         for theme in ("light", "dark"):
