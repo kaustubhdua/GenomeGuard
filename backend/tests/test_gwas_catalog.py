@@ -29,14 +29,18 @@ def association_payload():
         "_embedded": {
             "associations": [{
                 "association_id": 218086295,
-                "risk_frequency": "NR",
+                "risk_frequency": "0.319254",
                 "pvalue_description": "",
                 "pvalue_mantissa": 2,
                 "pvalue_exponent": -24,
                 "multi_snp_haplotype": False,
                 "snp_interaction": False,
-                "range": "-",
+                "range": "[1.04-1.07]",
                 "beta": "-",
+                "or_per_copy_num": 1.05,
+                "or_value": "1.05",
+                "ci_lower": 1.04,
+                "ci_upper": 1.07,
                 "p_value": 2.0e-24,
                 "efo_traits": [{"efo_id": "EFO_0004503", "efo_trait": "hematological measurement"}],
                 "reported_trait": ["Hematological traits (multi-trait analysis)"],
@@ -98,6 +102,10 @@ def test_gwas_v2_search_preserves_release_effect_and_source_provenance(monkeypat
     assert record["pvalue_mantissa"] == 2 and record["pvalue_exponent"] == -24
     assert record["mapped_genes"] == ["BRCA1"]
     assert record["snp_alleles"][0]["rs_id"] == "rs10445316"
+    assert record["odds_ratio"] == 1.05
+    assert record["odds_ratio_text"] == "1.05"
+    assert record["confidence_interval"]["lower"] == 1.04
+    assert record["confidence_interval"]["upper"] == 1.07
     assert record["source_url"].endswith("/associations/218086295")
     assert record["study_url"].endswith("/GCST90838669")
 
