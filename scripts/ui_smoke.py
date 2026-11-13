@@ -309,28 +309,38 @@ def main() -> None:
         nav_ctx.close()
 
 
-        print("\n1. Safe researcher-facing guided tour")
+        print("\n1. Short-lived requester session and navigation")
         ctx = browser.new_context(viewport={"width": 1280, "height": 900})
         pg = ctx.new_page()
         errors: list[str] = []
         pg.on("pageerror", lambda e: errors.append(str(e)))
+        issued_sessions: list[int] = []
+        pg.on("response", lambda response: issued_sessions.append(response.status)
+              if response.url.rstrip("/").endswith("/demo/session") else None)
         pg.goto(base + "/#/overview", wait_until="domcontentloaded")
         pg.wait_for_selector("#view h1", timeout=15000)
         pg.locator("#who").wait_for(state="visible", timeout=30000)
-        tour_button = pg.get_by_role("button", name="Guided walkthrough")
-        tour_button.wait_for(state="visible", timeout=30000)
-        tour_button.click()
-        expected_routes = ["#/overview", "#/research", "#/datasets", "#/requests", "#/donor"]
-        for step, expected in enumerate(expected_routes):
-            pg.wait_for_function("(hash) => location.hash === hash", arg=expected, timeout=15000)
-            check(f"guided tour step {step + 1} navigates to its page", pg.locator(".tour").count() == 1)
-            if step < len(expected_routes) - 1:
-                pg.locator(".tour-btns button", has_text="Next").click()
-        pg.locator(".tour-btns button", has_text="Finish").click()
-        check("guided tour closes", pg.locator(".tour").count() == 0)
-        check("guided tour does not change the active demo identity",
-              pg.locator("#who").input_value().isdigit())
-        check("no JavaScript errors during guided tour", not errors, "; ".join(errors)[:120])
+        pg.wait_for_function(
+            "() => document.querySelector('#who')?.value && document.querySelector('#who').value !== 'steward'",
+            timeout=30000,
+        )
+        options = pg.locator("#who option").evaluate_all(
+            "(items) => items.map(item => item.value).filter(Boolean)"
+        )
+        if len(options) > 1:
+            pg.locator("#who").select_option(options[1])
+            pg.wait_for_function(
+                "() => [...document.querySelectorAll('#nav .nav-label')].some("
+                "(label) => label.textContent === 'Research Requests')",
+                timeout=15000,
+            )
+        check("switching demo persona issues a short-lived session",
+              bool(issued_sessions) and issued_sessions[-1] == 200,
+              str(issued_sessions))
+        check("researcher session keeps steward-only navigation hidden",
+              "Steward Review" not in pg.locator("#nav .nav-label").all_text_contents())
+        check("no JavaScript errors during session-based navigation", not errors,
+              "; ".join(errors)[:120])
         ctx.close()
 
         for theme in ("light", "dark"):
