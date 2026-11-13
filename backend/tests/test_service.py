@@ -272,6 +272,7 @@ def test_signed_consent_event_produces_policy_compatible_participant_basis(monke
     import hashlib
     import hmac
     from datetime import UTC, datetime
+
     import app.consent_authority as authority
 
     svc = make_service()
