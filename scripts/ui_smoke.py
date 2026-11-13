@@ -426,7 +426,6 @@ def main() -> None:
             if menu_button.is_visible():
                 menu_button.click()
             pg.locator("#who").wait_for(state="visible", timeout=30000)
-            pg.locator("#who").select_option("steward")
             over = []
             for hsh in PAGES:
                 pg.goto(base + "/" + hsh)
