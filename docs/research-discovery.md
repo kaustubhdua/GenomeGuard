@@ -117,3 +117,19 @@ This is terminology-assisted literature retrieval, not a trained diagnostic mode
 
 The Research Discovery page provides direct, shareable hyperlinks for Genetics & Genomics, Oncology, Neurology, Cardiology, Immunology, Rare Diseases, Bioinformatics and Pharmacogenomics. Each link opens the publication search with that department selected and runs a live source-backed query scoped to its documented topic terms. The search remains editable so researchers can add a question or symptom, change sources, and inspect the exact resulting records. Department filters are broad discovery entry points, not formal taxonomies or exhaustive specialty coverage.
 
+
+
+## UniProtKB reviewed protein discovery
+
+The Research Discovery workspace includes a server-side UniProtKB search for exact human gene symbols. The adapter queries reviewed UniProtKB (Swiss-Prot) records by `gene_exact` and human taxonomy ID 9606, and returns stable accessions, entry names, gene aliases, protein names, organism, amino-acid length, source-provided function text, Ensembl cross-references, UniProt release metadata and retrieval time. It deliberately does not return amino-acid sequences.
+
+The endpoint is `POST /research/uniprot/search`. Input symbols and result counts are bounded; the provider origin is fixed; response size, timeout, request pacing and concurrent calls are bounded; errors are sanitized; and responses are marked `Cache-Control: no-store`. An empty result set is a valid no-match response, not a provider error.
+
+The UI can transfer a source-provided Ensembl gene cross-reference into the existing Open Targets panel. The user must explicitly launch that separate association query.
+
+**Scientific boundary:** reviewed protein annotations describe protein identity and curated function. They do not establish variant pathogenicity, disease causality, clinical diagnosis or treatment. UniProt release metadata and accession links are shown for reproducibility.
+
+Verification:
+- `backend/tests/test_uniprot.py` covers exact query construction, reviewed-human filters, response normalization, source release, empty results, malformed payloads and size limits.
+- `backend/tests/test_uniprot_api.py` covers validation, no-store responses, safe provider errors, concurrency bounds and OpenAPI documentation.
+- The CI live provider smoke checks the public BRCA2 reviewed record; browser acceptance covers result rendering and the Ensembl/Open Targets hand-off.
