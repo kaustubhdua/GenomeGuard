@@ -21,7 +21,7 @@ MAX_PAGE_SIZE = 50
 MAX_PAGE = 10_000
 MAX_RESPONSE_BYTES = 2_000_000
 REQUEST_TIMEOUT_SECONDS = 15
-MIN_REQUEST_INTERVAL_SECONDS = 1.0
+MIN_REQUEST_INTERVAL_SECONDS = 1.5
 METADATA_CACHE_SECONDS = 3600
 GENE_SYMBOL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9.-]{0,19}$")
 RS_ID_RE = re.compile(r"^rs[0-9]+$", re.IGNORECASE)
@@ -302,7 +302,7 @@ def search_gwas_catalog(
         or page_size != size or len(records) > size
     ):
         raise GwasCatalogProviderError("GWAS Catalog returned inconsistent pagination metadata")
-    if total_elements > 0 and not records:
+    if total_elements > 0 and page_number < total_pages and not records:
         raise GwasCatalogProviderError("GWAS Catalog returned an empty non-terminal page")
     normalized = [
         _normalize_association(record) for record in records if isinstance(record, dict)
