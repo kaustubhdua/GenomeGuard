@@ -513,7 +513,7 @@ def main() -> int:
 
         page.get_by_label("Trait / phenotype (optional)").fill("release drift test")
         page.get_by_role("button", name="Search GWAS Catalog").click()
-        page.get_by_text("2026-10-29", exact=False).wait_for()
+        page.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
         page.get_by_role("button", name="Load more GWAS associations").click()
         page.get_by_text("The GWAS Catalog release changed while loading this search", exact=False).wait_for()
         check("GWAS pagination refuses to combine records from different data releases",
@@ -524,7 +524,7 @@ def main() -> int:
         page.get_by_label("Trait / phenotype (optional)").fill("breast cancer")
         page.get_by_label("Include more specific child ontology traits").check()
         page.get_by_role("button", name="Search GWAS Catalog").click()
-        page.get_by_text("2026-10-29", exact=False).wait_for()
+        page.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
         check("GWAS Catalog trait search explicitly includes child ontology terms",
               len(gwas_requests) == 5
               and gwas_requests[-1].get("trait") == "breast cancer"
