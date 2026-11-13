@@ -34,3 +34,15 @@ def test_variant_search_uses_verified_public_catalogue_when_release_is_disabled(
         {"source": "verified-public-reference", "variant_id": "public-variant-1"}
     ]
     assert calls == [(chromosome, position, None, None)]
+
+def test_api_docs_escape_untrusted_provenance_labels():
+    service, client = make_client()
+    service.provenance["genotypes_label"] = '<img src=x onerror="alert(1)">'
+    service.provenance["consent_label"] = "<script>alert(1)</script>"
+
+    response = client.get("/docs")
+
+    assert response.status_code == 200
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in response.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
+    assert "<script>alert(1)</script>" not in response.text
