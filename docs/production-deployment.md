@@ -7,6 +7,7 @@ Last audited: 13 November 2026 (after merges of PRs #143 and #144).
 
 ### Public synthetic demo
 
+- Image contract: the public service's `Dockerfile` is synthetic-only and sets `GG_DEMO_MODE=true` with `GG_DATASET_ID=synthetic-cohort-1`; it must not download or embed a real cohort. `Dockerfile.staging` is also synthetic-only.
 - Public URL: https://genomeguard.onrender.com
 - Render service: srv-dbev1ka9lscs738813t0 — https://dashboard.render.com/web/srv-dbev1ka9lscs738813t0
 - Hosting: Render Free plan, Singapore region, Dockerfile ./Dockerfile; repository branch main; auto-deploy reports enabled.
@@ -18,6 +19,7 @@ Last audited: 13 November 2026 (after merges of PRs #143 and #144).
 
 ### Separate research-mode service
 
+- `Dockerfile.research` is the dedicated image that downloads/builds the public 1000 Genomes cohort. `render.yaml` explicitly selects `dockerfilePath: ./Dockerfile.research`; it must never use the public synthetic image.
 - render.yaml now describes a separate genomeguard-research service with demo mode disabled, real public-cohort provenance, OIDC, tenant isolation and consent-authority requirements.
 - That service is a blueprint only; it has not been provisioned or accepted. Do not apply it to the existing public synthetic demo service.
 - .github/workflows/live-research-mode-smoke.yml is manual-only and requires an explicit research-mode URL. It refuses the public synthetic-demo URL. Use it only after a separate research-mode service has been provisioned and its secrets and identity provider configured.
