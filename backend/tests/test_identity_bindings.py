@@ -4,7 +4,7 @@ from starlette.testclient import TestClient
 from app.api import create_app
 from app.config import Settings
 from app.identity import OIDCIdentity
-from app.service import hash_key
+from app.service import DEMO_REQUESTERS, hash_key
 from app.store import Store
 
 
@@ -69,7 +69,7 @@ def test_api_accepts_only_bound_oidc_subject_and_tenant(monkeypatch):
         ),
     )
     svc = bootstrap()
-    requester = svc.store.requester_by_key(hash_key("demo-researcher"))
+    requester = svc.store.requester_by_key(hash_key(DEMO_REQUESTERS[0][4]))
     svc.store.add_identity_binding(
         requester["id"], "https://id.example.edu", "researcher-sub", "org-a",
     )
