@@ -6,7 +6,7 @@ services:
     environment:
       GG_DEMO_MODE: "true"
       GG_ALLOW_TAMPER_DEMO: "true"          # lets the Audit page's tamper button work
-      GG_ADMIN_API_KEY: "${GG_ADMIN_API_KEY:-demo-admin-key}"
+      GG_ADMIN_API_KEY: "${GG_ADMIN_API_KEY:?Set a unique GG_ADMIN_API_KEY in your .env file}"
       GG_MASTER_KEY: "${GG_MASTER_KEY:-}"   # unset = insecure development key (warning logged)
     volumes: ["gg-data:/data"]
 volumes:
