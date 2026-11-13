@@ -18,7 +18,14 @@ def main() -> int:
         raise AssertionError("expected direct target-disease associations")
     if not target["provenance"]["api_version"] or not target["provenance"]["data_version"]:
         raise AssertionError("Open Targets API/data release metadata was missing")
-    first_disease = associations[0]["disease"]["id"]
+    # Association records may use MONDO or EFO identifiers; the provider's evidence
+    # query accepts EFO identifiers specifically. Prefer a returned EFO ID, with a
+    # stable public TP53/breast-carcinoma EFO fixture as a fallback.
+    first_disease = next(
+        (row["disease"]["id"] for row in associations
+         if row.get("disease", {}).get("id", "").startswith("EFO_")),
+        "EFO_0000311",
+    )
     evidence = search_target(
         "ENSG00000141510", disease_id=first_disease, page_index=0, page_size=5, evidence_size=5,
     )
