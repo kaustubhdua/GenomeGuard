@@ -30,6 +30,8 @@ from playwright.sync_api import sync_playwright
 PAGES = ["#/overview", "#/requests", "#/request/1", "#/family/1", "#/anomalies", "#/audit",
          "#/datasets", "#/chromosomes", "#/variants", "#/sources", "#/research", "#/dataset-qc",
          "#/donor", "#/redteam", "#/federated"]
+STEWARD_ONLY_PAGES = {"#/family/1", "#/anomalies", "#/audit", "#/dataset-qc"}
+PUBLIC_PAGES = [route for route in PAGES if route not in STEWARD_ONLY_PAGES]
 
 QC_VCF_HEADER = """##fileformat=VCFv4.2
 ##reference=GRCh38
@@ -341,7 +343,7 @@ def main() -> None:
             pg.goto(base + "/#/overview")
             pg.wait_for_selector("#view h1", timeout=15000)
             pg.locator("#who").wait_for(state="visible", timeout=30000)
-            for hsh in PAGES:
+            for hsh in PUBLIC_PAGES:
                 pg.goto(base + "/" + hsh)
                 try:  # pages render after their API calls; wait for the heading, not a fixed time
                     pg.wait_for_selector("#view h1", timeout=15000)
