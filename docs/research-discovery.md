@@ -146,7 +146,7 @@ The UI can transfer a source-provided Ensembl gene cross-reference into the exis
 Verification:
 - `backend/tests/test_uniprot.py` covers exact query construction, reviewed-human filters, response normalization, source release, empty results, malformed payloads and size limits.
 - `backend/tests/test_uniprot_api.py` covers validation, no-store responses, safe provider errors, concurrency bounds and OpenAPI documentation.
-- The CI live provider smoke checks the public BRCA2 reviewed record; browser acceptance covers result rendering and the Ensembl/Open Targets hand-off.
+- The explicit/manual live provider smoke checks the public BRCA2 reviewed record; browser acceptance covers result rendering and the Ensembl/Open Targets hand-off.
 
 
 ## Live-provider acceptance and pull-request CI
