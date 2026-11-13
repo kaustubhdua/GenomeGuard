@@ -7,7 +7,7 @@
 > - [#153](https://github.com/kaustubhdua/GenomeGuard/pull/153): this live-status, README, threat-model and deployment-documentation reconciliation.
 > - [#154](https://github.com/kaustubhdua/GenomeGuard/pull/154): require gnomAD TSV checksum to match the reviewed manifest before database writes.
 > - [#155](https://github.com/kaustubhdua/GenomeGuard/pull/155): signed-consent policy-basis, timestamp and event-ordering corrections.
-> - [#156](https://github.com/kaustubhdua/GenomeGuard/pull/156): official DUO identifiers and NPOA ancestry restriction across policy, import, FHIR and UI.
+> - [#156](https://github.com/kaustubhdua/GenomeGuard/pull/156): official DUO mappings for POA/NPOA and NCU/NPU/NPUNCU semantics, explicit consent-basis enforcement, and fail-closed verification of commercial-use/organisation attributes across policy, import, FHIR and UI.
 >
 > Exact-head backend CI, CodeQL, secret scanning, dependency audit and deployment-configuration checks for current `main` and PRs #152–#156 are queued. A queued check is not a passing check; do not merge or deploy until required checks complete successfully. The GitHub branch inventory reports `main` as unprotected, and a maintainer must configure a required-check ruleset.
 >
@@ -15,7 +15,7 @@
 >
 > The public demo remains **synthetic-only**. Do not upload private or controlled-access participant data. The separate public-cohort research image and CI fixtures are not participant-specific consent or institutional authorization.
 >
-> Institutional OIDC/SSO and MFA, durable production PostgreSQL, independently verified backups/restores, external audit anchoring, production observability/incident response, participant-specific consent authority, and independent scientific/privacy/security/legal/institutional sign-off remain release blockers. No paid infrastructure or production configuration was changed during this audit.
+> Institutional OIDC/SSO and MFA, a verified organisation/legal-entity registry, DAC-verified commercial-purpose classification, durable production PostgreSQL, independently verified backups/restores, external audit anchoring, production observability/incident response, participant-specific consent authority, and independent scientific/privacy/security/legal/institutional sign-off remain release blockers. No paid infrastructure or production configuration was changed during this audit.
 >
 > The authoritative, actively maintained acceptance ledger is [GitHub issue #124](https://github.com/kaustubhdua/GenomeGuard/issues/124). Deployment-specific operational evidence is in [docs/production-deployment.md](docs/production-deployment.md); older dated sections in this file are historical and must not be treated as current live status.
 
