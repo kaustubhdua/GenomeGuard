@@ -68,3 +68,26 @@ def test_security_headers_cover_html_and_https_responses():
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     assert "object-src 'none'" in response.headers["content-security-policy"]
     assert response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+
+
+def test_non_demo_public_health_endpoints_do_not_disclose_cohort_diagnostics(monkeypatch):
+    import app.api as api_module
+
+    settings = Settings()
+    settings.demo_mode = False
+    monkeypatch.setattr(api_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(api_module, "validate_settings", lambda _settings: None)
+
+    service, _client = make_client()
+    from starlette.testclient import TestClient
+
+    client = TestClient(api_module.create_app(service))
+    health = client.get("/health")
+    readiness = client.get("/health/ready")
+
+    assert health.status_code == 200
+    assert set(health.json()) == {"status", "deployment"}
+    assert health.headers["cache-control"] == "no-store"
+    assert readiness.status_code in (200, 503)
+    assert "checks" not in readiness.json()
+    assert readiness.headers["cache-control"] == "no-store"
