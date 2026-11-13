@@ -61,3 +61,20 @@ Verification:
 - `backend/tests/test_clinvar.py` validates query construction, classification filters, pagination, source metadata, review status, and conflict preservation.
 - `backend/tests/test_clinvar_api.py` validates request bounds, safe errors, no-store headers, and concurrency limits.
 - `scripts/research_ui_smoke.py` intercepts the API with deterministic source-shaped fixtures and checks conflict display, pagination, export, and mobile layout.
+
+
+## GWAS Catalog association discovery
+
+GenomeGuard uses **GWAS Catalog REST API v2 only**. The former v1 API was retired in August 2026. The v2 integration searches literature-curated top associations by mapped gene, rsID, and/or EFO trait; optional child-trait expansion is explicit. The standard Ensembl gene set is used (`extended_geneset=false`) to match the Catalog's default mapping behavior.
+
+Each response preserves the association ID, study accession, PubMed ID, first author, reported and EFO traits, p-value and mantissa/exponent, beta or odds ratio, confidence interval, risk frequency, mapped genes, genomic locations, effect alleles, source links, and retrieval time. The API metadata endpoint contributes the data release date, API release date, dbSNP build, gene build, EFO version, Ensembl version, commit hash, and license. Pagination follows the provider's validated v2 next link and is bounded to a maximum page size of 50.
+
+**Scope boundary:** the v2 API provides literature-curated top associations and metadata. It does not provide full genome-wide summary statistics; the previous summary-statistics API was retired in 2026. A GWAS association or p-value is not proof of causation, clinical validity, or an individual's risk. Effect estimates and allele frequencies remain source-reported and must be interpreted in the context of study design, ancestry, phenotype, and replication.
+
+The research panel supports gene, rsID, and trait searches and exports the query, source records, release metadata, and interpretation limits as JSON.
+
+Verification:
+- `scripts/gwas_catalog_provider_smoke.py` checks the live v2 metadata and BRCA1 association contract.
+- `backend/tests/test_gwas_catalog.py` validates query parameters, release provenance, p-values, alleles, links, pagination, and malformed responses.
+- `backend/tests/test_gwas_api.py` validates input bounds, safe provider errors, no-store responses, and concurrency limits.
+- `scripts/research_ui_smoke.py` checks search, pagination, provenance, exports, and mobile layout with deterministic source-shaped fixtures.
