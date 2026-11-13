@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
@@ -20,8 +21,12 @@ MAX_ATTEMPTS = 3
 MAX_PAGE_SIZE = 50
 MAX_EVIDENCE_SIZE = 50
 MAX_PAGE_INDEX = 100
+MAX_EVIDENCE_CURSOR_LENGTH = 2048
+MIN_INTERVAL_SECONDS = 0.5
+_rate_lock = threading.Lock()
+_last_request_started = 0.0
 TARGET_ID_RE = re.compile(r"^ENSG[0-9]{11}$")
-DISEASE_ID_RE = re.compile(r"^[A-Z][A-Z0-9_:-]{2,63}$")
+DISEASE_ID_RE = re.compile(r"^EFO_[0-9]{7,}$")
 
 _QUERY = """
 query GenomeGuardTargetEvidence(
@@ -30,7 +35,8 @@ query GenomeGuardTargetEvidence(
   $pageSize: Int!,
   $diseaseId: String!,
   $includeEvidence: Boolean!,
-  $evidenceSize: Int!
+  $evidenceSize: Int!,
+  $evidenceCursor: String
 ) {
   meta {
     product
@@ -53,7 +59,7 @@ query GenomeGuardTargetEvidence(
         datatypeScores { id score }
       }
     }
-    evidences(efoIds: [$diseaseId], size: $evidenceSize)
+    evidences(efoIds: [$diseaseId], size: $evidenceSize, cursor: $evidenceCursor)
       @include(if: $includeEvidence) {
       count
       cursor
@@ -99,6 +105,16 @@ def _validate(ensembl_id: str, disease_id: str | None, page_index: int, page_siz
         raise ValueError(f"evidence_size must be between 1 and {MAX_EVIDENCE_SIZE}")
 
 
+def _wait_for_rate_slot() -> None:
+    """Conservatively pace public API requests within this application process."""
+    global _last_request_started
+    with _rate_lock:
+        delay = MIN_INTERVAL_SECONDS - (time.monotonic() - _last_request_started)
+        if delay > 0:
+            time.sleep(delay)
+        _last_request_started = time.monotonic()
+
+
 def _fetch_graphql(variables: dict) -> dict:
     body = json.dumps({"query": _QUERY, "variables": variables}).encode("utf-8")
     request = Request(
@@ -113,6 +129,7 @@ def _fetch_graphql(variables: dict) -> dict:
     )
     last_error: Exception | None = None
     for attempt in range(MAX_ATTEMPTS):
+        _wait_for_rate_slot()
         try:
             with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
                 if response.status != 200:
@@ -153,9 +170,12 @@ def search_target(
     page_index: int = 0,
     page_size: int = 20,
     evidence_size: int = 25,
+    evidence_cursor: str | None = None,
 ) -> dict:
     """Fetch direct target-disease associations and optional disease-specific evidence."""
     _validate(ensembl_id, disease_id, page_index, page_size, evidence_size)
+    if evidence_cursor is not None and (not isinstance(evidence_cursor, str) or len(evidence_cursor) > MAX_EVIDENCE_CURSOR_LENGTH):
+        raise ValueError(f"evidence_cursor must be a string of at most {MAX_EVIDENCE_CURSOR_LENGTH} characters")
     data = _fetch_graphql({
         "ensemblId": ensembl_id,
         "pageIndex": page_index,
@@ -163,6 +183,7 @@ def search_target(
         "diseaseId": disease_id or "",
         "includeEvidence": disease_id is not None,
         "evidenceSize": evidence_size,
+        "evidenceCursor": evidence_cursor,
     })
     meta = data.get("meta")
     target = data.get("target")
