@@ -12,7 +12,7 @@ way).
 | `GG_DATABASE_URL` | unset | PostgreSQL URL; required when `GG_DEMO_MODE=false`. Non-demo startup refuses to fall back to SQLite. Keep it server-side only. |
 | `GG_DEMO_MODE` | `true` | Publish synthetic persona metadata and issue short-lived, process-local demo sessions. No API or donor keys are returned by public persona endpoints. Turn off for anything else |
 | `GG_ALLOW_TAMPER_DEMO` | `false` | Enable the audit tamper exercise (demo only) |
-| `GG_ADMIN_API_KEY` | `demo-admin-key` | Steward key. Outside demo mode it must be 32+ characters |
+| `GG_ADMIN_API_KEY` | process-random in demo mode when unset | Steward key. Set a unique secret explicitly for any deployment that enables steward operations; outside demo mode it must be 32+ characters |
 | `GG_MASTER_KEY` | unset: a fixed, publicly known development key, with a warning | base64 of 32 random bytes; encrypts the genotype matrix at rest |
 | `GG_REAL_COHORT_FILE` | empty | Path to a cohort `.npz` built by `make fetch-real` or `make real-trios` |
 | `GG_EVAL_JSON` | `docs/eval-results.json` | Evaluation file shown on the Red-team page |
@@ -28,4 +28,4 @@ In demo mode, GET /demo/requesters and GET /demo/donors return persona metadata 
 
 The browser obtains a short-lived (30-minute) requester session using POST /demo/session with a requester_id, and a donor session using POST /demo/donor-session with a donor_id. Tokens are held in tab memory and sent in X-Demo-Session or X-Demo-Donor-Session headers. They are scoped to one synthetic persona and expire automatically.
 
-The session registry is in process memory. It is suitable only for the current single-process synthetic demo. Multi-worker or multi-instance deployments must replace it with a shared, expiring server-side session store before scaling. Do not expose GG_EXPOSE_DEMO_ADMIN_KEY on any public deployment; it exists only for isolated local demonstrations and the public persona endpoints never return it.
+The session registry is in process memory. It is suitable only for the current single-process synthetic demo. Multi-worker or multi-instance deployments must replace it with a shared, expiring server-side session store before scaling. Static demo API keys are disabled by default. The test-only GG_TEST_ALLOW_STATIC_DEMO_KEYS flag must never be set on a hosted deployment.
