@@ -47,7 +47,7 @@ Auth: institution-bound requesters use `Authorization: Bearer`; non-demo API-key
 | GET | `/demo/donors` | Synthetic donor persona metadata; no credentials returned | public |
 | POST | `/demo/donor-session` | Issue a 30-minute in-memory synthetic donor session | public |
 | GET | `/donor/{id:int}` | A donor's own consent, status and who used their data | donor |
-| GET | `/donor/{id:int}/consent.fhir.json` | Download a FHIR R4 Consent resource with distinct synthetic-demo, participant-record or unverified-provenance tags; export does not verify legal consent | donor |
+| GET | `/donor/{id:int}/consent.fhir.json` | Download your consent as a FHIR R4 Consent resource (pseudonymous; tagged as simulated demo data) | donor |
 | POST | `/donor/{id:int}/withdraw` | Withdraw consent for all future requests | donor |
 | PUT | `/donor/{id:int}/consent` | Change what you agree to (use, disease, limits); applies to future requests | donor |
 | POST | `/donor/{id:int}/restore` | Give consent again after withdrawing | donor |
@@ -97,3 +97,8 @@ is not a reference-sequence or REF-allele verification.
 
 
 **Audit checkpoint limitation:** the checkpoint digest is unkeyed and does not authenticate who published it. Store exported checkpoints in an independently controlled, authenticated system; a separate signing/anchoring service is required for authenticity and reliable truncation detection.
+
+## Disease-specific research requests
+
+In institutional/research mode, a disease-specific request must use a MONDO CURIE in the existing `disease` field (for example `MONDO:0005015`). Free-text disease labels are accepted only by the explicitly synthetic demo. Participant consent imports and signed consent events using DUO:0000007 (DS) must likewise supply a MONDO identifier; an optional `disease_label` is display metadata only and never participates in authorization. FHIR R4 Consent exports include the MONDO identifier as a separate `disease-ontology` Coding extension. Use the ontology discovery endpoint to find a candidate term, review it, and explicitly select it; this is research terminology lookup, not diagnosis.
+
