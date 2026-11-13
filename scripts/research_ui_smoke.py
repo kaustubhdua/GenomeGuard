@@ -128,6 +128,12 @@ def main() -> int:
               page.locator(".research-paper a").first.get_attribute("href", timeout=args.timeout).startswith("https://")
               and page.locator(".research-paper a").first.get_attribute("rel") == "noopener noreferrer")
 
+        page.get_by_label("Publication sources").select_option("pubmed")
+        page.locator(".research-paper").first.wait_for()
+        check("source selector can restrict results to PubMed",
+              page.locator(".research-paper .tag").first.inner_text() == "PubMed"
+              and page.locator(".research-paper").count() == 3)
+
         screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
