@@ -367,7 +367,6 @@ def test_production_steward_provisions_oidc_bound_requester_without_api_key(monk
 
 
 def test_demo_accounts_endpoint_only_in_demo_mode(monkeypatch):
-    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
     svc, c = make_client()
     response = c.get("/demo/requesters")
     assert response.status_code == 200
