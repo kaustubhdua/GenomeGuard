@@ -12,7 +12,7 @@ POST /research/open-targets/target
 
 JSON body:
 - ensembl_id: required Ensembl gene identifier, ENSG followed by 11 digits.
-- disease_id: optional stable EFO identifier (EFO_ followed by digits). When supplied, GenomeGuard also requests source evidence for that target/disease pair.
+- disease_id: optional stable EFO identifier (EFO_ followed by digits). When supplied, GenomeGuard also requests source evidence for that target/disease pair. Association results can expose disease identifiers from multiple ontology namespaces (for example MONDO); those identifiers are not interchangeable with the EFO-only evidence filter.
 - page_index: zero-based association page, 0–100.
 - page_size: 1–50.
 - evidence_size: 1–50.
