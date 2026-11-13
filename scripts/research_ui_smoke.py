@@ -89,10 +89,10 @@ def main() -> int:
                     "returned": 3, "has_more": True, "papers": papers}
         else:
             papers = [{
-                "source": "PubMed", "pmid": "12345878", "title": "Duplicate second-page publication",
+                "source": "PubMed", "pmid": "12345999", "title": "Unique PubMed second-page publication",
                 "authors": ["NCBI Author"], "journal": "NCBI Journal", "publication_date": "2026",
                 "doi": "10.1000/genomeguard.page2", "abstract": None,
-                "source_url": "https://pubmed.ncbi.nlm.nih.gov/12345878/"
+                "source_url": "https://pubmed.ncbi.nlm.nih.gov/12345999/"
             }]
             body = {"provider": "PubMed", "count": 4, "retstart": 3, "retmax": PAGE_SIZE,
                     "returned": 1, "has_more": False, "papers": papers}
@@ -116,13 +116,20 @@ def main() -> int:
               page.locator(".research-paper h3").first.inner_text() == "Verified provider-shaped publication one-1")
         check("first result page renders all 20 returned records",
               page.locator(".research-paper").count() == PAGE_SIZE + 1)
+        first_page_count = page.locator(".research-paper").count()
         page.get_by_role("button", name="Load more publications").click()
-        page.locator(".research-paper").nth(PAGE_SIZE).wait_for()
+        page.wait_for_function(
+            "(before) => document.querySelectorAll('.research-paper').length > before",
+            arg=first_page_count,
+            timeout=args.timeout,
+        )
+        appended_count = page.locator(".research-paper").count()
         check("pagination appends the next provider page",
               len(requests) == 2 and requests[1]["cursorMark"] == "cursor-page-2"
               and len(pubmed_requests) == 2 and pubmed_requests[1].get("retstart") == 3
-              and page.locator(".research-paper").count() == PAGE_SIZE + 2,
-              str({"europe_pmc": requests, "pubmed": pubmed_requests}))
+              and appended_count == first_page_count + 2,
+              str({"before": first_page_count, "after": appended_count,
+                   "europe_pmc": requests, "pubmed": pubmed_requests}))
 
         page.get_by_label("Research question or symptom description").fill("BRCA1 ovarian cancer symptoms")
         page.get_by_label("Research department", exact=True).select_option("oncology")
