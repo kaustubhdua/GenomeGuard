@@ -87,6 +87,10 @@ jobs:
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/pubmed_provider_smoke.py
+      - name: Verify live Open Targets GraphQL associations and evidence contract
+        env:
+          PYTHONPATH: backend
+        run: .venv/bin/python scripts/open_targets_provider_smoke.py
       - name: Verify live Europe PMC search and cursor pagination contract
         run: .venv/bin/python scripts/research_provider_smoke.py
       - name: Compile all Python application and script files
