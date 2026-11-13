@@ -73,6 +73,8 @@ jobs:
             raise "public demo image must explicitly use synthetic demo mode" unless public_image.include?("GG_DEMO_MODE=true") && public_image.include?("GG_DATASET_ID=synthetic-cohort-1")
             research_image = File.read("Dockerfile.research")
             raise "research image must build the documented public cohort" unless research_image.include?("app.data.real build") && research_image.include?("GG_REAL_COHORT_FILE=/app/data_real/1000g_phase3_chr22.npz")
+            real_build = File.read(".github/workflows/real-data-image-build.yml")
+            raise "real-data CI must build the research-only image" unless real_build.include?("docker build -f Dockerfile.research") && real_build.include?("\"Dockerfile.research\"")
             raise "research blueprint must use /health/live" unless service["healthCheckPath"] == "/health/live"
             env = service.fetch("envVars").to_h { |entry| [entry.fetch("key"), entry] }
             raise "research mode must disable demo sessions" unless env.dig("GG_DEMO_MODE", "value") == "false"
