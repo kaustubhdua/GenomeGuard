@@ -151,6 +151,7 @@ def test_clinvar_search_without_filter_uses_gene_only(monkeypatch):
     ("", None, 0, 20),
     ("BRCA1 OR *", None, 0, 20),
     ("BRCA1", "invented", 0, 20),
+    ("BRCA1", ["pathogenic"], 0, 20),
     ("BRCA1", None, -1, 20),
     ("BRCA1", None, True, 20),
     ("BRCA1", None, 0, 51),
