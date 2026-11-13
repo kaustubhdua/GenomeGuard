@@ -143,6 +143,9 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
     settings = get_settings()
     validate_settings(settings)
     state = {"svc": svc}
+    demo_sessions: dict[str, dict] = {}
+    demo_donor_sessions: dict[str, dict] = {}
+    demo_session_lock = threading.RLock()
 
     def S() -> GenomeGuardService:
         if state["svc"] is None:
