@@ -126,9 +126,9 @@ def _ensembl_xrefs(record: dict) -> list[dict]:
             for prop in properties if isinstance(prop, dict)
         }
         gene_id = _text(values.get("GeneId"))
-        transcript_id = _text(values.get("ProteinId")) or _text(item.get("id"))
+        protein_id = _text(values.get("ProteinId")) or _text(item.get("id"))
         if gene_id and re.fullmatch(r"ENSG[0-9]{11}", gene_id):
-            output.append({"gene_id": gene_id, "transcript_id": transcript_id})
+            output.append({"gene_id": gene_id, "protein_id": protein_id})
     return output
 
 
