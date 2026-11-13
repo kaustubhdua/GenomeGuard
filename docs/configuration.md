@@ -26,6 +26,6 @@ Generate a master key: `python -c "import os,base64; print(base64.b64encode(os.u
 
 In demo mode, GET /demo/requesters and GET /demo/donors return persona metadata only. They do not disclose requester API keys, donor keys or administrator credentials.
 
-The browser obtains a short-lived (30-minute) requester session using POST /demo/session with a requester_id, and a donor session using POST /demo/donor-session with a donor_id. Tokens are held in tab memory and sent in X-Demo-Session or X-Demo-Donor-Session headers. They are scoped to one synthetic persona and expire automatically.
+The browser obtains a short-lived (30-minute) requester session using POST /demo/session with a requester_id, and a donor session using POST /demo/donor-session with a donor_id. Tokens are held in tab memory and sent in X-Demo-Session or X-Demo-Donor-Session headers. They are scoped to one synthetic persona, expire after 30 minutes, and are capped at five active sessions per persona.
 
 The session registry is in process memory. It is suitable only for the current single-process synthetic demo. Multi-worker or multi-instance deployments must replace it with a shared, expiring server-side session store before scaling. Static demo API keys are disabled by default. The test-only GG_TEST_ALLOW_STATIC_DEMO_KEYS flag must never be set on a hosted deployment.
