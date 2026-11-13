@@ -162,6 +162,7 @@ export function signOutInstitution() {
 export async function boot() {
   // Every deployment uses the same first-party Python API. No hosted auth,
   // Edge Function, project URL, or browser publishable key is required.
+  const preferredWho = state.who;
   state.bootError = "";
   const [h, ready] = await Promise.all([
     call("/health"),
@@ -172,6 +173,7 @@ export async function boot() {
   state.readiness = ready.data || h.data?.readiness || { ready: false, checks: {} };
   state.demo = null;
   state.donors = [];
+  state.donor = null;
   if (!h.ok) return;
   if (!h.data?.demo_mode) {
     // Production uses institutional OIDC; demo personas and API keys are never reused.
@@ -214,34 +216,38 @@ export async function boot() {
   state.oidcError = "";
   state.accessToken = "";
   state.me = null;
+  state.who = "";
+  state.adminKey = "";
+  state.demoSession = "";
   const [d, dn] = await Promise.all([call("/demo/requesters"), call("/demo/donors")]);
-  state.demo = d.ok ? d.data : null;
-  state.donors = dn.ok ? dn.data.donors : [];
-  if (!state.demo) {
-    state.who = "";
-    state.adminKey = "";
+  const demoData = d.ok ? d.data : null;
+  const donors = dn.ok ? dn.data?.donors || [] : [];
+  if (!demoData) {
+    state.bootError = d.data?.message || "Synthetic demo personas are unavailable.";
     try { localStorage.removeItem("gg_who"); } catch { /* storage can be blocked */ }
-    state.donor = null;
     return;
   }
-  if (state.donors.length) {
-    const donor = state.donors[0];
-    const session = await call("/demo/donor-session", {
-      method: "POST", body: { donor_id: donor.id },
-    });
-    state.donor = session.ok && session.data?.session_token
-      ? { ...donor, session_token: session.data.session_token } : null;
-  } else {
-    state.donor = null;
+  const reqs = demoData.requesters || [];
+  if (!reqs.length) {
+    state.bootError = "No synthetic demo requester personas are configured.";
+    return;
   }
-  const reqs = state.demo.requesters || [];
-  // Persona discovery contains no credentials. Issue a short-lived session for the
-  // first synthetic researcher; changing personas issues a new scoped session.
-  if (reqs.length) {
-    const desired = reqs.find((r) => String(r.id) === String(state.who)) || reqs[0];
-    await selectDemoRequester(desired.id);
-  } else {
+  // Keep demoData private until the requester session is issued. This prevents a
+  // fast route change from calling a requester endpoint before auth is ready.
+  const donor = donors[0] || null;
+  const donorSession = donor ? await call("/demo/donor-session", {
+    method: "POST", body: { donor_id: donor.id },
+  }) : null;
+  const desired = reqs.find((r) => String(r.id) === String(preferredWho)) || reqs[0];
+  const requesterSession = await selectDemoRequester(desired.id);
+  if (!requesterSession.ok) {
     state.who = "";
     state.demoSession = "";
+    state.bootError = requesterSession.data?.message || "Could not start a synthetic demo session.";
+    return;
   }
+  state.demo = demoData;
+  state.donors = donors;
+  state.donor = donorSession?.ok && donorSession.data?.session_token
+    ? { ...donor, session_token: donorSession.data.session_token } : null;
 }
