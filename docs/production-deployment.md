@@ -149,7 +149,7 @@ This addendum supersedes earlier deployment snapshots above where their timestam
 
 ### Database and research-mode separation
 
-- The connected Neon project `genomeguard-staging` is on the `free_v3` subscription with 6-hour history retention and is used for staging/validation branches. It is not a durable production database and must not be represented as one.
+- The connected Neon projects `genomeguard-staging` (`nameless-smoke-96099231`) and `genomeguard-free-demo` (`lingering-wind-59343068`) are both on the `free_v3` subscription with 6-hour history retention. The staging project contains migration/restore validation branches; the free-demo project has a synthetic-demo `main` and PR/research-preview branches. Neither is a durable production database, and neither is configured as an accepted production database.
 - The Render workspace has no Render Postgres instances.
 - The separate `Dockerfile.research`/research-mode blueprint remains unprovisioned and unaccepted. Do not apply it to the public synthetic demo service or load private participant data.
 - PR #150 adds OLS4-backed MONDO/HPO/DOID discovery on a feature branch; it is not merged or deployed. Its exact-head CI is a separate acceptance gate.
