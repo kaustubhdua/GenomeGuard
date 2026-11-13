@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from urllib.parse import urlparse
@@ -112,9 +113,19 @@ def main() -> int:
             }""")
             health_body = browser_health.get("body") or {}
             provenance = health_body.get("provenance") or {}
+            deployment = health_body.get("deployment") or {}
+            deployed_sha = deployment.get("git_commit")
+            expected_sha = os.environ.get("EXPECTED_DEPLOYED_SHA", "").strip().lower()
             check(f"{theme} browser-origin API connection",
                   browser_health.get("status") == 200 and health_body.get("status") == "ok",
                   browser_health.get("error", f"HTTP {browser_health.get('status')}"))
+            check(f"{theme} live service reports its Render commit SHA",
+                  isinstance(deployed_sha, str) and re.fullmatch(r"[0-9a-f]{40}", deployed_sha) is not None,
+                  str(deployed_sha))
+            if expected_sha:
+                check(f"{theme} live service matches expected deployed commit",
+                      deployed_sha == expected_sha,
+                      f"expected {expected_sha}, received {deployed_sha}")
             check(f"{theme} browser confirms synthetic-only deployment",
                   health_body.get("demo_mode") is True
                   and health_body.get("synthetic_data_only") is True
