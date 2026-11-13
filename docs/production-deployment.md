@@ -223,3 +223,42 @@ The session-flow check created only short-lived public synthetic-demo sessions; 
 **Browser-origin discrepancy remains open:** a separate hosted-browser run loaded the root HTML but displayed the frontend's API-connection error. Browser `fetch()` to `/health` and `/health/live` rejected with `TypeError: Failed to fetch`, while `/demo/requesters` and `/demo/donors` succeeded. Direct HTTP GETs to the health endpoints returned 200. This may be specific to the hosted-browser environment, but it is not explained. Verify the complete first-load and retry flow in a normal user browser and in GitHub-hosted Playwright before declaring the public UI accepted.
 
 The previous mainline live-demo workflow failed at its first health assertion without reporting the actual status/body. PR #158 adds bounded retries and actionable diagnostics; it does not claim to fix the browser-origin discrepancy. A Render deployment status of `live` and a successful direct health response are not substitutes for full browser acceptance or institutional production readiness.
+
+
+## Follow-up verification — 14 November 2026, 21:34 UTC
+
+This follow-up supersedes earlier Render and Neon status statements above where their timestamps conflict. It is based on a fresh read-only inspection. No secret values were read, no environment variables were changed, and no deploy, restart, migration, backup schedule, or billing action was performed.
+
+### GitHub and Render deployment mismatch
+
+- Current GitHub `main`: `1774f5a0d71d39551d3c588665b75635544d90e1` (PRs #153–#166 merged).
+- Primary Render service `srv-dbev1ka9lscs738813t0` still has `autoDeploy=yes`, trigger `commit`, branch `main`, Dockerfile `./Dockerfile`, and empty provider health-check path.
+- Latest live deployment is `dep-dbrgucce7ovs73femptg` at `3280ebc1924039bcfa19f4c58bb75e83a8c370eb`. It was started at 15:03:11 UTC and completed at 15:03:53 UTC on 13 November.
+- Render event history shows an immediately preceding build for `267c040cecd695f52ebdecb88c34341348c368b6` failed with process exit 143; the subsequent `3280ebc` deployment succeeded. No later build/deploy/commit-ignored event appears in the inspected event history, despite main advancing after the deployed commit. The root cause of the missing auto-deploy event is not exposed by the connected Render integration; inspect the GitHub→Render webhook/integration delivery and service event timeline in the Render dashboard. Do not manually deploy the current main SHA until exact-main CI and live synthetic acceptance pass.
+- Recovery demo `srv-dbri7fp5efls73amo2q0` is live at `f200b643f05a5f959887ac51accd7e202c424557`, also behind main. It is on Free, branch main, trigger commit, and its health-check path is empty.
+- The three staging services are also on Free and track their named feature/fix branches. Only staging PR113 currently has `/health/live` as its host health-check path. The other four GenomeGuard services have an empty path. Configure liveness as `/health/live`; never use `/health/ready`, which correctly fails closed.
+- Render's service API integration does not expose the environment-variable mapping or values. Therefore the Render-to-Neon host/branch connection cannot be proven from this inspection.
+
+### Neon data and backup schedule evidence
+
+- Project `genomeguard-free-demo` (`lingering-wind-59343068`) default branch `br-spring-wind-aoyffx8m` has 12 schema migrations, 600 donors, 600 genotype rows, 0 requests, 4 audit rows, and zero rows in normalized public dataset sample/variant/genotype-call tables. This is consistent with a synthetic demo dataset, but does not prove the primary Render service is connected to this branch.
+- Project `genomeguard-staging` (`nameless-smoke-96099231`) branch `gg-render-staging-2026-11-10` (`br-flat-wildflower-a1pgfnhn`) has 12 migrations, 600 donors, 600 genotype rows, 0 requests, 20 audit rows, and zero rows in normalized public dataset tables. This is staging evidence, not production acceptance.
+- Both inspected default branches report an empty automatic snapshot schedule. The snapshot inventories contain manually created snapshots only; no scheduled snapshot retention policy was observed. The project settings report six-hour history retention. This is not a verified backup/PITR policy or a completed isolated restore drill for the live service.
+- The repository's CI workflow contains an encrypted `pg_dump`/restore check against temporary PostgreSQL databases. That is useful test evidence, not proof of operational production backups, retention, restore objectives or monitoring.
+- No production backup schedule was enabled because doing so changes provider configuration and may incur storage/compute costs; it requires an explicit cost/retention decision.
+
+### Live UI and accessibility acceptance
+
+- Render application logs include successful requests for the root HTML, static JS/CSS/font assets, `/demo/requesters`, short-lived demo session endpoints, `/me`, `/demo/donors`, `/donor/1`, and `/health`. This is request-log evidence only; it does not establish the response content or a completed Playwright browser run.
+- Existing `scripts/live_ui_smoke.py` and `scripts/live_accessibility_smoke.py` are non-destructive browser checks. A dedicated read-only workflow is proposed in PR #169 so browser route/theme/responsive and accessibility checks do not have to be bundled with the separate live API acceptance workflow, which creates synthetic test requests.
+- A hosted browser run could not be executed in this session because the connected browser provider had exhausted its included credits. No paid credits were purchased. Do not infer a browser acceptance pass from request logs alone.
+
+### GitHub CI and repository protection
+
+- Exact-main checks for `1774f5a` and the documentation PR heads were still queued/pending at the last inspection. The backend jobs had not started; no green result is claimed.
+- The Vercel status on `1774f5a` is failed with `Deployment rate limited — retry in 24 hours`. This is a provider quota failure, not a source-code test failure. Do not upgrade the plan without explicit approval.
+- GitHub reports `main.protected=false`. The connected GitHub App integration is GET-only for repository settings and lacks administration permission to read or configure branch protection/rulesets. A repository administrator must configure required status checks and block direct pushes.
+
+### Production controls still fail closed
+
+The primary service's readiness endpoint remains HTTP 503 while institutional controls are unverified. Keep institutional OIDC/SSO/MFA, organization verification, authoritative participant consent/DAC approval, private cohort ingestion and research-mode access disabled. Do not set readiness flags to true to silence the 503. KMS/HSM-backed key custody, scheduled backups and isolated restore evidence, production monitoring/alerting, and externally controlled audit anchoring remain unproven.
