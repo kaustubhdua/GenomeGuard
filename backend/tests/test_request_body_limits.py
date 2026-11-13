@@ -1,8 +1,7 @@
 """Regression tests for bounded HTTP request parsing."""
 
-from tests.helpers import make_client
-
 from app.api import MAX_JSON_BODY_BYTES
+from tests.helpers import make_client
 
 
 def test_json_endpoints_reject_oversized_content_length_before_parsing():
