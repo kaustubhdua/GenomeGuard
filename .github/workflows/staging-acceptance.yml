@@ -6,13 +6,9 @@ on:
     branches: [main]
     paths:
       - "backend/**"
-      - "frontend/**"
       - "scripts/staging_smoke.py"
-      - "scripts/live_ui_smoke.py"
       - "Dockerfile.staging"
       - "render.staging.yaml"
-      - "README.md"
-      - "docs/**"
       - ".github/workflows/staging-acceptance.yml"
   workflow_dispatch:
 permissions:
