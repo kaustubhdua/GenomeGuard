@@ -1,16 +1,24 @@
 > **Live status refresh — 14 November 2026 (supersedes the 10 November snapshot below).**
 >
-> The current default branch is `main` at `50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`. PR #150 (OLS4-backed MONDO/HPO/Disease Ontology discovery) and PR #151 (filterable dataset catalogue) are merged. PR #152 (CSV formula-injection whitespace correction) remains open at `c12438e3ed9b5630c6f9865153c8d1601f076639`; its CI, security and deployment-configuration workflows are queued, so it is not approved for merge yet.
+> Current `main`: `50658f1ae0ec1df9f4b8c1e512d720bd4e7f5f94`. PR #150 (OLS4-backed ontology discovery) and PR #151 (filterable dataset catalogue) are merged.
 >
-> Main-branch CI, security verification and deployment-configuration checks for `50658f1` are also queued. The PR #150 security, Beacon-schema and deployment-configuration workflows passed on its final feature-branch head, but its backend CI was cancelled; the merged code still requires successful mainline CI evidence.
+> Open implementation/review PRs:
+> - [#152](https://github.com/kaustubhdua/GenomeGuard/pull/152): CSV formula-injection whitespace correction.
+> - [#153](https://github.com/kaustubhdua/GenomeGuard/pull/153): this live-status, README, threat-model and deployment-documentation reconciliation.
+> - [#154](https://github.com/kaustubhdua/GenomeGuard/pull/154): require gnomAD TSV checksum to match the reviewed manifest before database writes.
+> - [#155](https://github.com/kaustubhdua/GenomeGuard/pull/155): signed-consent policy-basis, timestamp and event-ordering corrections.
+> - [#156](https://github.com/kaustubhdua/GenomeGuard/pull/156): official DUO identifiers and NPOA ancestry restriction across policy, import, FHIR and UI.
 >
-> The public deployment must remain a **synthetic-only demo**. The separate institutional/research deployment is not accepted. Durable production storage and verified backups, institutional OIDC/MFA and organization provisioning, authoritative participant-specific consent/withdrawal, externally anchored audit integrity, monitoring/incident response, and independent security/privacy/scientific/legal/institutional review remain release blockers. Dataset-level public-use terms are not participant-specific consent. Do not upload private or controlled-access participant data.
+> Exact-head backend CI, CodeQL, secret scanning, dependency audit and deployment-configuration checks for current `main` and PRs #152–#156 are queued. A queued check is not a passing check; do not merge or deploy until required checks complete successfully. The GitHub branch inventory reports `main` as unprotected, and a maintainer must configure a required-check ruleset.
 >
-> The authoritative, actively maintained acceptance ledger is [GitHub issue #124](https://github.com/kaustubhdua/GenomeGuard/issues/124). The latest deployment-specific observations are in [docs/production-deployment.md](docs/production-deployment.md); older dated sections in this file are historical evidence and must not be treated as current live status.
+> Render currently reports the primary public synthetic demo live at `3280ebc1924039bcfa19f4c58bb75e83a8c370eb` and a separate recovery demo live at `f200b643f05a5f959887ac51accd7e202c424557`; both are behind current `main`. The connected workspace has no Render-managed PostgreSQL instance, and no accepted institutional research-mode deployment. Do not treat a Render `live` status as production acceptance.
 >
-> ---
+> The public demo remains **synthetic-only**. Do not upload private or controlled-access participant data. The separate public-cohort research image and CI fixtures are not participant-specific consent or institutional authorization.
 >
-> **Current status (10 November 2026):** The active runtime is the first-party Python/Starlette API; Supabase Auth, browser keys, Edge Functions, and runtime calls are removed. The current reviewed code branch tip before this documentation refresh was `c768a209a254905e60de37d2d1631cf21a74443e`; PostgreSQL provider-restart reconnection is implemented in `0ac6014eba7917b7aec82bcb4d50b23f3ce1687c` and regression-tested. Exact-head validation passed for backend/PostgreSQL integration, encrypted PostgreSQL backup/restore, evaluation smoke/full eval, demo, JavaScript syntax, Python compilation, security scans, Beacon v2, FHIR R4 Consent, deployment configuration, real-data image build, and live synthetic staging API plus browser/mobile acceptance. The staging service is running the reviewed code branch; it contains only 600 synthetic donors, 3,000 synthetic variants, and no normalized public-dataset imports. PR #111 remains open and unmerged. Production remains **not ready**: it uses SQLite on an ephemeral filesystem and still lacks institutional OIDC/organization authorization, participant-consent/withdrawal enforcement, independent audit anchoring, provider-level recovery evidence, least-privilege runtime credentials, and independent security/privacy/governance review. The final docs-only status refresh is at `a013d25cd61f252c91c306d505102b6cc67dbcce`; re-run checks after that docs commit before merging. See [the current status and verification record](docs/current-status-2026-11-10.md). Historical Supabase-specific sections below are archival evidence only and do not describe the active runtime.
+> Institutional OIDC/SSO and MFA, durable production PostgreSQL, independently verified backups/restores, external audit anchoring, production observability/incident response, participant-specific consent authority, and independent scientific/privacy/security/legal/institutional sign-off remain release blockers. No paid infrastructure or production configuration was changed during this audit.
+>
+> The authoritative, actively maintained acceptance ledger is [GitHub issue #124](https://github.com/kaustubhdua/GenomeGuard/issues/124). Deployment-specific operational evidence is in [docs/production-deployment.md](docs/production-deployment.md); older dated sections in this file are historical and must not be treated as current live status.
+
 ---
 
 Updated: 2 November 2026
