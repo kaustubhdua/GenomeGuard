@@ -73,7 +73,14 @@ jobs:
             raise "research mode must require OIDC" unless env.dig("GG_OIDC_REQUIRED", "value") == "true"
             raise "research mode must require tenant isolation" unless env.dig("GG_TENANT_ISOLATION_REQUIRED", "value") == "true"
             raise "research mode must require consent authority" unless env.dig("GG_CONSENT_AUTHORITY_REQUIRED", "value") == "true"
-            raise "research database URL must remain a manual secret" unless env.dig("GG_DATABASE_URL", "sync") == false
+            raise "research mode must require OIDC admin identity" unless env.dig("GG_OIDC_ADMIN_REQUIRED", "value") == "true"
+            raise "tamper demo must be disabled" unless env.dig("GG_ALLOW_TAMPER_DEMO", "value") == "false"
+            raise "runtime database URL must remain a manual secret" unless env.dig("GG_DATABASE_URL", "sync") == false
+            raise "migration database URL must remain a manual secret" unless env.dig("GG_MIGRATION_DATABASE_URL", "sync") == false
+            raise "master key must remain a manual secret" unless env.dig("GG_MASTER_KEY", "sync") == false
+            %w[GG_OIDC_ISSUER GG_OIDC_AUDIENCE GG_OIDC_CLIENT_ID GG_OIDC_REDIRECT_URI GG_OIDC_JWKS_URL GG_OIDC_ALLOWED_ORGANIZATIONS GG_CONSENT_AUTHORITY_ISSUER GG_CONSENT_AUTHORITY_PUBLIC_KEY].each do |key|
+              raise "#{key} must remain a manual secret" unless env.dig(key, "sync") == false
+            end
             puts "Research-mode blueprint is distinct from the public synthetic demo and fails closed by default."
           '
           node --input-type=module <<'NODE'
