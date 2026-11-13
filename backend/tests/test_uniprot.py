@@ -79,6 +79,7 @@ def test_search_proteins_builds_exact_reviewed_human_query(monkeypatch):
     assert params["format"] == ["json"]
     assert params["size"] == ["5"]
     assert "sequence" not in params["fields"][0]
+    assert "reviewed" in params["fields"][0]
     assert result["release"] == "2026_04"
     assert result["total_results"] == 1
     protein = result["proteins"][0]
