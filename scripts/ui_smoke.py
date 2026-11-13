@@ -341,6 +341,52 @@ def main() -> None:
               "Steward Review" not in pg.locator("#nav .nav-label").all_text_contents())
         check("no JavaScript errors during session-based navigation", not errors,
               "; ".join(errors)[:120])
+
+        catalogue_fixture = {
+            "provenance_note": "Synthetic browser fixture only; not a verified import.",
+            "datasets": [
+                {"dataset_key": "fixture-b", "source_name": "Beta source", "source_release": "2026.2",
+                 "reference_assembly": "GRCh38", "file_sha256": "b" * 64, "sample_count": 120,
+                 "variant_count": 900, "genotype_call_count": 108000, "imported_at": "2026-11-12T12:00:00Z",
+                 "source_url": "https://example.org/beta", "reuse_statement_url": "https://example.org/beta/terms",
+                 "citation": "Beta fixture citation", "policy_description": "Public aggregate research only"},
+                {"dataset_key": "fixture-a", "source_name": "Alpha source", "source_release": "2026.1",
+                 "reference_assembly": "GRCh37", "file_sha256": "a" * 64, "sample_count": 40,
+                 "variant_count": 300, "genotype_call_count": 12000, "imported_at": "2026-11-10T12:00:00Z",
+                 "source_url": "https://example.org/alpha", "reuse_statement_url": "https://example.org/alpha/terms",
+                 "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "Fixture policy"},
+            ],
+        }
+        pg.route("**/catalogue/datasets", lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(catalogue_fixture)))
+        pg.goto(base + "/#/datasets")
+        pg.get_by_label("Filter by source").wait_for()
+        check("dataset catalogue exposes source and assembly filters",
+              pg.get_by_label("Filter by source").count() == 1
+              and pg.get_by_label("Filter by reference assembly").count() == 1)
+        pg.get_by_label("Filter by source").select_option(label="Beta source")
+        check("dataset source filter narrows visible rows",
+              pg.locator(".dataset-table tbody tr").count() == 1
+              and "Beta source" in pg.locator(".dataset-table tbody").inner_text())
+        pg.get_by_label("Filter by source").select_option("")
+        pg.get_by_label("Filter by reference assembly").select_option("GRCh37")
+        check("dataset assembly filter narrows visible rows",
+              pg.locator(".dataset-table tbody tr").count() == 1
+              and "Alpha source" in pg.locator(".dataset-table tbody").inner_text())
+        pg.get_by_label("Filter by reference assembly").select_option("")
+        pg.get_by_label("Sort datasets").select_option("samples")
+        first_row = pg.locator(".dataset-table tbody tr").first.inner_text()
+        check("dataset sort orders by measured sample count", "Beta source" in first_row)
+        with pg.expect_download() as catalogue_download_info:
+            pg.get_by_role("button", name="Export filtered CSV").click()
+        catalogue_download = catalogue_download_info.value
+        catalogue_path = Path(tempfile.gettempdir()) / catalogue_download.suggested_filename
+        catalogue_download.save_as(str(catalogue_path))
+        catalogue_csv = catalogue_path.read_text(encoding="utf-8-sig")
+        check("catalogue CSV preserves provenance and neutralizes spreadsheet formulas",
+              "Source URL" in catalogue_csv and "Reuse terms URL" in catalogue_csv
+              and "'=HYPERLINK" in catalogue_csv)
+        catalogue_path.unlink(missing_ok=True)
         ctx.close()
 
         for theme in ("light", "dark"):
