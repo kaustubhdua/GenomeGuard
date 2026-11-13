@@ -13,8 +13,6 @@ services:
     envVars:
       - key: GG_DEMO_MODE
         value: "true"
-      - key: GG_EXPOSE_DEMO_ADMIN_KEY
-        value: "false"
       - key: GG_ALLOW_TAMPER_DEMO
         value: "false"
       - key: GG_DATASET_ID
