@@ -50,6 +50,7 @@ _CLINVAR_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _GWAS_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _ONTOLOGY_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 _ENSEMBL_SEARCH_SLOTS = threading.BoundedSemaphore(2)
+_UNIPROT_SEARCH_SLOTS = threading.BoundedSemaphore(2)
 
 
 # What a RESEARCHER may not see, because it is itself the protected information or an oracle:
