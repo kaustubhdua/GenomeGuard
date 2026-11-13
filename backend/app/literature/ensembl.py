@@ -130,8 +130,11 @@ def lookup_gene(symbol: str, *, species: str = SPECIES) -> dict:
             or isinstance(end, bool) or not isinstance(end, int) or end < start):
         raise EnsemblProviderError("Ensembl returned invalid gene coordinates")
     strand = payload.get("strand")
-    if strand not in (-1, 1):
+    if isinstance(strand, bool) or strand not in (-1, 1):
         raise EnsemblProviderError("Ensembl returned an invalid gene strand")
+    assembly = payload.get("assembly_name")
+    if not isinstance(assembly, str) or not assembly.strip():
+        raise EnsemblProviderError("Ensembl returned no reference assembly name")
 
     return {
         "provider": "Ensembl REST API",
@@ -143,7 +146,7 @@ def lookup_gene(symbol: str, *, species: str = SPECIES) -> dict:
             "symbol": display_name.strip(),
             "biotype": payload.get("biotype") if isinstance(payload.get("biotype"), str) else None,
             "gene_version": payload.get("version") if isinstance(payload.get("version"), int) else None,
-            "assembly": payload.get("assembly_name") if isinstance(payload.get("assembly_name"), str) else None,
+            "assembly": assembly.strip(),
             "chromosome": str(payload.get("seq_region_name")) if payload.get("seq_region_name") is not None else None,
             "start": start,
             "end": end,
