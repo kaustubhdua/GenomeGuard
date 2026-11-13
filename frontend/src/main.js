@@ -6,6 +6,7 @@ const ROUTES = [
   { re: /^#\/chromosomes$/, load: () => import("./pages/chromosomes.js"), nav: "chromosomes", title: "Chromosomes" },
   { re: /^#\/datasets$/, load: () => import("./pages/datasets.js"), nav: "datasets", title: "Datasets" },
   { re: /^#\/sources$/, load: () => import("./pages/sources.js"), nav: "sources", title: "Source discovery" },
+  { re: /^#\/research(?:\?.*)?$/, load: () => import("./pages/research.js"), nav: "research", title: "Research discovery" },
   { re: /^#\/variants(?:\?.*)?$/, load: () => import("./pages/variants.js"), nav: "variants", title: "Variant inspector" },
   { re: /^#\/dataset-qc$/, load: () => import("./pages/dataset-qc.js"), nav: "dataset-qc", title: "Dataset QC" },
   { re: /^#\/overview$/, load: () => import("./pages/overview.js"), nav: "overview", title: "Overview" },
@@ -27,7 +28,7 @@ function prefetchRoute(hash) {
 const NAV = [
   ["Overview", [["overview", "Overview", "#/overview"]]],
   ["Dataset Explorer", [["datasets", "Datasets", "#/datasets"], ["chromosomes", "Chromosomes", "#/chromosomes"],
-    ["variants", "Variant inspector", "#/variants"], ["sources", "Source discovery", "#/sources"]]],
+    ["variants", "Variant inspector", "#/variants"], ["sources", "Source discovery", "#/sources"], ["research", "Research discovery", "#/research"]]],
   ["Research Requests", [["requests", "Requests", "#/requests"]]],
   ["Steward Review", [["requests", "Request review queue", "#/requests", true],
     ["dataset-qc", "Dataset QC", "#/dataset-qc", true], ["family", "Family exposure", "#/family/1", true]]],
