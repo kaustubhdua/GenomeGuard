@@ -35,21 +35,29 @@ claims legal compliance: GenomeGuard is **designed around the ideas of** DPDP, G
 | `uniqueness_medium` / `uniqueness_high` | 1% / 10% | Record-level bands |
 | `signal_medium` / `signal_high` | 1.0 / 3.0 | Aggregate-level membership signal z |
 | `freq_bin_width` | 0.05 | Frequency bins |
-| `epsilon_budget` | 1.0 | Per requester per dataset, simple sequential composition |
-| `epsilon_per_release` | 0.5 | Spent by one noised release, split across its variants |
+| `epsilon_budget` | 1.0 | Configured per-requester/per-dataset ledger value; not a validated DP accountant |
+| `epsilon_per_release` | 0.5 | Configured noise parameter; not a formal per-release epsilon guarantee |
 | `max_variants_noised` | 25 | Noise grows with variant count, so release few |
 | `anomaly_warn` / `throttle` / `freeze` | 0.35 / 0.55 / 0.75 | Combined anomaly score actions |
 | `anomaly_window_minutes` | 15 | Sliding window |
 
 ## Limits you must state
 
+The risk score, epsilon-like budget and anomaly score are engineering controls. They are not
+certifications, clinical validity assessments, legal determinations or formal privacy guarantees.
+
 - **Synthetic data.** Real genomes have linkage, population structure and relatives that the
   generator only approximates. Real attack success could differ in either direction.
 - **Simplified attacks written by the defenders.** Treat results as evidence the mechanisms work
   as designed, not as a security proof.
-- **Differential privacy is simplified.** Sequential composition, not a formal accountant. Noise
-  is added to raw counts and binning is post-processing, which keeps the guarantee valid, but the
-  per-release epsilon split is a design choice.
+- **No formal differential-privacy guarantee is established.** The epsilon-like ledger and noise
+  settings are prototype controls, not a validated DP accountant or a basis for claiming
+  epsilon-DP. The repository does not yet establish and independently validate the privacy unit
+  and adjacency relation, contribution bounds, sensitivity for every output, mechanism calibration,
+  composition across every query/release path, or accountant correctness. Empirical attack
+  evaluation can show that tested attacks became less successful on tested fixtures; it does not
+  prove differential privacy. Do not describe the configured epsilon values as a formal privacy
+  guarantee until a qualified independent review validates the complete mechanism.
 - **The hash chain makes tampering detectable, not impossible.** Someone with full database
   write access can recompute every hash. Record the head hash in a trusted location outside the database (for example, a separately stored audit anchor) so a rewritten history can be detected.
 - **Encryption at rest protects a stolen file, not a compromised process.** The master key is an
