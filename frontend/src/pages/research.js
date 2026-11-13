@@ -130,20 +130,23 @@ export async function render() {
   let currentPage = 0;
   let totalHits = 0;
   let loadedCount = 0;
+  let hasMore = false;
+  let requestGeneration = 0;
 
   if (DEPARTMENTS.some(([, slug]) => slug === initialDepartment)) department.value = initialDepartment;
   question.value = initialQuery.slice(0, 500);
 
   async function fetchPage(query, pageNumber) {
     if (activeController) activeController.abort();
-    activeController = new AbortController();
-    const timeout = setTimeout(() => activeController?.abort(), 12000);
+    const controller = new AbortController();
+    activeController = controller;
+    const timeout = setTimeout(() => controller.abort(), 12000);
     const url = API + "?query=" + encodeURIComponent(query)
       + "&format=json&resultType=core&pageSize=" + PAGE_SIZE + "&page=" + pageNumber;
     try {
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
-        signal: activeController.signal,
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("The literature service returned HTTP " + response.status + ".");
       return parseSearchResponse(await response.json());
@@ -155,7 +158,7 @@ export async function render() {
   function renderLoadMore() {
     const old = results.querySelector("#research-load-more");
     old?.remove();
-    if (loadedCount >= totalHits || loadedCount === 0) return;
+    if (!hasMore || loadedCount >= totalHits || loadedCount === 0) return;
     const button = h("button", { id: "research-load-more", class: "btn secondary", type: "button" },
       "Load more publications");
     button.addEventListener("click", loadMore);
@@ -167,9 +170,11 @@ export async function render() {
     if (!button || !activeQuery) return;
     button.disabled = true;
     button.textContent = "Loading…";
+    const generation = requestGeneration;
     try {
       const nextPage = currentPage + 1;
       const data = await fetchPage(activeQuery, nextPage);
+      if (generation !== requestGeneration) return;
       if (data.papers.length) {
         results.insertBefore(
           h("div", { class: "research-paper-page" }, ...data.papers.map(paperCard)),
@@ -179,10 +184,15 @@ export async function render() {
       currentPage = nextPage;
       loadedCount += data.papers.length;
       totalHits = data.hitCount;
-      status.textContent = "Showing " + loadedCount + " of " + totalHits
+      hasMore = data.papers.length === PAGE_SIZE && loadedCount < totalHits;
+      status.textContent = data.papers.length
+        ? "Showing " + loadedCount + " of " + totalHits
+        : "No additional publication records were returned by Europe PMC.";
+      if (data.papers.length) status.textContent = "Showing " + loadedCount + " of " + totalHits
         + " publication records returned by Europe PMC. Results are source-indexed, not clinical recommendations.";
       renderLoadMore();
     } catch (error) {
+      if (generation !== requestGeneration) return;
       status.textContent = error.name === "AbortError"
         ? "The literature search timed out. Please try again."
         : "More results could not be loaded. " + error.message;
@@ -208,19 +218,23 @@ export async function render() {
       status.textContent = "Choose a department or enter a research question.";
       return;
     }
+    const generation = ++requestGeneration;
     activeQuery = query;
     currentPage = 0;
     loadedCount = 0;
     totalHits = 0;
+    hasMore = false;
     status.textContent = "Searching Europe PMC for matching publication records…";
     results.replaceChildren();
     submitButton.disabled = true;
     submitButton.textContent = "Searching…";
     try {
       const data = await fetchPage(query, 1);
+      if (generation !== requestGeneration) return;
       currentPage = 1;
       totalHits = data.hitCount;
       loadedCount = data.papers.length;
+      hasMore = data.papers.length === PAGE_SIZE && loadedCount < totalHits;
       if (data.papers.length) {
         results.append(h("div", { class: "research-paper-page" }, ...data.papers.map(paperCard)));
         status.textContent = "Showing " + loadedCount + " of " + totalHits
@@ -230,12 +244,15 @@ export async function render() {
       }
       renderLoadMore();
     } catch (error) {
+      if (generation !== requestGeneration) return;
       status.textContent = error.name === "AbortError"
         ? "The literature search timed out. Please try again."
         : "The live literature service could not be reached. No sample or fabricated papers are shown. " + error.message;
     } finally {
-      submitButton.disabled = false;
-      submitButton.textContent = "Search publications";
+      if (generation === requestGeneration) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Search publications";
+      }
     }
   }
 
