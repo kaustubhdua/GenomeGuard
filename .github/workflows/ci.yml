@@ -84,26 +84,32 @@ jobs:
       - run: make demo
       - run: for f in $(find frontend -name '*.js'); do node --check "$f" || exit 1; done
       - name: Verify live PubMed E-utilities search and summary contract
+        if: github.event_name == 'workflow_dispatch'
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/pubmed_provider_smoke.py
       - name: Verify live Open Targets GraphQL associations and evidence contract
+        if: github.event_name == 'workflow_dispatch'
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/open_targets_provider_smoke.py
       - name: Verify live ClinVar E-utilities search and classification contract
+        if: github.event_name == 'workflow_dispatch'
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/clinvar_provider_smoke.py
       - name: Verify live GWAS Catalog REST API v2 associations and release metadata
+        if: github.event_name == 'workflow_dispatch'
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/gwas_catalog_provider_smoke.py
       - name: Verify live OLS4 MONDO, HPO, and Disease Ontology search
+        if: github.event_name == 'workflow_dispatch'
         env:
           PYTHONPATH: backend
         run: .venv/bin/python scripts/ontology_provider_smoke.py
       - name: Verify live Europe PMC search and cursor pagination contract
+        if: github.event_name == 'workflow_dispatch'
         run: .venv/bin/python scripts/research_provider_smoke.py
       - name: Compile all Python application and script files
         run: .venv/bin/python -m compileall -q backend scripts

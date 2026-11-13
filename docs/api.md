@@ -97,3 +97,12 @@ is not a reference-sequence or REF-allele verification.
 
 
 **Audit checkpoint limitation:** the checkpoint digest is unkeyed and does not authenticate who published it. Store exported checkpoints in an independently controlled, authenticated system; a separate signing/anchoring service is required for authenticity and reliable truncation detection.
+
+## Disease-specific research requests
+
+In institutional/research mode, a disease-specific request must use a MONDO CURIE in the existing `disease` field (for example `MONDO:0005015`). Free-text disease labels are accepted only by the explicitly synthetic demo. Participant consent imports and signed consent events using DUO:0000007 (DS) must likewise supply a MONDO identifier; an optional `disease_label` is display metadata only and never participates in authorization. FHIR R4 Consent exports include the MONDO identifier as a separate `disease-ontology` Coding extension. Use the ontology discovery endpoint to find a candidate term, review it, and explicitly select it; this is research terminology lookup, not diagnosis.
+
+## Donor self-service consent endpoints
+
+The donor self-service consent-edit, withdrawal and restore endpoints are available only in the explicitly synthetic demo. In institutional/research mode they return `503 consent_authority_required`; participant consent changes and withdrawals must be recorded through the signed authoritative consent-event endpoint. A donor session token is not proof of institutional identity or consent authority.
+

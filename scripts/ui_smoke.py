@@ -354,29 +354,56 @@ def main() -> None:
                  "reference_assembly": "GRCh37", "file_sha256": "a" * 64, "sample_count": 40,
                  "variant_count": 300, "genotype_call_count": 12000, "imported_at": "2026-11-10T12:00:00Z",
                  "source_url": "https://example.org/alpha", "reuse_statement_url": "https://example.org/alpha/terms",
-                 "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "Fixture policy"},
+                 "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "  =SUM(1,1)"},
             ],
         }
         pg.route("**/catalogue/datasets", lambda route: route.fulfill(
             status=200, content_type="application/json", body=json.dumps(catalogue_fixture)))
         pg.goto(base + "/#/datasets")
         pg.get_by_label("Filter by source").wait_for()
+        source_control = pg.get_by_label("Filter by source")
+        assembly_control = pg.get_by_label("Filter by reference assembly")
+        sort_control = pg.get_by_label("Sort datasets")
+        rows = pg.locator(".dataset-table tbody tr")
+        # The catalogue is fetched asynchronously. Wait for both fixture records to be
+        # rendered before exercising filters; otherwise a fast CI runner can race the
+        # first paint even though the controls have already been inserted.
+        pg.wait_for_function(
+            "() => document.querySelectorAll('.dataset-table tbody tr').length === 2",
+            timeout=10000,
+        )
         check("dataset catalogue exposes source and assembly filters",
-              pg.get_by_label("Filter by source").count() == 1
-              and pg.get_by_label("Filter by reference assembly").count() == 1)
-        pg.get_by_label("Filter by source").select_option(label="Beta source")
+              source_control.count() == 1 and assembly_control.count() == 1)
+        source_control.select_option(label="Beta source")
+        pg.wait_for_function(
+            "() => document.querySelectorAll('.dataset-table tbody tr').length === 1 "
+            "&& document.querySelector('.dataset-table tbody').textContent.includes('Beta source')",
+            timeout=5000,
+        )
+        source_text = pg.locator(".dataset-table tbody").inner_text()
         check("dataset source filter narrows visible rows",
-              pg.locator(".dataset-table tbody tr").count() == 1
-              and "Beta source" in pg.locator(".dataset-table tbody").inner_text())
-        pg.get_by_label("Filter by source").select_option("")
-        pg.get_by_label("Filter by reference assembly").select_option("GRCh37")
+              rows.count() == 1 and "beta source" in source_text.lower(),
+              f"rows={rows.count()} text={source_text!r}")
+        source_control.select_option("")
+        assembly_control.select_option("GRCh37")
+        pg.wait_for_function(
+            "() => document.querySelectorAll('.dataset-table tbody tr').length === 1 "
+            "&& document.querySelector('.dataset-table tbody').textContent.includes('Alpha source')",
+            timeout=5000,
+        )
+        assembly_text = pg.locator(".dataset-table tbody").inner_text()
         check("dataset assembly filter narrows visible rows",
-              pg.locator(".dataset-table tbody tr").count() == 1
-              and "Alpha source" in pg.locator(".dataset-table tbody").inner_text())
-        pg.get_by_label("Filter by reference assembly").select_option("")
-        pg.get_by_label("Sort datasets").select_option("samples")
-        first_row = pg.locator(".dataset-table tbody tr").first.inner_text()
-        check("dataset sort orders by measured sample count", "Beta source" in first_row)
+              rows.count() == 1 and "alpha source" in assembly_text.lower(),
+              f"rows={rows.count()} text={assembly_text!r}")
+        assembly_control.select_option("")
+        sort_control.select_option("samples")
+        pg.wait_for_function(
+            "() => document.querySelector('.dataset-table tbody tr')?.textContent.includes('Beta source')",
+            timeout=5000,
+        )
+        first_row = rows.first.inner_text()
+        check("dataset sort orders by measured sample count", "beta source" in first_row.lower(),
+              f"first_row={first_row!r}")
         with pg.expect_download() as catalogue_download_info:
             pg.get_by_role("button", name="Export filtered CSV").click()
         catalogue_download = catalogue_download_info.value
@@ -385,7 +412,7 @@ def main() -> None:
         catalogue_csv = catalogue_path.read_text(encoding="utf-8-sig")
         check("catalogue CSV preserves provenance and neutralizes spreadsheet formulas",
               "Source URL" in catalogue_csv and "Reuse terms URL" in catalogue_csv
-              and "'=HYPERLINK" in catalogue_csv)
+              and "'=HYPERLINK" in catalogue_csv and "'  =SUM(1,1)" in catalogue_csv)
         catalogue_path.unlink(missing_ok=True)
         ctx.close()
 
