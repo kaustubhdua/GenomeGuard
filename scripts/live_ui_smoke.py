@@ -98,6 +98,44 @@ def main() -> int:
             page.on("response", record_http_error)
             page.goto(base + "/#/overview", wait_until="domcontentloaded")
             page.locator("#view h1").wait_for(state="visible", timeout=args.timeout)
+
+            # Exercise the API from the browser origin itself. urllib checks above do not
+            # catch browser CORS/network failures that can leave the UI disconnected.
+            browser_health = page.evaluate("""async () => {
+              try {
+                const response = await fetch('/health', { cache: 'no-store' });
+                const body = await response.json();
+                return { status: response.status, ok: response.ok, body };
+              } catch (error) {
+                return { status: 0, error: String(error) };
+              }
+            }""")
+            health_body = browser_health.get("body") or {}
+            provenance = health_body.get("provenance") or {}
+            check(f"{theme} browser-origin API connection",
+                  browser_health.get("status") == 200 and health_body.get("status") == "ok",
+                  browser_health.get("error", f"HTTP {browser_health.get('status')}"))
+            check(f"{theme} browser confirms synthetic-only deployment",
+                  health_body.get("demo_mode") is True
+                  and health_body.get("synthetic_data_only") is True
+                  and provenance.get("genotypes") == "synthetic"
+                  and health_body.get("consent_simulated") is True,
+                  "health response must explicitly identify synthetic demo provenance")
+
+            browser_ready = page.evaluate("""async () => {
+              try {
+                const response = await fetch('/health/ready', { cache: 'no-store' });
+                const body = await response.json();
+                return { status: response.status, body };
+              } catch (error) {
+                return { status: 0, error: String(error) };
+              }
+            }""")
+            check(f"{theme} browser observes fail-closed readiness",
+                  browser_ready.get("status") == 503
+                  and (browser_ready.get("body") or {}).get("ready") is False,
+                  browser_ready.get("error", f"HTTP {browser_ready.get('status')}"))
+
             if steward_enabled:
                 page.locator("#who").select_option("steward")
             for route in pages:
