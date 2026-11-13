@@ -242,6 +242,11 @@ def main() -> int:
         payload = json.loads(route.request.post_data or "{}")
         gwas_requests.append(payload)
         page_number = int(payload.get("page", 0))
+        release_date = (
+            "2026-10-30"
+            if payload.get("trait") == "release drift test" and page_number > 0
+            else "2026-10-29"
+        )
         association_id = "218086295" if page_number == 0 else "218060208"
         trait_label = (
             "Hematological traits (multi-trait analysis)"
@@ -308,7 +313,7 @@ def main() -> int:
             "retrieved_at": "2026-11-13T10:00:00Z",
             "provenance": {
                 "provider": "GWAS Catalog", "api": "REST API v2", "api_version": "2.0",
-                "data_release_date": "2026-10-29", "api_release_date": "2025-08-01",
+                "data_release_date": release_date, "api_release_date": "2025-08-01",
                 "dbsnp_build": "156", "gene_build": "GRCh38.p14",
                 "efo_version": "v3.95.0", "ensembl_version": "116",
                 "commit_hash": "c5e2dc9", "license": "Apache License 2.0",
@@ -506,12 +511,22 @@ def main() -> int:
               and len(gwas_export["records"]) == 2
               and gwas_export["records"][0]["study_accession"] == "GCST90838669")
 
+        page.get_by_label("Trait / phenotype (optional)").fill("release drift test")
+        page.get_by_role("button", name="Search GWAS Catalog").click()
+        page.get_by_text("2026-10-29", exact=False).wait_for()
+        page.get_by_role("button", name="Load more GWAS associations").click()
+        page.get_by_text("The GWAS Catalog release changed while loading this search", exact=False).wait_for()
+        check("GWAS pagination refuses to combine records from different data releases",
+              len(gwas_requests) == 4
+              and page.locator("#gwas-results .gwas-record").count() == 1
+              and "new page was not appended" in page.locator("#gwas-status").inner_text())
+
         page.get_by_label("Trait / phenotype (optional)").fill("breast cancer")
         page.get_by_label("Include more specific child ontology traits").check()
         page.get_by_role("button", name="Search GWAS Catalog").click()
         page.get_by_text("2026-10-29", exact=False).wait_for()
         check("GWAS Catalog trait search explicitly includes child ontology terms",
-              len(gwas_requests) == 3
+              len(gwas_requests) == 5
               and gwas_requests[-1].get("trait") == "breast cancer"
               and gwas_requests[-1].get("show_child_traits") is True)
 
