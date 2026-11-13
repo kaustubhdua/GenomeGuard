@@ -21,6 +21,7 @@ Every step writes to the hash-chained audit log.
 from __future__ import annotations
 
 import hashlib
+from html import escape as html_escape
 import hmac
 import json
 import re
@@ -1016,7 +1017,7 @@ class GenomeGuardService:
         res = {
             "resourceType": "Consent", "id": ref,
             "meta": {"tag": [tag]},
-            "text": {"status": "generated", "div": f'<div xmlns="http://www.w3.org/1999/xhtml"><p>{narrative}</p></div>'},
+            "text": {"status": "generated", "div": f'<div xmlns="http://www.w3.org/1999/xhtml"><p>{html_escape(narrative, quote=False)}</p></div>'},
             "status": "inactive" if d.withdrawn else "active",
             "scope": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/consentscope",
                                   "code": "research", "display": "Research"}]},
