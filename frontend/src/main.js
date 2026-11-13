@@ -1,4 +1,4 @@
-import { api, boot, state, setWho, selectDemoRequester, isSteward, signInWithInstitution, signOutInstitution } from "./api.js";
+import { api, boot, state, selectDemoRequester, isSteward, signInWithInstitution, signOutInstitution } from "./api.js";
 import { h } from "./ui.js";
 import { startTour, tourAvailable } from "./tour.js";
 
