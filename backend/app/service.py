@@ -893,6 +893,9 @@ class GenomeGuardService:
             raise ServiceError(422, "invalid_consent_authority_event", str(exc)) from None
         if self.store.consent_event_exists(payload["event_id"]):
             raise ServiceError(409, "duplicate_consent_event", "this consent event was already applied")
+        effective_at = datetime.fromisoformat(
+            payload["effective_at"].replace("Z", "+00:00")
+        ).astimezone(UTC)
         row = self.store.donor_by_source_sample_id(
             payload["source_sample_id"], self.master, self.dataset_id,
         )
@@ -906,6 +909,27 @@ class GenomeGuardService:
         # SQLite's BEGIN IMMEDIATE transaction already serializes writers.
         if getattr(self.store, "path", None) == "postgresql":
             self.store.q("SELECT id FROM donors WHERE id=? FOR UPDATE", (donor_id,))
+        previous_events = self.store.q(
+            "SELECT effective_at FROM consent_events WHERE donor_id=? AND dataset_id=?",
+            (donor_id, self.dataset_id),
+        )
+        for previous in previous_events:
+            try:
+                previous_at = datetime.fromisoformat(
+                    previous["effective_at"].replace("Z", "+00:00")
+                )
+                if previous_at.tzinfo is None or previous_at.utcoffset() is None:
+                    raise ValueError("stored effective_at is missing a timezone")
+            except (AttributeError, TypeError, ValueError):
+                raise ServiceError(
+                    409, "consent_history_invalid",
+                    "stored consent event history contains an invalid effective timestamp",
+                ) from None
+            if effective_at <= previous_at.astimezone(UTC):
+                raise ServiceError(
+                    409, "stale_consent_event",
+                    "consent event effective_at must be later than every previously applied event",
+                )
         donor = self._donor(donor_id)
         if donor.consent.get("consent_basis") == "dataset_policy":
             raise ServiceError(409, "dataset_policy_not_individual_consent",
