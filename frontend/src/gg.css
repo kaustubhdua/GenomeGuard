@@ -1106,3 +1106,31 @@ label:has(input[type="radio"]:checked) input[type="radio"]{accent-color:var(--pe
 }
 .clinvar-classification p { margin: 6px 0 0; }
 .clinvar-record .clinvar-classifications { margin: 8px 0; }
+
+
+.gwas-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+.gwas-metric {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pane);
+  background: var(--pane-2);
+  overflow-wrap: anywhere;
+}
+.gwas-metric strong,
+.gwas-metric span,
+.gwas-metric small { display: block; }
+.gwas-metric span { margin-top: 6px; font-weight: 650; }
+.gwas-metric small { margin-top: 4px; color: var(--muted); }
+.gwas-child-traits-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+}
+.gwas-child-traits-label input { width: auto; margin: 0; }
+.gwas-record .source-links { flex-wrap: wrap; }
