@@ -354,7 +354,7 @@ def main() -> None:
                  "reference_assembly": "GRCh37", "file_sha256": "a" * 64, "sample_count": 40,
                  "variant_count": 300, "genotype_call_count": 12000, "imported_at": "2026-11-10T12:00:00Z",
                  "source_url": "https://example.org/alpha", "reuse_statement_url": "https://example.org/alpha/terms",
-                 "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "Fixture policy"},
+                 "citation": "=HYPERLINK(\"https://bad.example\")", "policy_description": "  =SUM(1,1)"},
             ],
         }
         pg.route("**/catalogue/datasets", lambda route: route.fulfill(
@@ -385,7 +385,7 @@ def main() -> None:
         catalogue_csv = catalogue_path.read_text(encoding="utf-8-sig")
         check("catalogue CSV preserves provenance and neutralizes spreadsheet formulas",
               "Source URL" in catalogue_csv and "Reuse terms URL" in catalogue_csv
-              and "'=HYPERLINK" in catalogue_csv)
+              and "'=HYPERLINK" in catalogue_csv and "'  =SUM(1,1)" in catalogue_csv)
         catalogue_path.unlink(missing_ok=True)
         ctx.close()
 
