@@ -105,3 +105,15 @@ Verification:
 A researcher can explicitly add a selected ontology term to the publication-search query. The UI combines that term's source label and up to three source synonyms as a visible quoted `OR` expression, preserves the existing query as another `OR` clause, and returns focus to the editable publication query. Nothing is silently expanded or searched until the researcher reviews and submits the resulting query. This is lexical expansion from OLS4 labels/synonyms, not semantic similarity scoring or an asserted cross-ontology mapping.
 
 The desktop browser acceptance verifies that the selected term and source synonym are inserted into the editable query while preserving the researcher's original text.
+
+
+### Symptom-to-research discovery flow
+
+The phenotype panel supports a symptom-first workflow. It defaults to the Human Phenotype Ontology (HPO), which is designed to represent phenotypic abnormalities. A user enters a symptom phrase, reviews candidate HPO terms and source synonyms returned by OLS4, and explicitly chooses **Find research papers for this term**. GenomeGuard then sends the selected source label and synonyms as a bounded quoted OR expression to the existing Europe PMC and PubMed publication search. The ordinary source metadata, pagination, deduplication and publication links are retained.
+
+This is terminology-assisted literature retrieval, not a trained diagnostic model or an AI clinical decision system. It does not infer a disease from a symptom, estimate probability, rank treatment options, infer causality, or establish that a paper applies to an individual. Candidate term selection remains a human decision. A future semantic/LLM layer would require a separately reviewed design, evaluation dataset, privacy review and explicit provenance for every generated query term; it must not receive private participant data or genotype data.
+
+### Department-specific search entry points
+
+The Research Discovery page provides direct, shareable hyperlinks for Genetics & Genomics, Oncology, Neurology, Cardiology, Immunology, Rare Diseases, Bioinformatics and Pharmacogenomics. Each link opens the publication search with that department selected and runs a live source-backed query scoped to its documented topic terms. The search remains editable so researchers can add a question or symptom, change sources, and inspect the exact resulting records. Department filters are broad discovery entry points, not formal taxonomies or exhaustive specialty coverage.
+
