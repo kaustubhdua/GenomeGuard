@@ -4,7 +4,7 @@ from starlette.testclient import TestClient
 from app.api import create_app
 from app.config import Settings
 from app.identity import OIDCIdentity
-from app.service import hash_key
+from app.service import DEMO_REQUESTERS, hash_key
 from app.store import Store
 
 
