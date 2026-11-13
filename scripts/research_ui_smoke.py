@@ -447,7 +447,7 @@ def main() -> int:
               and "https://example.org/evidence/1" in markdown_report
               and "Citation and reuse requirements" in markdown_report)
 
-        page.get_by_label("Gene symbol").fill("BRCA1")
+        page.locator("#clinvar-gene-symbol").fill("BRCA1")
         page.get_by_label("ClinVar report property filter").select_option("pathogenic")
         page.get_by_role("button", name="Search ClinVar variants").click()
         page.get_by_text("Conflicting classifications of pathogenicity", exact=True).wait_for()
@@ -540,7 +540,7 @@ def main() -> int:
         mobile.locator(".research-paper").first.wait_for()
         check("mobile research search renders live-provider-shaped results",
               mobile.locator(".research-paper").count() == PAGE_SIZE + 1)
-        mobile.get_by_label("Gene symbol").fill("BRCA1")
+        mobile.locator("#clinvar-gene-symbol").fill("BRCA1")
         mobile.get_by_label("ClinVar report property filter").select_option("pathogenic")
         mobile.get_by_role("button", name="Search ClinVar variants").click()
         mobile.get_by_text("Conflicting classifications of pathogenicity", exact=True).wait_for()
