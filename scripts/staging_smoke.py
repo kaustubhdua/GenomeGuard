@@ -105,10 +105,10 @@ def main() -> int:
 
         status, demo = get_json(base, "/demo/requesters", args.timeout)
         accounts = demo.get("requesters")
-        check("public demo endpoint never exposes administrator credentials",
+        check("public demo personas contain no static credentials",
               status == 200 and "admin_key" not in demo
               and isinstance(accounts, list) and len(accounts) >= 1
-              and all(bool(item.get("api_key")) for item in accounts))
+              and all("api_key" not in item for item in accounts))
 
         status, _ = get_json(base, "/audit", args.timeout)
         check("steward audit route rejects anonymous requests", status == 401,
