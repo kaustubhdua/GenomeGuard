@@ -15,6 +15,11 @@ on:
         required: true
         default: "https://genomeguard.onrender.com"
         type: string
+      expected_deployed_sha:
+        description: "Expected Render deployment commit SHA"
+        required: true
+        default: "3280ebc1924039bcfa19f4c58bb75e83a8c370eb"
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -26,6 +31,7 @@ jobs:
     timeout-minutes: 20
     env:
       BASE_URL: ${{ inputs.base_url || 'https://genomeguard.onrender.com' }}
+      EXPECTED_DEPLOYED_SHA: ${{ inputs.expected_deployed_sha || '3280ebc1924039bcfa19f4c58bb75e83a8c370eb' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
