@@ -52,3 +52,10 @@ For large-scale systematic work, use official Open Targets data downloads or Big
 - Target–disease evidence: https://platform-docs.opentargets.org/evidence
 - Target–disease associations: https://platform-docs.opentargets.org/associations
 - Official API implementation: https://github.com/opentargets/platform-api
+
+
+## Research workspace, source filters and exports
+
+The research workspace includes an Open Targets evidence panel that accepts an explicit Ensembl gene identifier and optional EFO disease identifier. It does not guess gene symbols or resolve identifiers silently. Association and evidence source filters preserve the provider's datasource/datatype attribution. Original HTTPS evidence URLs and numeric PMID links are rendered as source links.
+
+The panel displays the Open Targets API version, data release, retrieval timestamp, endpoint and exact query identifiers. JSON and Markdown exports include those provenance fields, the loaded result pages, original evidence identifiers/URLs, and explicit citation requirements. The export warns that association scores are Open Targets prioritisation scores, not probabilities, clinical validity, causality or GenomeGuard confidence. Pagination refuses to combine records if the API or data release changes during a search.
