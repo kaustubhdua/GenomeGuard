@@ -143,7 +143,8 @@ export async function render() {
     activeController = controller;
     const timeout = setTimeout(() => controller.abort(), 12000);
     const url = API + "?query=" + encodeURIComponent(query)
-      + "&format=json&resultType=core&pageSize=" + PAGE_SIZE + "&cursorMark=" + encodeURIComponent(cursorMark);
+      + "&format=json&resultType=core&pageSize=" + PAGE_SIZE + "&cursorMark=" + encodeURIComponent(cursorMark)
+      + "&synonym=true";
     try {
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
@@ -214,7 +215,7 @@ export async function render() {
       question.focus();
       return;
     }
-    const query = buildQuery(text, department.value) + " sort_date:y";
+    const query = buildQuery(text, department.value);
     if (!query.trim()) {
       status.textContent = "Choose a department or enter a research question.";
       return;
