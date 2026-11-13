@@ -149,7 +149,9 @@ async function renderCatalogue(sample, force = false) {
   }
 
   function csvCell(value) {
-    const text = value == null ? "" : String(value);
+    let text = value == null ? "" : String(value);
+    // Prevent spreadsheet formula execution when source-controlled text is opened in Excel/Sheets.
+    if (/^[\\s]*[=+@-]/.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   }
 
