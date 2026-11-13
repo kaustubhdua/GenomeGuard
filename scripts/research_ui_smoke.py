@@ -485,7 +485,7 @@ def main() -> int:
 
         page.get_by_label("Gene symbol (optional)").fill("BRCA1")
         page.get_by_role("button", name="Search GWAS Catalog").click()
-        page.get_by_text("2026-10-29", exact=False).wait_for()
+        page.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
         check("GWAS Catalog search preserves data release and reported association metadata",
               len(gwas_requests) == 1
               and gwas_requests[0].get("gene_symbol") == "BRCA1"
@@ -563,7 +563,7 @@ def main() -> int:
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.get_by_label("Gene symbol (optional)").fill("BRCA1")
         mobile.get_by_role("button", name="Search GWAS Catalog").click()
-        mobile.get_by_text("2026-10-29", exact=False).wait_for()
+        mobile.locator("#gwas-provenance").get_by_text("Data release: 2026-10-29", exact=False).wait_for()
         check("mobile GWAS evidence has no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
