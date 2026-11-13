@@ -186,6 +186,8 @@ class GenomeGuardService:
         is_demo_label = self.demo_mode and isinstance(disease, str) and DISEASE.match(disease)
         if disease is not None and not (is_mondo or is_demo_label):
             bad("research-mode disease restrictions must use a MONDO identifier (MONDO:ddddddd)")
+        if not self.demo_mode and purpose == "disease_research" and disease is None:
+            bad("institutional disease research requires a MONDO disease identifier")
         level = req.get("data_level", "frequency")
         if level not in DATA_LEVELS:
             bad(f"data_level must be one of {list(DATA_LEVELS)}")
