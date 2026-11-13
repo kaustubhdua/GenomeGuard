@@ -14,6 +14,10 @@ Download the appropriate public gnomAD v4 GRCh38 sites artifact and prepare a no
 
 Optional: `homozygote_count`. No additional columns are accepted; sample identifiers, individual genotype fields, and participant IDs are rejected. Preserve source release, artifact URL, checksum, and documented population labels. The normalizer must map the release's INFO/frequency annotations to AC, AN, AF and homozygote count without deriving sample-level calls.
 
+## Checksum semantics
+
+The manifest `file_sha256` field must pin the exact normalized TSV bytes supplied to this importer. The normalized TSV is the imported artifact; it is not byte-identical to the upstream gnomAD VCF/sites file. If the upstream source artifact has a separate checksum, preserve it separately in manifest metadata (for example `source_artifact_sha256`) alongside the source URL and release. Never put the raw VCF checksum in `file_sha256` and then expect it to match the normalized TSV. The importer always compares the actual TSV digest with the registered `file_sha256` before inserting any rows; `--expected-sha256` is an optional second operator-supplied check, not a replacement for the manifest pin.
+
 ## Import
 
 1. Apply the native migration `backend/migrations/002_normalized_public_references.sql` through the normal reviewed deployment process. It creates the normalized dataset and aggregate-reference tables without Supabase or PostgREST.
