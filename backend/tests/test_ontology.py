@@ -98,6 +98,7 @@ def test_rejects_invalid_input_without_network(monkeypatch, query, ontology_id, 
 def test_rejects_terms_outside_allowlist(monkeypatch):
     bad = payload()
     bad["response"]["docs"][0]["ontology_name"] = "do-not-trust"
+    bad["response"]["docs"][0]["ontology_prefix"] = "UNTRUSTED"
     monkeypatch.setattr(ontology, "urlopen", lambda *a, **k: FakeResponse(bad))
     with pytest.raises(ontology.OntologyProviderError, match="outside"):
         ontology.search_ontology("breast cancer")
