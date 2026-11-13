@@ -4,6 +4,7 @@ from app.api import MAX_JSON_BODY_BYTES
 from tests.helpers import make_client
 
 
+
 def test_json_endpoints_reject_oversized_content_length_before_parsing():
     _, client = make_client()
     response = client.post(
@@ -13,6 +14,7 @@ def test_json_endpoints_reject_oversized_content_length_before_parsing():
     )
     assert response.status_code == 413
     assert response.json()["error"] == "request_body_too_large"
+
 
 
 def test_json_body_limit_does_not_change_small_json_validation():
@@ -26,12 +28,14 @@ def test_json_body_limit_does_not_change_small_json_validation():
     assert response.json()["error"] == "bad_json"
 
 
+
 def test_json_body_limit_preserves_valid_demo_session_flow():
     _, client = make_client()
     response = client.post("/demo/session", json={"requester_id": 1})
     assert response.status_code == 200
     assert response.json()["expires_in"] == 1800
     assert response.json()["session_token"]
+
 
 def test_streaming_limit_cannot_be_bypassed_without_content_length():
     import asyncio
@@ -64,6 +68,7 @@ def test_streaming_limit_cannot_be_bypassed_without_content_length():
             raise AssertionError("streaming request limit was bypassed")
 
     asyncio.run(invoke())
+
 
 def test_deeply_nested_json_is_rejected_without_uncaught_recursion_error():
     _, client = make_client()
