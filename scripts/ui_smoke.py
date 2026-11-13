@@ -282,6 +282,10 @@ def main() -> None:
         nav_pg.goto(base + "/#/overview")
         nav_pg.wait_for_selector("#view h1", timeout=15000)
         nav_pg.locator("#who").wait_for(state="visible", timeout=30000)
+        nav_pg.wait_for_function(
+            "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
+            timeout=30000,
+        )
         persona_values = nav_pg.locator("#who option").evaluate_all(
             "(options) => options.map((option) => option.value).filter(Boolean)"
         )
@@ -321,6 +325,10 @@ def main() -> None:
         pg.wait_for_selector("#view h1", timeout=15000)
         pg.locator("#who").wait_for(state="visible", timeout=30000)
         pg.wait_for_function(
+            "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
+            timeout=30000,
+        )
+        pg.wait_for_function(
             "() => document.querySelector('#who')?.value && document.querySelector('#who').value !== 'steward'",
             timeout=30000,
         )
@@ -354,6 +362,10 @@ def main() -> None:
         tour_pg.goto(base + "/#/overview", wait_until="domcontentloaded")
         tour_pg.wait_for_selector("#view h1", timeout=15000)
         tour_pg.locator("#who").wait_for(state="visible", timeout=30000)
+        tour_pg.wait_for_function(
+            "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
+            timeout=30000,
+        )
         tour_pg.keyboard.press("Control+k")
         tour_pg.locator("#cmdk-input").fill("Start the guided tour")
         tour_pg.locator("#cmdk-list li").first.click()
@@ -384,6 +396,10 @@ def main() -> None:
             pg.goto(base + "/#/overview")
             pg.wait_for_selector("#view h1", timeout=15000)
             pg.locator("#who").wait_for(state="visible", timeout=30000)
+        pg.wait_for_function(
+            "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
+            timeout=30000,
+        )
             for hsh in PUBLIC_PAGES:
                 pg.goto(base + "/" + hsh)
                 try:  # pages render after their API calls; wait for the heading, not a fixed time
@@ -480,6 +496,10 @@ def main() -> None:
             if menu_button.is_visible():
                 menu_button.click()
             pg.locator("#who").wait_for(state="visible", timeout=30000)
+        pg.wait_for_function(
+            "() => /^\\d+$/.test(document.querySelector('#who')?.value || '')",
+            timeout=30000,
+        )
             over = []
             for hsh in PAGES:
                 pg.goto(base + "/" + hsh)
