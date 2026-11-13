@@ -544,9 +544,22 @@ def test_dataset_policy_accepts_poa_without_claiming_participant_consent():
     with tempfile.TemporaryDirectory() as d:
         v = Path(d) / "t.vcf.gz"
         make_vcf(v)
-        policy_path = Path(__file__).resolve().parents[2] / "docs" / "policies" / "igsr-1000-genomes-public-release.json"
-        policy = __import__("json").loads(policy_path.read_text(encoding="utf-8"))
-        policy["duo_use"] = "POA"
+        # This is an explicitly synthetic test policy, not an assertion about IGSR terms.
+        policy = {
+            "policy_id": "test-only-poa-policy",
+            "source_dataset": "synthetic POA policy fixture",
+            "source_url": "https://example.org/test-only-poa-policy",
+            "scope": "dataset",
+            "duo_use": "POA",
+            "disease": None,
+            "duo_modifiers": [],
+            "population": None,
+            "withdrawal_supported": False,
+            "review_status": "source_documented_not_legal_review",
+            "limitations": ["Synthetic fixture only; not a real dataset policy."],
+        }
+        policy_path = Path(d) / "poa-policy.json"
+        policy_path.write_text(__import__("json").dumps(policy), encoding="utf-8")
         cohort, meta = real.build_cohort(
             v, PED, n_samples=44, max_variants=50, keep_prob=1.0, seed=9,
             consent_policy=policy, consent_source_file=str(policy_path),
