@@ -91,7 +91,7 @@ def test_pubmed_search_normalizes_real_provider_contract(monkeypatch):
         "pmid": "12345678",
         "pmcid": "PMC12345",
         "doi": "10.1000/example",
-        "title": "BRCA1 and ovarian cancer",
+        "title": "BRCA1 and ovarian cancer.",
         "authors": ["A Researcher", "B Scientist"],
         "journal": "Journal of Oncology",
         "publication_date": "2025 Jan",
