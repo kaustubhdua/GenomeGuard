@@ -971,7 +971,9 @@ class GenomeGuardService:
         are carried in namespaced extensions rather than mapped onto FHIR purpose codes we cannot
         verify. The record is tagged as simulated: no real person consented to this system.
         Structure follows FHIR R4 and is checked in CI with the HL7 FHIR Validator against the
-        project extension package. Structural conformance does not make simulated consent legally valid."""
+        project extension package. Structural conformance does not make consent legally valid or verify
+        the source authority. Synthetic demo, operator-supplied participant, and unknown provenance
+        receive distinct FHIR tags and narratives."""
         d = self._donor(donor_id)
         c = d.consent
         if c.get("consent_basis") == "dataset_policy":
