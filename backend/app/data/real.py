@@ -386,8 +386,15 @@ def _validated_consent(record: dict, sample: str) -> tuple[dict, bool]:
     disease = record.get("disease")
     if disease is not None and not isinstance(disease, str):
         raise ValueError(f"consent disease for {sample} must be a string or null")
-    if use == "DS" and (not isinstance(disease, str) or not disease.strip()):
-        raise ValueError(f"disease-specific consent for {sample} requires disease")
+    if use == "DS" and (not isinstance(disease, str) or not re.fullmatch(r"MONDO:\\d{7}", disease)):
+        raise ValueError(
+            f"disease-specific consent for {sample} requires a MONDO identifier (MONDO:ddddddd)"
+        )
+    disease_label = record.get("disease_label")
+    if disease_label is not None and (
+        not isinstance(disease_label, str) or not disease_label.strip() or len(disease_label) > 160
+    ):
+        raise ValueError(f"disease label for {sample} must be a non-empty string up to 160 characters")
     modifiers = record.get("modifiers")
     allowed_modifiers = {"NCU", "NPU", "NPUNCU", "NMDS", "NPOA", "NAGR", "NCTRL"}
     if not isinstance(modifiers, list) or any(
@@ -425,6 +432,8 @@ def _validated_consent(record: dict, sample: str) -> tuple[dict, bool]:
     validated = {"use": use, "disease": disease, "modifiers": sorted(set(modifiers)),
                  "population": population, "consent_date": consent_date,
                  "consent_basis": consent_basis}
+    if disease_label is not None:
+        validated["disease_label"] = disease_label
     for key in ("source_policy_id", "source_policy_url", "withdrawal_supported"):
         if key in record:
             validated[key] = record[key]
@@ -457,6 +466,10 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
             raise ValueError("this public-release policy must explicitly disclose that participant withdrawal is not supported")
         if consent_policy["duo_use"] not in {"GRU", "HMB", "DS", "POA"}:
             raise ValueError("consent policy duo_use must be GRU, HMB, DS, or POA")
+        if consent_policy["duo_use"] == "DS" and not re.fullmatch(
+            r"MONDO:\\d{7}", str(consent_policy.get("disease") or "")
+        ):
+            raise ValueError("DS dataset policy requires disease as a MONDO identifier (MONDO:ddddddd)")
         if not isinstance(consent_policy["source_url"], str) or not consent_policy["source_url"].startswith("https://"):
             raise ValueError("consent policy source_url must be HTTPS")
     rng = np.random.default_rng(seed)
@@ -481,6 +494,7 @@ def build_cohort(vcf: Path, ped_text: str, n_samples: int = 600, max_variants: i
             sample: {
                 "use": consent_policy["duo_use"],
                 "disease": consent_policy.get("disease"),
+                "disease_label": consent_policy.get("disease_label"),
                 "modifiers": consent_policy["duo_modifiers"],
                 "population": consent_policy.get("population"),
                 "consent_date": None,
