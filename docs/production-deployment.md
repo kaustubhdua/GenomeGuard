@@ -47,6 +47,8 @@ All three are on the Free plan. They are not interchangeable and must not be tre
 - No production-grade database target, backup schedule, PITR window, independently held backup key, KMS/HSM key custody, or production restore evidence has been verified.
 - The repository includes native PostgreSQL migrations, restricted runtime/migration roles, RLS, consent event ledger and signed checkpoint code. These are implementation foundations; they do not provision infrastructure or prove live production controls.
 - Institutional OIDC/SSO, organization membership lifecycle, MFA policy, participant-specific consent authority, independent audit anchoring, monitoring/alerting, incident response and independent legal/privacy/scientific/security sign-off remain unaccepted.
+- DUO restrictions NCU/NPU/NPUNCU require verified commercial-use and not-for-profit organisation attributes. The current service has no independently verified organisation/legal-entity registry or DAC-verified commercial-purpose workflow; it passes these attributes as unknown and fails closed. Do not override this by trusting a requester-supplied `is_commercial=false`.
+- Consent records without an explicit `consent_basis` are rejected. Signed consent events require timezone-aware, non-future, strictly increasing effective timestamps; this is an event-integrity control, not proof that the issuing authority's statement is truthful.
 
 ### Immediate deployment actions
 
