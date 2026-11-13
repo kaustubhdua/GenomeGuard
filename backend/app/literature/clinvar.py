@@ -237,7 +237,11 @@ def search_clinvar(
         if not isinstance(docs, dict) or not isinstance(docs.get("uids"), list):
             raise ClinVarProviderError("ClinVar ESummary response was missing result.uids")
         returned_uids = docs["uids"]
-        if len(returned_uids) != len(ids) or set(returned_uids) != set(ids):
+        if (
+            any(not isinstance(uid, str) or not uid.isdigit() for uid in returned_uids)
+            or len(returned_uids) != len(ids)
+            or set(returned_uids) != set(ids)
+        ):
             raise ClinVarProviderError("ClinVar ESummary returned an unexpected identifier set")
         for uid in ids:
             record = docs.get(uid)
