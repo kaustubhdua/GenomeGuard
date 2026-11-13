@@ -1,6 +1,5 @@
 import { api, boot, state, selectDemoRequester, isSteward, signInWithInstitution, signOutInstitution } from "./api.js";
 import { h } from "./ui.js";
-import { startTour, tourAvailable } from "./tour.js";
 
 const ROUTES = [
   { re: /^#\/chromosomes$/, load: () => import("./pages/chromosomes.js"), nav: "chromosomes", title: "Chromosomes" },
@@ -200,7 +199,6 @@ const ACTIONS = () => [
     } },
   ] : []),
   { text: "Switch colour theme", hint: "Appearance", run: toggleTheme },
-  ...(tourAvailable() ? [{ text: "Start the guided tour", hint: "Help", run: startTour }] : []),
 ];
 let sel = 0, shown = [];
 function openPalette() { $("cmdk").classList.add("open"); const i = $("cmdk-input"); i.value = ""; filter(); i.focus(); }
