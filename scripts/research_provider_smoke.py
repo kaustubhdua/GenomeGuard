@@ -14,7 +14,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
-QUERY = "BRCA1 AND breast cancer sort_date:y"
+QUERY = "BRCA1 AND breast cancer"
 
 
 def fetch(cursor_mark: str) -> dict:
@@ -24,6 +24,7 @@ def fetch(cursor_mark: str) -> dict:
         "resultType": "core",
         "pageSize": 3,
         "cursorMark": cursor_mark,
+        "synonym": "true",
     })
     request = Request(url, headers={
         "Accept": "application/json",
