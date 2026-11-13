@@ -182,7 +182,7 @@ class GenomeGuardService:
         if purpose not in RESEARCH_PURPOSES:
             bad(f"purpose must be one of {sorted(RESEARCH_PURPOSES)}")
         disease = req.get("disease")
-        is_mondo = isinstance(disease, str) and re.fullmatch(r"MONDO:\\d{7}", disease)
+        is_mondo = isinstance(disease, str) and re.fullmatch(r"MONDO:\d{7}", disease)
         is_demo_label = self.demo_mode and isinstance(disease, str) and DISEASE.match(disease)
         if disease is not None and not (is_mondo or is_demo_label):
             bad("research-mode disease restrictions must use a MONDO identifier (MONDO:ddddddd)")
@@ -944,7 +944,7 @@ class GenomeGuardService:
         disease = incoming.get("disease")
         disease_label = incoming.get("disease_label")
         if use == "DS":
-            if not isinstance(disease, str) or not re.fullmatch(r"MONDO:\\d{7}", disease):
+            if not isinstance(disease, str) or not re.fullmatch(r"MONDO:\d{7}", disease):
                 raise ServiceError(422, "invalid_consent", "DS consent requires a MONDO disease identifier")
             if disease_label is not None and (
                 not isinstance(disease_label, str) or not disease_label.strip() or len(disease_label) > 160
@@ -1080,7 +1080,7 @@ class GenomeGuardService:
                 "url": f"{self.FHIR_EXT}disease.json",
                 "valueString": c.get("disease_label") or c["disease"],
             })
-            if re.fullmatch(r"MONDO:\\d{7}", str(c["disease"])):
+            if re.fullmatch(r"MONDO:\d{7}", str(c["disease"])):
                 ext.append({
                     "url": f"{self.FHIR_EXT}disease-ontology.json",
                     "valueCoding": {
