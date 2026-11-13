@@ -27,6 +27,13 @@ The connected workspace currently lists three separate GenomeGuard staging servi
 
 All three are on the Free plan. They are not interchangeable and must not be treated as a single canonical staging environment. Consolidation requires an explicit owner and retention decision; do not delete or suspend any service as part of this audit.
 
+### GitHub repository protection and CI queue
+
+- The GitHub branch inventory reports `main` as `protected=false`. The connected GitHub integration cannot read or change branch-protection settings (the protection endpoint returns HTTP 403, `Resource not accessible by integration`). Until a repository maintainer configures a ruleset, required checks are not guaranteed to be enforced before a direct push or merge.
+- Required `main` checks should include the backend CI job, Python and JavaScript CodeQL, secret scanning, Python dependency audit, and deployment-configuration checks. Require pull requests, at least one independent approval, dismissal of stale approvals after new commits, no force pushes/deletion, and no administrator bypass for normal releases.
+- As of this audit, the current `main` SHA and open PR heads #152–#156 all have backend/security/deployment check runs reported as `queued`. The integration does not expose the underlying hosted-runner queue reason. A queued check is not a passing check; do not merge or deploy while required checks are pending.
+- The Vercel GitHub integration has returned `api-deployments-free-per-day` (more than 100 deployments/day) on PR preview attempts. This is an external preview quota, not a backend CI result. Do not upgrade a paid plan or change the production deployment target without explicit approval.
+
 ### Separate research-mode service
 
 - `Dockerfile.research` is the dedicated image for building the public 1000 Genomes research evaluation cohort. It is not the public demo image.
