@@ -125,6 +125,7 @@ def test_gwas_v2_empty_result_is_a_valid_empty_state(monkeypatch):
     {"trait": "x"},
     {"trait": "asthma\nOR cancer"},
     {"show_child_traits": "true", "gene_symbol": "BRCA1"},
+    {"show_child_traits": True, "gene_symbol": "BRCA1"},
     {"page": -1, "gene_symbol": "BRCA1"},
     {"page": True, "gene_symbol": "BRCA1"},
     {"size": 51, "gene_symbol": "BRCA1"},
