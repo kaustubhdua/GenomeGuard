@@ -101,7 +101,6 @@ def check_vcf_qc_workflow(browser, base: str) -> None:
     menu_button = page.locator("#menu")
     if menu_button.is_visible():
         menu_button.click()
-    page.locator("#who").select_option("steward")
     page.goto(base + "/#/dataset-qc")
     page.wait_for_selector(".qc-upload", timeout=15000)
 
