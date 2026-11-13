@@ -50,7 +50,7 @@ API keys are not institutional identity verification. A named requester record i
 
 The old Supabase migrations and Edge Function implementation are retained as historical migration artifacts only; they are not part of the runtime, build, or deployment path. Do not apply them as part of a new installation.
 
-The public demo-account endpoint returns only synthetic researcher personas. It never returns a hosted administrator credential. Local interactive development may explicitly opt in with `GG_EXPOSE_DEMO_ADMIN_KEY=true`; never enable this setting on a public deployment. The hosted synthetic staging service deliberately disables steward controls rather than exposing an admin key.
+The public demo-account endpoints return synthetic requester and donor persona metadata only. They never return static requester, donor or administrator credentials. The browser obtains short-lived, process-local demo sessions that expire after 30 minutes; these are for the single-process synthetic demo only and are not an institutional identity system.
 
 ## Get started
 
