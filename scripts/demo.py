@@ -50,7 +50,9 @@ def main():
     st, demo = call(base, "GET", "/demo/requesters")
     if st != 200:
         sys.exit("demo accounts not available: is the server in demo mode?")
-    admin = os.environ.get("GG_ADMIN_API_KEY", "demo-admin-key")
+    admin = os.environ.get("GG_ADMIN_API_KEY")
+    if not admin:
+        sys.exit("set GG_ADMIN_API_KEY explicitly for the local steward portion of this demo")
     accounts = {item["name"]: item for item in demo.get("requesters", [])}
 
     def session_for(name):
