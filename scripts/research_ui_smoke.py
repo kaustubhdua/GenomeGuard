@@ -382,7 +382,7 @@ def main() -> int:
                 "stable_id": "ENSG00000139618", "symbol": "BRCA2",
                 "biotype": "protein_coding", "gene_version": 19,
                 "assembly": "GRCh38", "chromosome": "13",
-                "start": 32315086, "end": 32400266, "strand": 1,
+                "start": 32315086, "end": 32400266, "coordinate_system": "1-based closed (inclusive)", "strand": 1,
                 "canonical_transcript": "ENST00000380152",
             },
             "transcript_count_returned": 1,
@@ -668,7 +668,8 @@ def main() -> int:
         check("Ensembl resolves a symbol to stable ID and assembly-aware coordinates",
               len(ensembl_requests) == 1
               and ensembl_requests[0].get("symbol") == "BRCA2"
-              and "GRCh38" in page.locator(".ensembl-panel").inner_text())
+              and "GRCh38" in page.locator(".ensembl-panel").inner_text()
+              and "1-based closed (inclusive)" in page.locator(".ensembl-panel").inner_text())
         page.get_by_role("button", name="Use this ID in Open Targets").click()
         check("resolved Ensembl ID transfers explicitly into Open Targets search",
               page.locator("#ot-ensembl-id").input_value() == "ENSG00000139618")
