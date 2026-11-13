@@ -365,18 +365,21 @@ def main() -> None:
               pg.get_by_label("Filter by source").count() == 1
               and pg.get_by_label("Filter by reference assembly").count() == 1)
         pg.get_by_label("Filter by source").select_option(label="Beta source")
+        source_rows = pg.locator(".dataset-table tbody tr").all_text_contents()
         check("dataset source filter narrows visible rows",
-              pg.locator(".dataset-table tbody tr").count() == 1
-              and "Beta source" in pg.locator(".dataset-table tbody").inner_text())
+              len(source_rows) == 1 and "Beta source" in " ".join(source_rows),
+              f"selected={pg.get_by_label('Filter by source').input_value()!r}; rows={source_rows!r}")
         pg.get_by_label("Filter by source").select_option("")
         pg.get_by_label("Filter by reference assembly").select_option("GRCh37")
+        assembly_rows = pg.locator(".dataset-table tbody tr").all_text_contents()
         check("dataset assembly filter narrows visible rows",
-              pg.locator(".dataset-table tbody tr").count() == 1
-              and "Alpha source" in pg.locator(".dataset-table tbody").inner_text())
+              len(assembly_rows) == 1 and "Alpha source" in " ".join(assembly_rows),
+              f"selected={pg.get_by_label('Filter by reference assembly').input_value()!r}; rows={assembly_rows!r}")
         pg.get_by_label("Filter by reference assembly").select_option("")
         pg.get_by_label("Sort datasets").select_option("samples")
         first_row = pg.locator(".dataset-table tbody tr").first.inner_text()
-        check("dataset sort orders by measured sample count", "Beta source" in first_row)
+        check("dataset sort orders by measured sample count", "Beta source" in first_row,
+              f"selected={pg.get_by_label('Sort datasets').input_value()!r}; first_row={first_row!r}")
         with pg.expect_download() as catalogue_download_info:
             pg.get_by_role("button", name="Export filtered CSV").click()
         catalogue_download = catalogue_download_info.value
