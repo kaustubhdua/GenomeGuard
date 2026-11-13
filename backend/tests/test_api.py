@@ -366,12 +366,57 @@ def test_production_steward_provisions_oidc_bound_requester_without_api_key(monk
     ).status_code == 200
 
 
+def test_demo_settings_default_to_random_admin_secret_and_disable_static_keys(monkeypatch):
+    from app.config import Settings
+
+    monkeypatch.delenv("GG_ADMIN_API_KEY", raising=False)
+    monkeypatch.delenv("GG_TEST_ALLOW_STATIC_DEMO_KEYS", raising=False)
+    first = Settings()
+    second = Settings()
+    assert len(first.admin_api_key) >= 32
+    assert first.admin_api_key != "demo-admin-key"
+    assert first.admin_api_key != second.admin_api_key
+    assert first.allow_static_demo_keys is False
+
+
 def test_demo_accounts_endpoint_only_in_demo_mode(monkeypatch):
-    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
     svc, c = make_client()
-    j = c.get("/demo/requesters").json()
+    response = c.get("/demo/requesters")
+    assert response.status_code == 200
+    j = response.json()
     assert {r["tier"] for r in j["requesters"]} == {"registered", "anonymous", "controlled"}
-    assert j["admin_key"] == "demo-admin-key"
+    assert "admin_key" not in j
+    assert all("api_key" not in r for r in j["requesters"])
+
+
+def test_demo_requester_session_is_short_lived_and_never_returns_api_key():
+    _, client = make_client()
+    personas = client.get("/demo/requesters").json()["requesters"]
+    response = client.post("/demo/session", json={"requester_id": personas[0]["id"]})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["expires_in"] == 1800
+    assert payload["requester"]["id"] == personas[0]["id"]
+    assert "api_key" not in payload and "admin_key" not in payload
+    assert len(payload["session_token"]) >= 40
+    profile = client.get("/me", headers={"X-Demo-Session": payload["session_token"]})
+    assert profile.status_code == 200
+
+
+def test_demo_mode_rejects_predictable_static_requester_keys(monkeypatch):
+    monkeypatch.setenv("GG_TEST_ALLOW_STATIC_DEMO_KEYS", "false")
+    _, client = make_client()
+    response = client.get("/me", headers={"X-API-Key": "demo-researcher"})
+    assert response.status_code == 401
+    assert response.json()["error"] == "demo_session_required"
+
+
+def test_demo_requester_session_rejects_unknown_and_expired_tokens():
+    _, client = make_client()
+    missing = client.post("/demo/session", json={"requester_id": 999999})
+    assert missing.status_code == 404
+    invalid = client.get("/me", headers={"X-Demo-Session": "invalid-token"})
+    assert invalid.status_code == 401
 
 
 def test_public_demo_accounts_never_disclose_custom_admin_credential(monkeypatch):
@@ -384,14 +429,14 @@ def test_public_demo_accounts_never_disclose_custom_admin_credential(monkeypatch
     assert secret not in response.text
 
 
-def test_public_demo_accounts_can_only_disclose_explicit_local_demo_key(monkeypatch):
+def test_public_demo_accounts_never_disclose_explicit_local_demo_key(monkeypatch):
     secret = "local-only-demo-secret-12345678901234567890"
     monkeypatch.setenv("GG_ADMIN_API_KEY", secret)
-    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
     _, client = make_client()
     response = client.get("/demo/requesters")
     assert response.status_code == 200
-    assert response.json()["admin_key"] == secret
+    assert "admin_key" not in response.json()
+    assert secret not in response.text
 
 
 def test_no_response_ever_leaks_genotype_like_data():
