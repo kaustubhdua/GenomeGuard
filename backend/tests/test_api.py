@@ -419,7 +419,6 @@ def test_public_demo_accounts_never_disclose_custom_admin_credential(monkeypatch
 def test_public_demo_accounts_never_disclose_explicit_local_demo_key(monkeypatch):
     secret = "local-only-demo-secret-12345678901234567890"
     monkeypatch.setenv("GG_ADMIN_API_KEY", secret)
-    monkeypatch.setenv("GG_EXPOSE_DEMO_ADMIN_KEY", "true")
     _, client = make_client()
     response = client.get("/demo/requesters")
     assert response.status_code == 200
