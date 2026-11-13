@@ -62,16 +62,21 @@ def test_every_donor_route_refuses_missing_other_donor_and_researcher_keys():
     svc, c = make_client()
     donors = c.get("/demo/donors").json()["donors"]
     a, b = donors[0], donors[1]
+    session_a = c.post("/demo/donor-session", json={"donor_id": a["id"]}).json()["session_token"]
+    session_b = c.post("/demo/donor-session", json={"donor_id": b["id"]}).json()["session_token"]
     donor_routes = [r for r in _routes(c) if r["auth"] == "donor"]
     assert len(donor_routes) >= 5
     for r in donor_routes:
         url = _url(r["path"]).replace("/donor/1", f"/donor/{a['id']}")
-        for hdr in ({}, {"X-Donor-Key": b["key"]}, {"X-Donor-Key": "x"}, H(RESEARCHER), ADMIN):
+        for hdr in ({}, {"X-Demo-Donor-Session": session_b},
+                    {"X-Demo-Donor-Session": "invalid"}, {"X-Donor-Key": "demo"},
+                    H(RESEARCHER), ADMIN):
             res = _call(c, r["method"], url, hdr)
             assert res.status_code == 401, (r["method"], url, hdr, res.status_code)
-    # donor B's key must not read donor A's FHIR export or ledger either
+        assert _call(c, r["method"], url, {"X-Demo-Donor-Session": session_a}).status_code != 401
+    # donor B's session must not read donor A's FHIR export or ledger either
     assert c.get(f"/donor/{a['id']}/consent.fhir.json",
-                 headers={"X-Donor-Key": b["key"]}).status_code == 401
+                 headers={"X-Demo-Donor-Session": session_b}).status_code == 401
 
 
 def test_requester_cannot_use_admin_actions_on_another_requesters_request():
