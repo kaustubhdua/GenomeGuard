@@ -58,6 +58,8 @@ function recordCard(record) {
     location.start && location.stop ? location.start + "–" + location.stop : "",
   ].filter(Boolean).join(" ")).filter(Boolean).join(" · ");
   const submissionCount = record.supporting_submissions || {};
+  const consequences = Array.isArray(record.molecular_consequences)
+    ? record.molecular_consequences.filter(Boolean).join(", ") : "";
   return h("article", { class: "card research-paper clinvar-record" },
     h("div", { class: "source-card-top" },
       h("span", { class: "tag" }, "NCBI ClinVar"),
@@ -65,7 +67,7 @@ function recordCard(record) {
     h("h3", {}, record.title || "Variant record without a title"),
     h("p", { class: "fine" }, "Gene: " + (genes.map((gene) => gene.symbol).filter(Boolean).join(", ") || "Not supplied")),
     h("p", { class: "fine muted" }, "Variant type: " + display(record.variation_type)
-      + " · Consequence: " + (record.molecular_consequences || []).join(", ") || "Not supplied"),
+      + " · Consequence: " + (consequences || "Not supplied by ClinVar")),
     locationText ? h("p", { class: "fine muted" }, "Genomic locations: " + locationText) : null,
     h("div", { class: "clinvar-classifications" },
       classificationCard("Germline classification", classifications.germline),
@@ -278,10 +280,16 @@ export function renderClinVarPanel() {
       status.textContent = "Loaded " + records.length + " ClinVar records. Each page is retrieved from the current public index.";
       renderAll();
     } catch (error) {
-      status.textContent = "More ClinVar records could not be loaded. " + error.message;
+      if (requestGeneration === generation) {
+        status.textContent = error.name === "AbortError"
+          ? "ClinVar pagination timed out. Please retry."
+          : "More ClinVar records could not be loaded. " + error.message;
+      }
     } finally {
-      busy = false;
-      loadMore.disabled = false;
+      if (requestGeneration === generation) {
+        busy = false;
+        loadMore.disabled = false;
+      }
     }
   }
 
