@@ -5,6 +5,7 @@ from app.service import _release_enabled_for_mode
 from tests.helpers import make_client
 
 
+
 def test_governed_release_is_enabled_only_for_synthetic_demo_mode():
     settings = Settings()
     settings.demo_mode = True
@@ -12,6 +13,7 @@ def test_governed_release_is_enabled_only_for_synthetic_demo_mode():
 
     settings.demo_mode = False
     assert _release_enabled_for_mode(settings) is False
+
 
 
 def test_variant_search_uses_verified_public_catalogue_when_release_is_disabled(monkeypatch):
@@ -34,6 +36,7 @@ def test_variant_search_uses_verified_public_catalogue_when_release_is_disabled(
         {"source": "verified-public-reference", "variant_id": "public-variant-1"}
     ]
     assert calls == [(chromosome, position, None, None)]
+
 
 def test_api_docs_escape_untrusted_provenance_labels():
     service, client = make_client()
