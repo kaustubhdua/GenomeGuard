@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import sync_playwright
@@ -88,6 +90,29 @@ def main() -> int:
         check("publication links use HTTPS and open safely",
               page.locator(".research-paper a").first.get_attribute("href", timeout=args.timeout).startswith("https://")
               and page.locator(".research-paper a").first.get_attribute("rel") == "noopener noreferrer")
+
+        screenshot_dir = Path(os.environ.get("UI_SCREENSHOT_DIR", "/tmp/genomeguard-ui-screenshots"))
+        screenshot_dir.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(screenshot_dir / "research-desktop.png"), full_page=True)
+
+        mobile = browser.new_page(viewport={"width": 375, "height": 812})
+        mobile.set_default_timeout(args.timeout)
+        mobile.route("https://www.ebi.ac.uk/europepmc/webservices/rest/search**", handle_provider)
+        mobile.goto(args.base.rstrip("/") + "/#/research", wait_until="domcontentloaded")
+        mobile.get_by_role("heading", name="Research discovery").wait_for()
+        no_horizontal_overflow = mobile.evaluate(
+            "document.documentElement.scrollWidth <= window.innerWidth + 1"
+        )
+        check("research discovery has no horizontal overflow at 375px", no_horizontal_overflow)
+        mobile.get_by_label("Research question or symptom description").fill(
+            "BRCA1 ovarian cancer symptoms"
+        )
+        mobile.get_by_label("Research department", exact=True).select_option("oncology")
+        mobile.get_by_role("button", name="Search publications").click()
+        mobile.locator(".research-paper").first.wait_for()
+        check("mobile research search renders live-provider-shaped results",
+              mobile.locator(".research-paper").count() == PAGE_SIZE)
+        mobile.screenshot(path=str(screenshot_dir / "research-mobile-375.png"), full_page=True)
         browser.close()
 
     print("\n" + ("RESEARCH UI SMOKE PASSED" if not failures else f"RESEARCH UI SMOKE FAILED ({len(failures)} checks)"))
