@@ -576,3 +576,36 @@ def test_dataset_policy_accepts_poa_without_claiming_participant_consent():
         assert allowed.n == 44
         assert blocked.n == 0
         assert blocked.excluded_by_reason["purpose_not_population_origins"] == 44
+
+def test_real_disease_specific_consent_requires_mondo_identifier():
+    participant = {
+        "use": "DS", "disease": "diabetes", "modifiers": [],
+        "population": None, "consent_date": "2026-01-15", "withdrawn": False,
+        "consent_basis": "participant_record",
+    }
+    with pytest.raises(ValueError, match="MONDO identifier"):
+        real._validated_consent(participant, "SAMPLE-DS")
+
+    participant["disease"] = "MONDO:0005015"
+    participant["disease_label"] = "diabetes mellitus"
+    consent, withdrawn = real._validated_consent(participant, "SAMPLE-DS")
+    assert consent["disease"] == "MONDO:0005015"
+    assert consent["disease_label"] == "diabetes mellitus"
+    assert withdrawn is False
+
+
+def test_dataset_policy_disease_specific_consent_requires_mondo_identifier():
+    policy = {
+        "use": "DS", "disease": "diabetes", "modifiers": [],
+        "population": None, "consent_date": None, "withdrawn": False,
+        "consent_basis": "dataset_policy", "source_policy_id": "public-policy-v1",
+        "source_policy_url": "https://example.org/policy", "withdrawal_supported": False,
+    }
+    with pytest.raises(ValueError, match="MONDO identifier"):
+        real._validated_consent(policy, "SAMPLE-DS")
+
+    policy["disease"] = "MONDO:0005015"
+    consent, withdrawn = real._validated_consent(policy, "SAMPLE-DS")
+    assert consent["disease"] == "MONDO:0005015"
+    assert withdrawn is False
+
