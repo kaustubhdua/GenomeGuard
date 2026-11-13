@@ -54,7 +54,9 @@ def association_payload():
                 "_links": {
                     "self": {"href": "https://www.ebi.ac.uk/gwas/rest/api/v2/associations/218086295"},
                     "loci": {"href": "https://www.ebi.ac.uk/gwas/rest/api/v2/associations/218086295/loci"},
-                    "snp": {"href": "https://www.ebi.ac.uk/gwas/rest/api/v2/single-nucleotide-polymorphisms/rs10445316"},
+                    "snp": {
+                        "href": "https://www.ebi.ac.uk/gwas/rest/api/v2/single-nucleotide-polymorphisms/rs10445316",
+                    },
                 },
             }],
         },
