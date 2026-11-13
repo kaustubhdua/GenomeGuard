@@ -57,7 +57,8 @@ export function renderEnsemblPanel() {
           + " · Gene version: " + (gene.gene_version ?? "Not supplied")),
         h("p", { class: "fine" }, "Location: " + (gene.chromosome || "Chr?") + ":"
           + (gene.start ?? "?") + "-" + (gene.end ?? "?")
-          + " · Strand: " + (gene.strand === 1 ? "+" : gene.strand === -1 ? "-" : "not supplied")),
+          + " · Strand: " + (gene.strand === 1 ? "+" : gene.strand === -1 ? "-" : "not supplied")
+          + " · Coordinates: " + (gene.coordinate_system || "convention not supplied")),
         h("p", { class: "fine muted" }, "Canonical transcript: " + (gene.canonical_transcript || "Not supplied")
           + " · Transcripts returned: " + String(data.transcript_count_returned ?? 0)),
         transcriptRows.length ? h("details", {},
