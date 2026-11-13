@@ -231,6 +231,10 @@ export async function boot() {
     });
     state.donor = session.ok && session.data?.session_token
       ? { ...donor, session_token: session.data.session_token } : null;
+    if (!state.donor) {
+      state.bootError = session.data?.message || "Could not initialize the synthetic participant session.";
+      return;
+    }
   } else {
     state.donor = null;
   }
@@ -239,9 +243,16 @@ export async function boot() {
   // first synthetic researcher; changing personas issues a new scoped session.
   if (reqs.length) {
     const desired = reqs.find((r) => String(r.id) === String(state.who)) || reqs[0];
-    await selectDemoRequester(desired.id);
+    const selected = await selectDemoRequester(desired.id);
+    if (!selected.ok) {
+      state.bootError = selected.data?.message || "Could not initialize the synthetic researcher session.";
+      state.who = "";
+      state.demoSession = "";
+      return;
+    }
   } else {
     state.who = "";
     state.demoSession = "";
+    state.bootError = "No synthetic demo personas are available.";
   }
 }
