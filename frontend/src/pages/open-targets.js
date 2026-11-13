@@ -267,7 +267,7 @@ export function renderOpenTargetsPanel() {
         "Citation metadata: cite Open Targets Platform with this data release, API version, retrieval timestamp and exact query identifiers. Cite original evidence records and publications separately using their source IDs and links. Scores remain source-defined research-prioritisation signals."),
       Array.isArray(current.interpretation?.limitations) && current.interpretation.limitations.length
         ? h("p", { class: "fine muted" }, "Source limitations: " + current.interpretation.limitations.join(" · "))
-        : null));
+        : null);
   }
 
   function updateFilters() {
