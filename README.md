@@ -43,7 +43,7 @@ GenomeGuard does not require Supabase, a hosted authentication provider, a brows
 
 GenomeGuard supports two deliberately separate authentication modes:
 
-- **Local/demo or compatibility mode:** researchers use individually provisioned `X-API-Key` credentials; the steward compatibility path uses `X-Admin-Key`; donor-facing demo workflows use a separate `X-Donor-Key`. Demo personas and credentials are available only when explicit demo mode is enabled.
+- **Synthetic demo mode:** the browser uses short-lived, persona-scoped `X-Demo-Session` and `X-Demo-Donor-Session` tokens. Public persona endpoints return metadata only; static demo API keys are disabled by default. **Non-demo compatibility deployments** may use individually provisioned `X-API-Key` credentials; institutional production should use verified OIDC identities, and steward operations require separately authorized reviewer credentials.
 - **Institutional mode:** set `GG_OIDC_REQUIRED=true` and `GG_TENANT_ISOLATION_REQUIRED=true`. The browser uses Authorization Code + PKCE S256; the API independently verifies the signed access-token JWT, issuer, audience, time claims, and allow-listed organization claim, then resolves an explicitly provisioned active issuer/subject/organization binding. Researcher, reviewer, steward, and global-administrator operations remain separated.
 
 API keys are not institutional identity verification. A named requester record is not proof of affiliation, participant consent, or legal authorization. Institutional OIDC configuration and organization membership must be supplied and operated by the institution before controlled-data workflows are enabled.
