@@ -192,3 +192,38 @@ def test_signed_consent_rejects_ambiguous_or_future_effective_time(case):
         svc.apply_signed_consent_event(
             event, public_key_b64=public, trusted_issuer="https://consent.example.edu",
         )
+
+
+
+def test_signed_consent_rejects_out_of_order_restore_event():
+    svc = make_service()
+    private = Ed25519PrivateKey.generate()
+    public = base64.b64encode(private.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw,
+    )).decode()
+    svc.store.x(
+        "UPDATE donors SET source_sample_id_hash=? WHERE id=1",
+        (hmac.new(
+            svc.master, svc.dataset_id.encode() + b"\\0" + b"SOURCE-SAMPLE-001",
+            hashlib.sha256,
+        ).hexdigest(),),
+    )
+    withdrawn_at = datetime.now(UTC) - timedelta(days=2)
+    withdrawal = signed_event(
+        private, svc.dataset_id, event_type="withdrawn",
+        effective_at=withdrawn_at.isoformat(),
+    )
+    svc.apply_signed_consent_event(
+        withdrawal, public_key_b64=public, trusted_issuer="https://consent.example.edu",
+    )
+    stale_restore = signed_event(
+        private, svc.dataset_id, event_type="restored",
+        effective_at=(withdrawn_at - timedelta(hours=1)).isoformat(),
+    )
+
+    with pytest.raises(ServiceError, match="later than every previously applied event"):
+        svc.apply_signed_consent_event(
+            stale_restore, public_key_b64=public, trusted_issuer="https://consent.example.edu",
+        )
+    assert svc.ds.donors[0].withdrawn is True
+    assert not svc.store.consent_event_exists(stale_restore["event_id"])
