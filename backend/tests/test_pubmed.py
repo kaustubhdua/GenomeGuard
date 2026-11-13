@@ -203,3 +203,55 @@ def test_pubmed_api_route_returns_safe_provider_error(monkeypatch):
     assert response.status_code == 503
     assert response.json()["error"] == "literature_provider_unavailable"
     assert "upstream detail" not in response.text
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_pubmed_retries_transient_provider_status(monkeypatch, status):
+    calls = []
+    success = FakeResponse({"esearchresult": {"count": "0", "idlist": []}})
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        if len(calls) == 1:
+            raise HTTPError(request.full_url, status, "temporary provider failure", {"Retry-After": "0"}, None)
+        return success
+
+    monkeypatch.setattr(pubmed, "urlopen", fake_urlopen)
+    monkeypatch.setattr(pubmed, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(pubmed.time, "sleep", lambda _: None)
+    assert pubmed.search_pubmed("BRCA1")["count"] == 0
+    assert len(calls) == 2
+
+
+def test_pubmed_retries_transport_timeout(monkeypatch):
+    from urllib.error import URLError
+
+    calls = []
+    success = FakeResponse({"esearchresult": {"count": "0", "idlist": []}})
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        if len(calls) == 1:
+            raise URLError("temporary timeout")
+        return success
+
+    monkeypatch.setattr(pubmed, "urlopen", fake_urlopen)
+    monkeypatch.setattr(pubmed, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(pubmed.time, "sleep", lambda _: None)
+    assert pubmed.search_pubmed("BRCA1")["count"] == 0
+    assert len(calls) == 2
+
+
+def test_pubmed_stops_after_bounded_retries(monkeypatch):
+    calls = []
+
+    def fail_provider(request, timeout):
+        calls.append(request.full_url)
+        raise HTTPError(request.full_url, 503, "unavailable", {"Retry-After": "0"}, None)
+
+    monkeypatch.setattr(pubmed, "urlopen", fail_provider)
+    monkeypatch.setattr(pubmed, "_wait_for_rate_slot", lambda: None)
+    monkeypatch.setattr(pubmed.time, "sleep", lambda _: None)
+    with pytest.raises(pubmed.PubMedProviderError, match="temporarily unavailable"):
+        pubmed.search_pubmed("BRCA1")
+    assert len(calls) == pubmed.MAX_ATTEMPTS
