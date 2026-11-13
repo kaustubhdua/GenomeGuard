@@ -40,11 +40,10 @@ Staging environment values are stored only in Render:
 - GG_ADMIN_API_KEY: unique rotated secret; never place it in Git or a browser variable.
 - GG_DEMO_MODE=true
 - GG_ALLOW_TAMPER_DEMO=false
-- GG_EXPOSE_DEMO_ADMIN_KEY=false
 - GG_REAL_COHORT_FILE=
 - GG_DATASET_ID=synthetic-cohort-1
 
-The public /demo/requesters endpoint returns synthetic researcher personas only. It must never return a hosted administrator credential. The hosted UI hides steward-only controls rather than exposing a privileged key. GG_EXPOSE_DEMO_ADMIN_KEY=true is a local-development-only opt-in.
+The public /demo/requesters and /demo/donors endpoints return persona metadata only, never static credentials. Browser users obtain 30-minute process-local requester/donor sessions through the corresponding POST endpoints. The hosted UI hides steward-only controls rather than exposing a privileged key. The in-memory session registry is single-process only; replace it with a shared session store before scaling to multiple workers or instances.
 
 ## Live staging acceptance already performed
 
