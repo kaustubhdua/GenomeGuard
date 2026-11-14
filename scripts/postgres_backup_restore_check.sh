@@ -26,6 +26,22 @@ if [[ "$source_identity" == "$target_identity" ]]; then
   exit 2
 fi
 
+# pg_dump/pg_restore must match the PostgreSQL major version to avoid emitting
+# restore-time SET options unsupported by an older target server.
+source_version_num="$(psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+  --dbname="$GG_DATABASE_URL" --command="SHOW server_version_num")"
+target_version_num="$(psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+  --dbname="$GG_RESTORE_TEST_URL" --command="SHOW server_version_num")"
+source_major="$((source_version_num / 10000))"
+target_major="$((target_version_num / 10000))"
+dump_major="$(pg_dump --version | awk '{print $3}' | cut -d. -f1)"
+restore_major="$(pg_restore --version | awk '{print $3}' | cut -d. -f1)"
+if [[ "$source_major" != "$target_major" || "$dump_major" != "$source_major" \
+      || "$restore_major" != "$target_major" ]]; then
+  echo "PostgreSQL major-version mismatch: source=$source_major target=$target_major pg_dump=$dump_major pg_restore=$restore_major" >&2
+  exit 2
+fi
+
 # Refuse any non-empty target before pg_restore can partially overwrite it.
 target_objects="$(psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --dbname="$GG_RESTORE_TEST_URL" --command="
