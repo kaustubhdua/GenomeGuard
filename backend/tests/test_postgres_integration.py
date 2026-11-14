@@ -163,6 +163,9 @@ def test_postgres_synthetic_cohort_seed_round_trips_with_tenant_columns(pg_store
         n_donors=12, n_variants=24, n_populations=2, n_families=3,
         seed=17, n_planted=2, rare_maf=0.01,
     )
+    # Simulate the default search_path returned by a transaction pooler.
+    pg_store.connection.execute("RESET search_path")
+    pg_store.connection.commit()
     pg_store.save_cohort(
         cohort, master, "integration-synthetic",
         metadata={"source": "integration test synthetic generator",
