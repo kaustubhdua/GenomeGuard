@@ -247,6 +247,9 @@ class PostgresStore(Store):
             self.db = _ConnectionCompat(self.connection, self)
             if run_migrations:
                 self._migrate()
+            # Close any bootstrap transaction before serving requests. Each runtime
+            # operation re-establishes its schema locally for transaction poolers.
+            self.connection.commit()
         except Exception:
             self.connection.close()
             if self.migration_connection is not None and self.migration_connection is not self.connection:
@@ -524,22 +527,34 @@ class PostgresStore(Store):
             statement = _translate(sql)
 
             def execute() -> list[dict]:
-                with self.connection.transaction():
-                    self.connection.execute(
-                        "SET LOCAL search_path TO genomeguard_runtime, public"
-                    )
-                    return list(self.connection.execute(statement, args).fetchall())
+                self.connection.execute(
+                    "SET LOCAL search_path TO genomeguard_runtime, public"
+                )
+                return list(self.connection.execute(statement, args).fetchall())
 
             try:
-                return execute()
+                rows = execute()
             except psycopg.OperationalError:
                 # A provider restart can race the health check above. Retrying a read-only
                 # query is safe only outside an application transaction.
                 if self._transaction_depth or not self.connection.broken:
+                    if self._transaction_depth == 0:
+                        self.connection.rollback()
                     raise
                 self.connection.close()
                 self._ensure_connection()
-                return execute()
+                try:
+                    rows = execute()
+                except Exception:
+                    self.connection.rollback()
+                    raise
+            except Exception:
+                if self._transaction_depth == 0:
+                    self.connection.rollback()
+                raise
+            if self._transaction_depth == 0:
+                self.connection.commit()
+            return rows
 
     def one(self, sql: str, args: tuple = ()) -> dict | None:
         rows = self.q(sql, args)
@@ -550,18 +565,26 @@ class PostgresStore(Store):
         with self.lock:
             self._ensure_connection()
             statement = _translate(sql)
-            insert = re.match(r"INSERT\s+INTO\s+(\w+)", statement, re.IGNORECASE)
+            insert = re.match(r"INSERT\\s+INTO\\s+(\\w+)", statement, re.IGNORECASE)
             id_tables = {"requesters", "requests", "alerts"}
-            with self.connection.transaction():
+            try:
                 self.connection.execute(
                     "SET LOCAL search_path TO genomeguard_runtime, public"
                 )
                 if insert and insert.group(1).lower() in id_tables:
                     statement = statement.rstrip().rstrip(";") + " RETURNING id"
                     row = self.connection.execute(statement, args).fetchone()
+                    if self._transaction_depth == 0:
+                        self.connection.commit()
                     return int(row["id"]) if row else 0
                 self.connection.execute(statement, args)
+                if self._transaction_depth == 0:
+                    self.connection.commit()
                 return 0
+            except Exception:
+                if self._transaction_depth == 0:
+                    self.connection.rollback()
+                raise
 
 
     @contextmanager
