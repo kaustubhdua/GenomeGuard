@@ -30,7 +30,9 @@ def test_json_body_limit_preserves_valid_demo_session_flow():
 
 def test_streaming_limit_cannot_be_bypassed_without_content_length():
     import asyncio
+
     from starlette.requests import Request
+
     from app.api import _body
     from app.service import ServiceError
 
