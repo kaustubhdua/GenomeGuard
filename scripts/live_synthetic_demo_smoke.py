@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
@@ -34,6 +35,27 @@ def get(base: str, path: str, timeout: float = 20.0, headers: dict | None = None
     except (URLError, TimeoutError, OSError) as exc:
         return 0, f"{type(exc).__name__}: {str(exc)[:180]}"
 
+
+
+def get_with_retry(
+    base: str,
+    path: str,
+    timeout: float = 20.0,
+    headers: dict | None = None,
+    *,
+    attempts: int = 3,
+    retry_delay: float = 0.5,
+) -> tuple[int, dict | str]:
+    """Retry transient gateway/cold-start failures, but never retry stable client errors."""
+    last: tuple[int, dict | str] = (0, "request was not attempted")
+    for attempt in range(max(1, attempts)):
+        last = get(base, path, timeout=timeout, headers=headers)
+        status, _payload = last
+        if status != 0 and status < 500:
+            return last
+        if attempt + 1 < max(1, attempts):
+            time.sleep(retry_delay * (2 ** attempt))
+    return last
 
 def post(base: str, path: str, body: dict, headers: dict | None = None, timeout: float = 20.0) -> tuple[int, dict | str]:
     request = Request(
@@ -74,7 +96,7 @@ def main() -> int:
     base = args.base.rstrip("/")
 
     try:
-        status, health = get(base, "/health")
+        status, health = get_with_retry(base, "/health")
         require("health endpoint is HTTP 200", status == 200 and isinstance(health, dict))
         require("service reports healthy", health.get("status") == "ok")
         require("public deployment is explicitly demo mode", health.get("demo_mode") is True)
@@ -87,11 +109,11 @@ def main() -> int:
                 int(health.get("donors") or 0) == 600 and int(health.get("variants") or 0) == 3000)
         require("destructive tamper demo remains disabled", health.get("tamper_demo") is False)
 
-        status, audit = get(base, "/audit/verify")
+        status, audit = get_with_retry(base, "/audit/verify")
         require("audit verification endpoint is HTTP 200", status == 200 and isinstance(audit, dict))
         require("audit hash chain verifies", audit.get("ok") is True and int(audit.get("length") or 0) > 0)
 
-        status, demo = get(base, "/demo/requesters")
+        status, demo = get_with_retry(base, "/demo/requesters")
         require("demo persona endpoint is available", status == 200 and isinstance(demo, dict))
         accounts = demo.get("requesters") or []
         require("demo personas are present", isinstance(accounts, list) and len(accounts) >= 1)
@@ -102,13 +124,13 @@ def main() -> int:
         require("short-lived demo requester session can be issued",
                 session_status == 200 and isinstance(demo_session, dict)
                 and bool(demo_session.get("session_token")) and "api_key" not in demo_session)
-        profile_status, profile = get(
+        profile_status, profile = get_with_retry(
             base, "/me", headers={"X-Demo-Session": demo_session.get("session_token", "")},
         )
         require("short-lived demo requester session authenticates", profile_status == 200
                 and isinstance(profile, dict))
 
-        donor_status, donor_data = get(base, "/demo/donors")
+        donor_status, donor_data = get_with_retry(base, "/demo/donors")
         donors = donor_data.get("donors") if isinstance(donor_data, dict) else []
         require("demo donor personas are present without donor keys",
                 donor_status == 200 and isinstance(donors, list) and len(donors) >= 1
@@ -118,14 +140,14 @@ def main() -> int:
         )
         require("short-lived demo donor session can be issued",
                 donor_session_status == 200 and bool(donor_session.get("session_token")))
-        donor_profile_status, donor_profile = get(
+        donor_profile_status, donor_profile = get_with_retry(
             base, f"/donor/{donors[0]['id']}",
             headers={"X-Demo-Donor-Session": donor_session.get("session_token", "")},
         )
         require("short-lived donor session authenticates only its donor",
                 donor_profile_status == 200 and isinstance(donor_profile, dict))
 
-        status, ready = get(base, "/health/ready")
+        status, ready = get_with_retry(base, "/health/ready")
         checks = ready.get("checks") if isinstance(ready, dict) else {}
         require("production readiness correctly remains blocked",
                 status == 503 and ready.get("status") == "not_ready" and ready.get("ready") is False)
@@ -134,7 +156,7 @@ def main() -> int:
         require("participant consent authority is not falsely marked configured",
                 checks.get("participant_consent_authority_configured") is False)
 
-        status, page = get(base, "/")
+        status, page = get_with_retry(base, "/")
         require("public landing page responds", status == 200 and isinstance(page, str)
                 and "GenomeGuard" in page)
     except (AssertionError, ValueError, TypeError, json.JSONDecodeError) as exc:
