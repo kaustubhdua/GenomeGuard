@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# This workflow is intentionally lightweight but runs on every PR update. Keep only
+# the newest validation per PR/ref so rapid commits do not fill the hosted-runner queue.
+concurrency:
+  group: genomeguard-deployment-config-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deployment-config:
     runs-on: ubuntu-latest
