@@ -75,6 +75,24 @@ jobs:
           finally:
               store.close()
           PY
+          # Ubuntu's default postgresql-client can be newer than the PostgreSQL 16
+          # service container. Use matching 16.x client binaries for dump/restore;
+          # newer pg_dump archives may contain SET options unsupported by PG16.
+          mkdir -p /tmp/pg16-client
+          cat > /tmp/pg16-client/pg_dump <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm --network host --env PGPASSWORD postgres:16 pg_dump "$@"
+          SH
+          cat > /tmp/pg16-client/pg_restore <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network host --env PGPASSWORD postgres:16 pg_restore "$@"
+          SH
+          cat > /tmp/pg16-client/psql <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network host --env PGPASSWORD postgres:16 psql "$@"
+          SH
+          chmod +x /tmp/pg16-client/*
+          export PATH="/tmp/pg16-client:$PATH"
           age-keygen --output /tmp/genomeguard-age-identity.txt
           export GG_BACKUP_AGE_RECIPIENT="$(age-keygen --y /tmp/genomeguard-age-identity.txt)"
           export GG_BACKUP_AGE_IDENTITY_FILE=/tmp/genomeguard-age-identity.txt
