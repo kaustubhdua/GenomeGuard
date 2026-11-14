@@ -248,6 +248,9 @@ def test_runtime_and_migration_connections_are_separated(monkeypatch):
         def close(self):
             self.closed = True
 
+        def commit(self):
+            pass
+
     connections = []
 
     def connect(url, **kwargs):
