@@ -513,10 +513,25 @@ class PostgresStore(Store):
             ) from error
 
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
+        """Run a query with a transaction-scoped runtime schema.
+
+        Neon transaction-pooler connections may reset session settings between
+        transactions. Never rely on the constructor's session-level search_path:
+        establish it locally for every statement instead.
+        """
         with self.lock:
             self._ensure_connection()
+            statement = _translate(sql)
+
+            def execute() -> list[dict]:
+                with self.connection.transaction():
+                    self.connection.execute(
+                        "SET LOCAL search_path TO genomeguard_runtime, public"
+                    )
+                    return list(self.connection.execute(statement, args).fetchall())
+
             try:
-                rows = list(self.connection.execute(_translate(sql), args).fetchall())
+                return execute()
             except psycopg.OperationalError:
                 # A provider restart can race the health check above. Retrying a read-only
                 # query is safe only outside an application transaction.
@@ -524,10 +539,7 @@ class PostgresStore(Store):
                     raise
                 self.connection.close()
                 self._ensure_connection()
-                rows = list(self.connection.execute(_translate(sql), args).fetchall())
-            if self._transaction_depth == 0:
-                self.connection.commit()
-            return rows
+                return execute()
 
     def one(self, sql: str, args: tuple = ()) -> dict | None:
         rows = self.q(sql, args)
@@ -540,16 +552,16 @@ class PostgresStore(Store):
             statement = _translate(sql)
             insert = re.match(r"INSERT\s+INTO\s+(\w+)", statement, re.IGNORECASE)
             id_tables = {"requesters", "requests", "alerts"}
-            if insert and insert.group(1).lower() in id_tables:
-                statement = statement.rstrip().rstrip(";") + " RETURNING id"
-                row = self.connection.execute(statement, args).fetchone()
-                if self._transaction_depth == 0:
-                    self.connection.commit()
-                return int(row["id"]) if row else 0
-            self.connection.execute(statement, args)
-            if self._transaction_depth == 0:
-                self.connection.commit()
-            return 0
+            with self.connection.transaction():
+                self.connection.execute(
+                    "SET LOCAL search_path TO genomeguard_runtime, public"
+                )
+                if insert and insert.group(1).lower() in id_tables:
+                    statement = statement.rstrip().rstrip(";") + " RETURNING id"
+                    row = self.connection.execute(statement, args).fetchone()
+                    return int(row["id"]) if row else 0
+                self.connection.execute(statement, args)
+                return 0
 
 
     @contextmanager
@@ -569,6 +581,9 @@ class PostgresStore(Store):
             try:
                 try:
                     with self.connection.transaction():
+                        self.connection.execute(
+                            "SET LOCAL search_path TO genomeguard_runtime, public"
+                        )
                         # Serialize mutation units across instances. This conservative lock prevents
                         # concurrent requests from racing the privacy-budget read/charge sequence.
                         self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
@@ -586,6 +601,9 @@ class PostgresStore(Store):
                     finally:
                         self._transaction_depth += 1
                     with self.connection.transaction():
+                        self.connection.execute(
+                            "SET LOCAL search_path TO genomeguard_runtime, public"
+                        )
                         self.connection.execute("SELECT pg_advisory_xact_lock(71020261026)")
                         yield
             finally:
@@ -598,6 +616,9 @@ class PostgresStore(Store):
         with self.lock:
             self._ensure_connection()
             with self.connection.transaction():
+                self.connection.execute(
+                    "SET LOCAL search_path TO genomeguard_runtime, public"
+                )
                 # Transaction-scoped advisory lock coordinates separate workers and instances.
                 self.connection.execute("SELECT pg_advisory_xact_lock(71020261025)")
                 last = self.connection.execute(
