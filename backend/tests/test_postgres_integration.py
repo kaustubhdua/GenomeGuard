@@ -91,6 +91,28 @@ def test_postgres_store_uses_schema_separate_from_normalized_supabase_tables(pg_
     assert pg_store.one("SELECT current_schema() AS schema")["schema"] == "genomeguard_runtime"
 
 
+def test_postgres_runtime_schema_is_reestablished_after_session_reset(pg_store):
+    # Simulate a transaction-pooler reset: the connection returns to the provider's
+    # default pg_catalog,public search path between transactions.
+    pg_store.connection.execute("RESET search_path")
+    pg_store.connection.commit()
+
+    assert pg_store.one("SELECT current_schema() AS schema")["schema"] == "genomeguard_runtime"
+
+    pg_store.connection.execute("RESET search_path")
+    pg_store.connection.commit()
+    requester_id = pg_store.add_requester(
+        "Pooler Researcher", "researcher", "standard", "test-institution", "pooler-test-key"
+    )
+    assert pg_store.requester(requester_id)["name"] == "Pooler Researcher"
+
+    pg_store.connection.execute("RESET search_path")
+    pg_store.connection.commit()
+    audit = AuditChain(AuditStore(pg_store))
+    audit.append("integration-test", "pooler.audit", {"synthetic": True})
+    assert audit.verify()["ok"] is True
+
+
 def test_postgres_persists_request_decision_budget_and_audit(pg_store):
     requester_id = pg_store.add_requester(
         "Integration Researcher", "researcher", "standard", "test-institution", "hash-test-key"
