@@ -22,6 +22,7 @@ from urllib.parse import unquote
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
@@ -136,6 +137,41 @@ def _reported_consent_provenance(
 
 
 MAX_JSON_BODY_BYTES = 1_048_576
+
+
+class _SecurityHeadersASGIMiddleware:
+    """Outer ASGI wrapper so browser security headers also cover unhandled 500 responses."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_security_headers(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("X-Frame-Options", "DENY")
+                headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+                headers.setdefault(
+                    "Permissions-Policy", "camera=(), microphone=(), geolocation=()",
+                )
+                headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+                headers.setdefault(
+                    "Content-Security-Policy",
+                    "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+                )
+                if scope.get("scheme") == "https":
+                    headers.setdefault(
+                        "Strict-Transport-Security",
+                        "max-age=31536000; includeSubDomains",
+                    )
+            await send(message)
+
+        await self.app(scope, receive, send_with_security_headers)
 
 
 async def _body(request: Request) -> dict:
@@ -1962,25 +1998,10 @@ def create_app(svc: GenomeGuardService | None = None) -> Starlette:
         routes.append(Mount("/static", StaticFiles(directory=FRONTEND), name="static"))
     app = Starlette(routes=routes)
 
-    @app.middleware("http")
-    async def security_headers(request: Request, call_next):
-        """Apply browser security headers consistently to API, HTML and static responses."""
-        response = await call_next(request)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
-        )
-        if request.url.scheme == "https":
-            response.headers.setdefault(
-                "Strict-Transport-Security", "max-age=31536000; includeSubDomains",
-            )
-        return response
-
+    # Wrap the complete Starlette stack, including ServerErrorMiddleware. A normal
+    # @app.middleware("http") handler sits inside ServerErrorMiddleware and therefore
+    # cannot add headers to the 500 response generated after an unhandled exception.
+    app.middleware_stack = _SecurityHeadersASGIMiddleware(app.build_middleware_stack())
     return app
 
 
