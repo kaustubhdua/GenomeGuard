@@ -45,6 +45,7 @@ def test_api_docs_escape_untrusted_provenance_labels():
 
 def test_security_headers_cover_html_and_https_responses():
     from starlette.testclient import TestClient
+
     from app.api import create_app
 
     service, _client = make_client()
