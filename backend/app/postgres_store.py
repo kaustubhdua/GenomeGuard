@@ -168,9 +168,13 @@ class _ConnectionCompat:
         self.store = store
 
     def execute(self, sql: str, args: tuple = ()):
+        # The base Store's cohort-seeding path uses this compatibility facade directly.
+        # Keep its multi-statement transaction safe on Neon transaction-pooler URLs too.
+        self.connection.execute("SET LOCAL search_path TO genomeguard_runtime, public")
         return self.connection.execute(_translate(sql), args)
 
     def executemany(self, sql: str, args):
+        self.connection.execute("SET LOCAL search_path TO genomeguard_runtime, public")
         return self.connection.cursor().executemany(_translate(sql), args)
 
     def commit(self) -> None:
