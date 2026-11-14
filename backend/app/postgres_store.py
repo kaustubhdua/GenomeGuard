@@ -565,7 +565,7 @@ class PostgresStore(Store):
         with self.lock:
             self._ensure_connection()
             statement = _translate(sql)
-            insert = re.match(r"INSERT\\s+INTO\\s+(\\w+)", statement, re.IGNORECASE)
+            insert = re.match(r"INSERT\s+INTO\s+(\w+)", statement, re.IGNORECASE)
             id_tables = {"requesters", "requests", "alerts"}
             try:
                 self.connection.execute(
