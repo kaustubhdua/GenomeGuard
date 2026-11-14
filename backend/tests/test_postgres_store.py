@@ -214,6 +214,7 @@ def test_read_query_reconnects_before_using_broken_provider_session(monkeypatch)
     assert store.db.connection is second
     assert second.statements == [
         ("SET search_path TO genomeguard_runtime, public", ()),
+        ("SET LOCAL search_path TO genomeguard_runtime, public", ()),
         ("SELECT 1", ()),
     ]
 
@@ -389,6 +390,7 @@ def test_transaction_reconnects_if_provider_closes_session_before_transaction_st
     assert store.db.connection is replacement
     assert replacement.statements == [
         ("SET search_path TO genomeguard_runtime, public", ()),
+        ("SET LOCAL search_path TO genomeguard_runtime, public", ()),
         ("SELECT pg_advisory_xact_lock(71020261026)", ()),
         ("SELECT 42", ()),
     ]
