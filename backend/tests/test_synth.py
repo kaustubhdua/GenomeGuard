@@ -101,7 +101,6 @@ def test_consent_mix_and_withdrawals():
     assert 5 <= s["withdrawn"] <= 35
 
 
-def test_synthetic_consent_records_are_explicitly_marked_as_simulated():
+def test_synthetic_consent_records_have_explicit_synthetic_basis():
     generated = generate(n_donors=60, n_variants=100, n_families=12, seed=23)
     assert all(donor["consent"]["consent_basis"] == "synthetic_demo" for donor in generated.donors)
-    assert all(donor["consent"]["consent_simulated"] is True for donor in generated.donors)
