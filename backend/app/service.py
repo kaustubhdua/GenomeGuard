@@ -857,15 +857,15 @@ class GenomeGuardService:
     @transactional
     def donor_set_consent(self, donor_id: int, change: dict) -> dict:
         """Apply a synthetic-demo consent edit; research mode requires signed authority events."""
+        d = self._donor(donor_id)
+        if d.consent.get("consent_basis") == "dataset_policy":
+            raise ServiceError(409, "dataset_policy_not_individual_consent",
+                               "dataset-level source terms cannot be edited as an individual's consent")
         if not self.demo_mode:
             raise ServiceError(
                 503, "consent_authority_required",
                 "participant consent changes must be recorded by a signed authoritative consent event",
             )
-        d = self._donor(donor_id)
-        if d.consent.get("consent_basis") == "dataset_policy":
-            raise ServiceError(409, "dataset_policy_not_individual_consent",
-                               "dataset-level source terms cannot be edited as an individual's consent")
         use = str(change.get("use", "")).upper()
         if use not in self.CONSENT_USES:
             raise ServiceError(422, "invalid_consent", f"use must be one of {self.CONSENT_USES}")
