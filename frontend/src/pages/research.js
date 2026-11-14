@@ -138,7 +138,10 @@ export async function render() {
         h("div", { class: "hero-actions" },
           h("button", { id: "research-save-search", class: "btn ghost", type: "button", disabled: true }, "Save current search"),
           h("button", { id: "research-clear-saved", class: "btn ghost", type: "button", hidden: true }, "Clear saved searches")),
-        h("div", { id: "research-saved-searches-list", role: "list", "aria-live": "polite" }))),
+        h("div", {
+          id: "research-saved-searches-list", role: "list", "aria-label": "Saved searches",
+          "aria-live": "polite",
+        }))),
     renderOpenTargetsPanel(),
     renderClinVarPanel(),
     renderGwasPanel(),
@@ -200,13 +203,15 @@ export async function render() {
     savedSearchesList.replaceChildren();
     saveSearchButton.disabled = !currentSearch || savedSearches === null;
     if (savedSearches === null) {
-      savedSearchesList.append(h("p", { class: "fine muted" },
-        "Saved searches are unavailable because this browser blocks local storage."));
+      savedSearchesList.append(h("div", { role: "listitem" },
+        h("p", { class: "fine muted" },
+          "Saved searches are unavailable because this browser blocks local storage.")));
       clearSavedButton.hidden = true;
       return;
     }
     if (!savedSearches.length) {
-      savedSearchesList.append(h("p", { class: "fine muted" }, "No searches saved on this device."));
+      savedSearchesList.append(h("div", { role: "listitem" },
+        h("p", { class: "fine muted" }, "No searches saved on this device.")));
       clearSavedButton.hidden = true;
       return;
     }
