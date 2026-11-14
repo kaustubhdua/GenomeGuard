@@ -99,3 +99,8 @@ def test_consent_mix_and_withdrawals():
     assert abs(use["HMB"] / 600 - 0.30) < 0.08
     assert abs(use["DS"] / 600 - 0.25) < 0.08
     assert 5 <= s["withdrawn"] <= 35
+
+
+def test_synthetic_consent_records_have_explicit_synthetic_basis():
+    generated = generate(n_donors=60, n_variants=100, n_families=12, seed=23)
+    assert all(donor["consent"]["consent_basis"] == "synthetic_demo" for donor in generated.donors)

@@ -1510,7 +1510,8 @@ def bootstrap(settings=None, p: Params = DEFAULT, store: Store | None = None,
                               n_populations=s.n_populations, n_families=s.n_families,
                               seed=s.seed, n_planted=s.n_planted_rare, rare_maf=p.rare_maf)
             cohort_meta = {"source": "GenomeGuard synthetic generator", "genotypes_real": False,
-                           "consent_simulated": True, "consent_records_matched": 0}
+                           "consent_simulated": True, "consent_basis": "synthetic_demo",
+                           "consent_records_matched": 0}
         if store.path == "postgresql":
             with store.transaction():
                 store.set_admin_access()
