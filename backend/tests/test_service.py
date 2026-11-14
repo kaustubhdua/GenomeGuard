@@ -282,12 +282,16 @@ def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
     svc.demo_mode = False
     first, second = svc.ds.donors[0], svc.ds.donors[1]
     svc.ds.donors[0] = replace(
-        first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
-        withdrawn=False,
+        first, consent={
+            **first.consent, "consent_basis": "participant_record", "consent_simulated": False,
+            "use": "GRU", "modifiers": ["NCU"],
+        }, withdrawn=False,
     )
     svc.ds.donors[1] = replace(
-        second, consent={**second.consent, "use": "GRU", "modifiers": ["NPU"]},
-        withdrawn=False,
+        second, consent={
+            **second.consent, "consent_basis": "participant_record", "consent_simulated": False,
+            "use": "GRU", "modifiers": ["NPU"],
+        }, withdrawn=False,
     )
 
     # The requester declares non-commercial use, but the declaration is not verified.
