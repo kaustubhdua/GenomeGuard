@@ -188,7 +188,8 @@ def test_research_mode_requires_signed_authority_for_donor_consent_changes():
 
 
 def test_research_mode_requires_machine_readable_mondo_disease_identifier():
-    svc = make_service(demo_mode=False)
+    svc = make_service()
+    svc.demo_mode = False
     with pytest.raises(ServiceError, match="requires a MONDO disease identifier"):
         svc._validate({"purpose": "disease_research"})
     with pytest.raises(ServiceError, match="MONDO identifier"):
@@ -277,7 +278,8 @@ def test_service_agent_explanations_are_offline_and_deterministic():
 
 
 def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
-    svc = make_service(demo_mode=False)
+    svc = make_service()
+    svc.demo_mode = False
     first, second = svc.ds.donors[0], svc.ds.donors[1]
     svc.ds.donors[0] = replace(
         first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
