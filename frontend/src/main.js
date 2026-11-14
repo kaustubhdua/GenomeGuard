@@ -222,7 +222,15 @@ function paint() {
   $("cmdk-list").replaceChildren(...shown.map((a, i) => h("li", { role: "option", "aria-selected": i === sel ? "true" : "false", onclick: () => choose(i) }, a.text, h("small", {}, a.hint))));
   if (!shown.length) $("cmdk-list").replaceChildren(h("li", {}, "Nothing matches"));
 }
-function choose(i) { const a = shown[i]; if (!a) return; closePalette(); a.run(); }
+function choose(i) {
+  const action = shown[i];
+  if (!action) return;
+  closePalette();
+  // Hiding the palette can move focus to <body>; restore the launcher before
+  // running actions that open dialogs so those dialogs capture a real return target.
+  $("open-cmdk").focus();
+  action.run();
+}
 
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); return; }

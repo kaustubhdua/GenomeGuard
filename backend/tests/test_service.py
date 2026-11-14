@@ -46,8 +46,8 @@ def test_release_matches_true_frequencies_when_no_noise():
     from app.core.consent import ConsentRequest, eligible_cohort
     ids = eligible_cohort(
         ConsentRequest(
-            "disease_research", "diabetes", None, "frequency", None, {},
-            organization_is_nonprofit=None, demo_mode=True,
+            "disease_research", "diabetes", False, "frequency", None, {},
+            organization_is_nonprofit=True, demo_mode=True,
         ),
         svc.ds.donors,
     ).donor_ids
@@ -179,7 +179,8 @@ def test_epsilon_budget_is_charged_and_refuses_when_spent():
 
 
 def test_research_mode_requires_signed_authority_for_donor_consent_changes():
-    svc = make_service(demo_mode=False)
+    svc = make_service()
+    svc.demo_mode = False
     with pytest.raises(ServiceError, match="signed authoritative consent event"):
         svc.donor_set_consent(1, {"use": "GRU", "modifiers": []})
     with pytest.raises(ServiceError, match="authoritative consent source"):
@@ -187,7 +188,8 @@ def test_research_mode_requires_signed_authority_for_donor_consent_changes():
 
 
 def test_research_mode_requires_machine_readable_mondo_disease_identifier():
-    svc = make_service(demo_mode=False)
+    svc = make_service()
+    svc.demo_mode = False
     with pytest.raises(ServiceError, match="requires a MONDO disease identifier"):
         svc._validate({"purpose": "disease_research"})
     with pytest.raises(ServiceError, match="MONDO identifier"):
@@ -276,15 +278,20 @@ def test_service_agent_explanations_are_offline_and_deterministic():
 
 
 def test_service_fails_closed_on_unverified_ncu_and_npu_attributes():
-    svc = make_service(demo_mode=False)
+    svc = make_service()
+    svc.demo_mode = False
     first, second = svc.ds.donors[0], svc.ds.donors[1]
     svc.ds.donors[0] = replace(
-        first, consent={**first.consent, "use": "GRU", "modifiers": ["NCU"]},
-        withdrawn=False,
+        first, consent={
+            **first.consent, "consent_basis": "participant_record", "consent_simulated": False,
+            "use": "GRU", "modifiers": ["NCU"],
+        }, withdrawn=False,
     )
     svc.ds.donors[1] = replace(
-        second, consent={**second.consent, "use": "GRU", "modifiers": ["NPU"]},
-        withdrawn=False,
+        second, consent={
+            **second.consent, "consent_basis": "participant_record", "consent_simulated": False,
+            "use": "GRU", "modifiers": ["NPU"],
+        }, withdrawn=False,
     )
 
     # The requester declares non-commercial use, but the declaration is not verified.

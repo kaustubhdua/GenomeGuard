@@ -5,15 +5,12 @@ from app.service import _release_enabled_for_mode
 from tests.helpers import make_client
 
 
-
 def test_governed_release_is_enabled_only_for_synthetic_demo_mode():
     settings = Settings()
     settings.demo_mode = True
     assert _release_enabled_for_mode(settings) is True
-
     settings.demo_mode = False
     assert _release_enabled_for_mode(settings) is False
-
 
 
 def test_variant_search_uses_verified_public_catalogue_when_release_is_disabled(monkeypatch):
@@ -26,11 +23,8 @@ def test_variant_search_uses_verified_public_catalogue_when_release_is_disabled(
         calls.append((chrom, pos, reference, alternate))
         return [{"source": "verified-public-reference", "variant_id": "public-variant-1"}]
 
-    monkeypatch.setattr(
-        service.store, "verified_public_variant_search", public_lookup, raising=False,
-    )
+    monkeypatch.setattr(service.store, "verified_public_variant_search", public_lookup, raising=False)
     response = client.get(f"/variants/search?q={chromosome}:{position}")
-
     assert response.status_code == 200
     assert response.json()["matches"] == [
         {"source": "verified-public-reference", "variant_id": "public-variant-1"}
@@ -42,9 +36,7 @@ def test_api_docs_escape_untrusted_provenance_labels():
     service, client = make_client()
     service.provenance["genotypes_label"] = '<img src=x onerror="alert(1)">'
     service.provenance["consent_label"] = "<script>alert(1)</script>"
-
     response = client.get("/docs")
-
     assert response.status_code == 200
     assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in response.text
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
@@ -59,7 +51,6 @@ def test_security_headers_cover_html_and_https_responses():
     service, _client = make_client()
     client = TestClient(create_app(service), base_url="https://testserver")
     response = client.get("/")
-
     assert response.status_code == 200
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
@@ -77,14 +68,12 @@ def test_non_demo_public_health_endpoints_do_not_disclose_cohort_diagnostics(mon
     settings.demo_mode = False
     monkeypatch.setattr(api_module, "get_settings", lambda: settings)
     monkeypatch.setattr(api_module, "validate_settings", lambda _settings: None)
-
     service, _client = make_client()
     from starlette.testclient import TestClient
 
     client = TestClient(api_module.create_app(service))
     health = client.get("/health")
     readiness = client.get("/health/ready")
-
     assert health.status_code == 200
     assert set(health.json()) == {"status", "deployment"}
     assert health.headers["cache-control"] == "no-store"

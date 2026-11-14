@@ -689,7 +689,7 @@ def main() -> int:
               len(ontology_requests) == 2 and ontology_requests[1].get("page") == 1
               and page.locator("#ontology-results .ontology-term").count() == 3)
 
-        page.get_by_label("Human gene symbol").fill("BRCA2")
+        page.get_by_role("region", name="Resolve a gene symbol").get_by_placeholder("BRCA2").fill("BRCA2")
         page.get_by_role("button", name="Resolve gene").click()
         page.get_by_text("ENSG00000139618", exact=False).wait_for()
         check("Ensembl resolves a symbol to stable ID and assembly-aware coordinates",
@@ -758,7 +758,7 @@ def main() -> int:
         mobile.locator("#ontology-results .ontology-term").first.wait_for()
         check("mobile ontology results have no horizontal overflow at 375px",
               mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
-        mobile.get_by_label("Human gene symbol").fill("BRCA2")
+        mobile.get_by_role("region", name="Resolve a gene symbol").get_by_placeholder("BRCA2").fill("BRCA2")
         mobile.get_by_role("button", name="Resolve gene").click()
         mobile.get_by_text("ENSG00000139618", exact=False).wait_for()
         check("mobile Ensembl gene resolver has no horizontal overflow at 375px",
