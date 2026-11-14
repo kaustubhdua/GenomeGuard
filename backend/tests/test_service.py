@@ -46,8 +46,8 @@ def test_release_matches_true_frequencies_when_no_noise():
     from app.core.consent import ConsentRequest, eligible_cohort
     ids = eligible_cohort(
         ConsentRequest(
-            "disease_research", "diabetes", None, "frequency", None, {},
-            organization_is_nonprofit=None, demo_mode=True,
+            "disease_research", "diabetes", False, "frequency", None, {},
+            organization_is_nonprofit=True, demo_mode=True,
         ),
         svc.ds.donors,
     ).donor_ids
@@ -179,7 +179,8 @@ def test_epsilon_budget_is_charged_and_refuses_when_spent():
 
 
 def test_research_mode_requires_signed_authority_for_donor_consent_changes():
-    svc = make_service(demo_mode=False)
+    svc = make_service()
+    svc.demo_mode = False
     with pytest.raises(ServiceError, match="signed authoritative consent event"):
         svc.donor_set_consent(1, {"use": "GRU", "modifiers": []})
     with pytest.raises(ServiceError, match="authoritative consent source"):
