@@ -41,7 +41,7 @@ jobs:
         run: |
           PYTHONPATH=backend python -m app.ml.clinvar_vep_train --max-variants 20000 --prepare-only
       - name: Cache the version-matched Ensembl VEP GRCh38 cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .training-data/public-annotations/.vep
           key: ensembl-vep-116.3-grch38-${{ runner.os }}
